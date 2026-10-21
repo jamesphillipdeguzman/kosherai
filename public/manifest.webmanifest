@@ -1,0 +1,18 @@
+{
+  "name": "KosherAI - Low-Iodine Diet Companion",
+  "short_name": "KosherAI",
+  "description": "Offline-first clinical Low-Iodine Diet (LID) companion for patients preparing for Radioactive Iodine (RAI) therapy and caregivers.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#059669",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["medical", "health", "food", "utilities"]
+}
