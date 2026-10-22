@@ -100,7 +100,7 @@ function render() {
   app.innerHTML = `
     ${renderHeader(state.isOnline)}
     
-    <main class="app-container">
+    <main class="app-container pt-24">
       ${activeTabHtml}
     </main>
 
@@ -383,7 +383,10 @@ function attachEventHandlers() {
   if (runAiBtn) {
     runAiBtn.addEventListener('click', async () => {
       if (!state.scanText) return;
-      const activeKey = state.settings.geminiApiKey || import.meta.env.VITE_GEMINI_API_KEY || '';
+      const settings = getSettings();
+      console.log(`[Scanner] Gemini Key present: ${Boolean(settings.geminiApiKey)}`);
+      console.log(`[Scanner] Cloudinary configured: ${Boolean(settings.cloudinaryCloudName && settings.cloudinaryPreset)}`);
+      const activeKey = settings.geminiApiKey;
       if (!activeKey) {
         alert('Please add your Gemini API Key in Settings (top right gear icon) to run deep AI reasoning. Our built-in offline engine has already evaluated this label!');
         state.settingsOpen = true;
@@ -397,6 +400,11 @@ function attachEventHandlers() {
       try {
         const result = await verifyWithGeminiAI(state.scanText, activeKey);
         state.aiAnalysis = result;
+        if (state.scanAnalysis) {
+          state.scanAnalysis.status = result.status;
+          state.scanAnalysis.source = 'GEMINI_AI';
+          state.scanAnalysis.reason = result.reason;
+        }
       } catch (err) {
         alert('AI Verification Error: ' + err.message);
       } finally {
@@ -543,19 +551,68 @@ Filtered water`;
   }
 }
 
-// Helper: Processes scanned text with offline rule engine & persists to history
-function processScanText(text, title = 'Food Label') {
+// Helper: Processes scanned/entered text with Gemini AI (if key present) or offline rule engine
+async function processScanText(text, title = 'Food Label') {
   if (!text || !text.trim()) return;
-  const analysis = analyzeIngredients(text);
-  state.scanAnalysis = analysis;
-  state.aiAnalysis = null;
+  const settings = getSettings();
+  console.log(`[Scanner] Gemini Key present: ${Boolean(settings.geminiApiKey)}`);
+  console.log(`[Scanner] Cloudinary configured: ${Boolean(settings.cloudinaryCloudName && settings.cloudinaryPreset)}`);
 
-  // Save to scan history
+  let analysis = null;
+  let aiResult = null;
+
+  if (settings.geminiApiKey) {
+    try {
+      state.aiLoading = true;
+      render();
+      aiResult = await verifyWithGeminiAI(text, settings.geminiApiKey);
+      state.aiAnalysis = aiResult;
+      const probTokens = aiResult.problemIngredients || [];
+      analysis = {
+        isSafe: aiResult.status === 'SAFE',
+        status: aiResult.status,
+        overallBadge: aiResult.status === 'SAFE' ? 'SAFE TO EAT' : aiResult.status === 'AVOID' ? 'STRICTLY AVOID' : 'CHECK LABEL CAREFULLY',
+        reasons: Array.isArray(aiResult.reasons) ? aiResult.reasons : [aiResult.reason],
+        reason: aiResult.reason,
+        problemIngredients: probTokens,
+        detectedForbidden: aiResult.status === 'AVOID' ? probTokens.map(p => ({
+          name: p,
+          matchedWord: p,
+          reason: aiResult.reason
+        })) : [],
+        detectedCaution: aiResult.status === 'CAUTION' ? probTokens.map(p => ({
+          name: p,
+          matchedWord: p,
+          reason: aiResult.reason
+        })) : [],
+        parsedTokens: text.split(/[,;\n•]+/).map(t => t.trim()).filter(Boolean).map(tok => ({
+          text: tok,
+          status: probTokens.some(p => tok.toLowerCase().includes(p.toLowerCase())) ? aiResult.status : 'SAFE',
+          matchedReason: aiResult.reason
+        })),
+        source: 'GEMINI_AI'
+      };
+    } catch (err) {
+      console.warn('[Scanner] Gemini evaluation failed, falling back to offline rule engine:', err);
+      analysis = analyzeIngredients(text);
+      analysis.source = 'OFFLINE_RULE_ENGINE';
+      state.aiAnalysis = null;
+    } finally {
+      state.aiLoading = false;
+    }
+  } else {
+    analysis = analyzeIngredients(text);
+    analysis.source = 'OFFLINE_RULE_ENGINE';
+    state.aiAnalysis = null;
+  }
+
+  state.scanAnalysis = analysis;
   state.scanHistory = addScanToHistory({
     title,
     rawText: text,
     status: analysis.status,
-    analysis
+    analysis,
+    aiAnalysis: state.aiAnalysis
   });
 
   render();

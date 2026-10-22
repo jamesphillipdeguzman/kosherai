@@ -3,6 +3,7 @@ import { STATUS } from '../data/lidDatabase.js';
 import { SMART_SUBSTITUTES } from '../data/protocolRules.js';
 import { compressImage, runClientOCR, verifyWithGeminiAI, uploadToCloudinary } from '../services/aiVerification.js';
 import { analyzeIngredients } from '../services/ruleEngine.js';
+import { getSettings } from '../services/storage.js';
 
 export const SAMPLE_LABELS = [
   {
@@ -61,9 +62,14 @@ export async function executeScanWorkflow(file, context = {}) {
     state.imagePreviewUrl = dataUrl;
     state.cloudinaryUrl = null;
 
+    // Retrieve settings using getSettings()
+    const settings = getSettings();
+    console.log(`[Scanner] Gemini Key present: ${Boolean(settings.geminiApiKey)}`);
+    console.log(`[Scanner] Cloudinary configured: ${Boolean(settings.cloudinaryCloudName && settings.cloudinaryPreset)}`);
+
     // 3. If Cloudinary credentials exist, upload to Cloudinary in the background to log/save the image URL
-    const cloudName = state.settings?.cloudinaryCloudName || import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '';
-    const uploadPreset = state.settings?.cloudinaryPreset || import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || '';
+    const cloudName = settings.cloudinaryCloudName;
+    const uploadPreset = settings.cloudinaryPreset;
 
     let cloudinaryPromise = null;
     if (cloudName && uploadPreset) {
@@ -106,7 +112,7 @@ export async function executeScanWorkflow(file, context = {}) {
 
     // 5. Call verifyWithGeminiAI(extractedText, apiKey) (or multimodal image payload).
     // If no API key is provided, gracefully fall back to the offline local ruleEngine.js keyword scanner.
-    const apiKey = state.settings?.geminiApiKey || import.meta.env.VITE_GEMINI_API_KEY || '';
+    const apiKey = settings.geminiApiKey;
 
     state.aiLoading = true;
     render();
@@ -433,8 +439,8 @@ function renderAnalysisResult(analysis, rawText, aiAnalysis, aiLoading, cloudina
 
       <!-- Engine Verification Source Badge -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; font-size: 0.78rem;">
-        <span style="color: var(--text-muted); font-weight: 600;">
-          ${analysis.source === 'GEMINI_AI' || aiAnalysis ? '✨ Verified by Google Gemini 2.5 Flash' : '⚡ Evaluated by Offline Clinical Rule Engine'}
+        <span class="engine-badge ${analysis.source === 'GEMINI_AI' || aiAnalysis ? 'badge-gemini' : 'badge-offline'}" style="font-weight: 700;">
+          ${analysis.source === 'GEMINI_AI' || aiAnalysis ? '🤖 Verified by Gemini AI Clinical Analysis' : '⚡ Evaluated by Offline Clinical Rule Engine'}
         </span>
         ${(cloudinaryUrl || analysis.cloudinaryUrl) ? `
           <span style="color: #67e8f9; font-weight: 600;">☁️ Cloudinary Synced</span>
@@ -550,8 +556,8 @@ function renderAiResult(ai) {
   return `
     <div class="ai-verification-card">
       <div class="ai-header">
-        <span class="ai-sparkle">✨</span>
-        <div class="ai-title">Gemini 2.5 Flash Clinical Deep Reasoning</div>
+        <span class="ai-sparkle">🤖</span>
+        <div class="ai-title">Verified by Gemini AI Clinical Analysis</div>
         <span class="badge-status ${isSafe ? 'badge-safe' : isAvoid ? 'badge-avoid' : 'badge-caution'}" style="margin-left: auto;">
           ${ai.status}
         </span>

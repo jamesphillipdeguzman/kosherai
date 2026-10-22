@@ -16,25 +16,21 @@ const DEFAULT_SETTINGS = {
 };
 
 export function getSettings() {
+  let parsed = {};
   try {
-    const raw = localStorage.getItem(KEYS.SETTINGS);
-    const savedSettings = raw ? JSON.parse(raw) : null;
-    return {
-      geminiApiKey: savedSettings?.geminiApiKey || import.meta.env.VITE_GEMINI_API_KEY || '',
-      cloudinaryCloudName: savedSettings?.cloudinaryCloudName || import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '',
-      cloudinaryPreset: savedSettings?.cloudinaryPreset || import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || '',
-      prepDate: savedSettings?.prepDate || '',
-      targetMaxIodine: savedSettings?.targetMaxIodine ?? 50
-    };
+    const saved = localStorage.getItem('kosherai_settings');
+    if (saved) parsed = JSON.parse(saved);
   } catch (e) {
-    return {
-      geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
-      cloudinaryCloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '',
-      cloudinaryPreset: import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || '',
-      prepDate: '',
-      targetMaxIodine: 50
-    };
+    console.warn('Error reading settings from localStorage', e);
   }
+
+  return {
+    geminiApiKey: parsed.geminiApiKey?.trim() || import.meta.env.VITE_GEMINI_API_KEY || '',
+    cloudinaryCloudName: parsed.cloudinaryCloudName?.trim() || import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '',
+    cloudinaryPreset: parsed.cloudinaryPreset?.trim() || import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || '',
+    prepDate: parsed.prepDate || '',
+    targetMaxIodine: parsed.targetMaxIodine ?? 50
+  };
 }
 
 export function saveSettings(newSettings) {

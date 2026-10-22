@@ -115,7 +115,7 @@ export function parseGeminiJson(rawText) {
  * Calls gemini-2.5-flash to enforce strict Radioactive Iodine (RAI) / Low-Iodine Diet protocol
  */
 export async function verifyWithGeminiAI(ingredientTextOrPayload, apiKey) {
-  const activeKey = (apiKey || import.meta.env.VITE_GEMINI_API_KEY || '').trim();
+  const activeKey = (apiKey?.trim() || import.meta.env.VITE_GEMINI_API_KEY || '').trim();
   if (!activeKey) {
     throw new Error('Please add your Gemini API Key in Settings or set VITE_GEMINI_API_KEY to enable online AI deep reasoning.');
   }
@@ -236,8 +236,8 @@ Return clean JSON:
  * If credentials are missing, logs a gentle warning and returns null without throwing or breaking UI.
  */
 export async function uploadToCloudinary(blob, cloudName, uploadPreset) {
-  const resolvedCloudName = cloudName || import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-  const resolvedPreset = uploadPreset || import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+  const resolvedCloudName = (cloudName?.trim() || import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '').trim();
+  const resolvedPreset = (uploadPreset?.trim() || import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || '').trim();
 
   if (!resolvedCloudName || !resolvedPreset) {
     console.warn('Cloudinary upload skipped: missing cloudName or uploadPreset credentials.');
