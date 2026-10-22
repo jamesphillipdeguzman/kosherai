@@ -5,7 +5,7 @@ import './style.css';
 import { renderHeader } from './components/Header.js';
 import { renderBottomNav } from './components/BottomNav.js';
 import { renderCheckerTab } from './components/CheckerTab.js';
-import { renderScannerTab, SAMPLE_LABELS } from './components/ScannerTab.js';
+import { renderScannerTab, executeScanWorkflow, SAMPLE_LABELS } from './components/ScannerTab.js';
 import { renderCheatSheetTab } from './components/CheatSheetTab.js';
 import { renderSubstitutesTab } from './components/SubstitutesTab.js';
 import { renderCookModeTab } from './components/CookModeTab.js';
@@ -310,35 +310,11 @@ function attachEventHandlers() {
 
   const handleImageFile = async (file) => {
     if (!file) return;
-    try {
-      state.ocrStatus = { message: 'Compressing image...' };
-      state.ocrProgress = 0.15;
-      render();
-
-      const { dataUrl } = await compressImage(file);
-      state.imagePreviewUrl = dataUrl;
-      state.ocrStatus = { message: 'Running OCR engine on label...' };
-      state.ocrProgress = 0.45;
-      render();
-
-      const extractedText = await runClientOCR(dataUrl, (prog) => {
-        state.ocrStatus = prog;
-        state.ocrProgress = prog.progress;
-        // Don't re-render entire DOM every tick for performance
-        const fill = document.querySelector('.progress-bar-fill');
-        if (fill) fill.style.width = Math.round(prog.progress * 100) + '%';
-      });
-
-      state.ocrStatus = null;
-      state.scanText = extractedText;
-      processScanText(extractedText, 'Scanned Label');
-    } catch (err) {
-      console.error('Scan error', err);
-      state.ocrStatus = null;
-      alert('Could not extract text via OCR. You can paste the ingredients directly in the text tab.');
-      state.inputMode = 'text';
-      render();
-    }
+    await executeScanWorkflow(file, {
+      state,
+      render,
+      addScanToHistory
+    });
   };
 
   if (cameraInput) {
@@ -407,7 +383,8 @@ function attachEventHandlers() {
   if (runAiBtn) {
     runAiBtn.addEventListener('click', async () => {
       if (!state.scanText) return;
-      if (!state.settings.geminiApiKey) {
+      const activeKey = state.settings.geminiApiKey || import.meta.env.VITE_GEMINI_API_KEY || '';
+      if (!activeKey) {
         alert('Please add your Gemini API Key in Settings (top right gear icon) to run deep AI reasoning. Our built-in offline engine has already evaluated this label!');
         state.settingsOpen = true;
         render();
@@ -418,7 +395,7 @@ function attachEventHandlers() {
       render();
 
       try {
-        const result = await verifyWithGeminiAI(state.scanText, state.settings.geminiApiKey);
+        const result = await verifyWithGeminiAI(state.scanText, activeKey);
         state.aiAnalysis = result;
       } catch (err) {
         alert('AI Verification Error: ' + err.message);

@@ -8,9 +8,9 @@ const KEYS = {
 };
 
 const DEFAULT_SETTINGS = {
-  geminiApiKey: '',
-  cloudinaryCloudName: '',
-  cloudinaryPreset: '',
+  geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
+  cloudinaryCloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '',
+  cloudinaryPreset: import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || '',
   prepDate: '',
   targetMaxIodine: 50
 };
@@ -18,9 +18,22 @@ const DEFAULT_SETTINGS = {
 export function getSettings() {
   try {
     const raw = localStorage.getItem(KEYS.SETTINGS);
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
+    const savedSettings = raw ? JSON.parse(raw) : null;
+    return {
+      geminiApiKey: savedSettings?.geminiApiKey || import.meta.env.VITE_GEMINI_API_KEY || '',
+      cloudinaryCloudName: savedSettings?.cloudinaryCloudName || import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '',
+      cloudinaryPreset: savedSettings?.cloudinaryPreset || import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || '',
+      prepDate: savedSettings?.prepDate || '',
+      targetMaxIodine: savedSettings?.targetMaxIodine ?? 50
+    };
   } catch (e) {
-    return DEFAULT_SETTINGS;
+    return {
+      geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
+      cloudinaryCloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '',
+      cloudinaryPreset: import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || '',
+      prepDate: '',
+      targetMaxIodine: 50
+    };
   }
 }
 

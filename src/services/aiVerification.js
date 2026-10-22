@@ -86,31 +86,64 @@ function loadScript(src) {
 }
 
 /**
- * Deep Clinical AI Verification via Gemini API
+ * Safe parser that handles markdown backtick wraps (e.g. ```json ... ```)
  */
-export async function verifyWithGeminiAI(ingredientText, apiKey) {
-  if (!apiKey || !apiKey.trim()) {
-    throw new Error('Please add your Gemini API Key in Settings to enable online AI deep reasoning.');
+export function parseGeminiJson(rawText) {
+  if (!rawText || typeof rawText !== 'string') return null;
+  let text = rawText.trim();
+
+  // Extract markdown fenced code block if present
+  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (codeBlockMatch) {
+    text = codeBlockMatch[1].trim();
+  } else if (text.startsWith('```')) {
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  } else {
+    // Look for outermost JSON object brackets
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      text = text.slice(firstBrace, lastBrace + 1);
+    }
   }
+
+  return JSON.parse(text);
+}
+
+/**
+ * Deep Clinical AI Verification via Gemini API
+ * Calls gemini-2.5-flash to enforce strict Radioactive Iodine (RAI) / Low-Iodine Diet protocol
+ */
+export async function verifyWithGeminiAI(ingredientTextOrPayload, apiKey) {
+  const activeKey = (apiKey || import.meta.env.VITE_GEMINI_API_KEY || '').trim();
+  if (!activeKey) {
+    throw new Error('Please add your Gemini API Key in Settings or set VITE_GEMINI_API_KEY to enable online AI deep reasoning.');
+  }
+
+  // Support string ingredient text or multimodal payload object { text, imageBase64, mimeType }
+  const isMultimodal = typeof ingredientTextOrPayload === 'object' && ingredientTextOrPayload !== null;
+  const ingredientText = isMultimodal ? (ingredientTextOrPayload.text || '') : String(ingredientTextOrPayload || '');
+  const imageBase64 = isMultimodal ? ingredientTextOrPayload.imageBase64 : null;
+  const mimeType = isMultimodal && ingredientTextOrPayload.mimeType ? ingredientTextOrPayload.mimeType : 'image/jpeg';
 
   const prompt = `
 You are a nuclear medicine clinical endocrinology AI specialist for Radioactive Iodine (RAI) therapy preparation.
 Patients MUST adhere to a strict Low-Iodine Diet (LID) (<50 mcg iodine/day).
 
 Protocol Ground Rules:
+- Flag any hidden dairy, whey, egg yolk, sea salt, iodized salt, fish, seafood, carrageenan, agar-agar, Red Dye #3, soy/soybeans, potatoes, or iodate dough conditioners.
 - STRICTLY FORBIDDEN (AVOID):
-  * Any iodized salt, sea salt, rock salt, himalayan pink salt
-  * Seaweed, nori, kelp, carrageenan (E407), agar-agar (E406), alginate (E401-E404)
-  * All marine fish, shellfish, crustaceans, fish sauce (patis), oyster sauce
-  * All dairy (milk, cheese, yogurt, butter, whey, casein, cream, milk chocolate)
-  * Whole eggs, egg yolks, mayonnaise with yolks
-  * Soybeans, soy sauce (toyo), tofu, edamame, soy protein/isoflavones (NIS inhibitors)
-  * Turkey breast (commercial brine)
+  * Hidden dairy, whey, milk, cheese, butter, yogurt, casein, cream, milk chocolate
+  * Egg yolks, whole eggs, mayonnaise with yolks
+  * Sea salt, iodized salt, rock salt, Himalayan pink salt
+  * Marine fish, shellfish, crustaceans, fish sauce (patis), oyster sauce
+  * Carrageenan (E407), agar-agar (E406), alginate (E401-E404), seaweed, nori, kelp
+  * FD&C Red Dye #3 (erythrosine / E127 - 58% elemental iodine)
+  * Soybeans, soy sauce (toyo), tofu, edamame, soy protein, soy isoflavones (NIS inhibitors)
   * Potatoes (russet/red/chips ~60mcg), watercress, cassava (kamoteng kahoy), millet
   * Cruciferous vegetables (cabbage, broccoli, cauliflower, brussels sprouts)
-  * FD&C Red Dye #3 (erythrosine / E127 - 58% elemental iodine)
+  * Iodate dough conditioners (potassium iodate, calcium iodate)
   * Prunes, bananas, pineapple, strawberries, cranberries
-  * Commercially prepared bakery items with iodate conditioners (potassium iodate, calcium iodate)
 - STRICTLY SAFE:
   * Pure non-iodized kosher salt (Morton Coarse, Diamond Crystal), pickling salt
   * Pure egg whites
@@ -121,30 +154,39 @@ Protocol Ground Rules:
   * Pure black pepper, chili peppers (siling labuyo), pure spices
 - CAUTION:
   * Unspecified "salt" on commercial packages (usually iodized)
-  * "Natural flavors" or "dough conditioners" (may hide iodates or dairy)
+  * "Natural flavors", "artificial flavors", or ambiguous "dough conditioners"
   * Commercial plant milks with added sea salt or carrageenan
 
 Analyze the following food ingredient text or packaging label:
 """${ingredientText}"""
 
-Output ONLY a valid JSON object with this exact structure:
+Return clean JSON:
 {
-  "isSafe": boolean,
   "status": "SAFE" | "AVOID" | "CAUTION",
-  "reasons": ["string explanation 1", "string explanation 2"],
-  "detectedProblemIngredients": ["ingredient name 1", "ingredient name 2"],
-  "safeSubstitutions": ["substitute advice if avoid or caution"],
-  "clinicalSummary": "Concise medical rationale for the patient"
+  "reason": "Brief explanation why",
+  "problemIngredients": ["ingredient1", "ingredient2"]
 }
 `;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(activeKey)}`;
+
+  const parts = [];
+  if (imageBase64) {
+    const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
+    parts.push({
+      inlineData: {
+        mimeType: mimeType,
+        data: cleanBase64
+      }
+    });
+  }
+  parts.push({ text: prompt });
 
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
+      contents: [{ parts }],
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0.1
@@ -154,47 +196,74 @@ Output ONLY a valid JSON object with this exact structure:
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `Gemini API error: ${response.statusText}`);
+    throw new Error(errorData.error?.message || `Gemini API error: ${response.status} ${response.statusText}`);
   }
 
   const data = await response.json();
   const textOutput = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
   if (!textOutput) {
-    throw new Error('No AI response received.');
+    throw new Error('No AI response received from Gemini.');
   }
 
-  try {
-    return JSON.parse(textOutput);
-  } catch (err) {
-    // If wrapped in markdown code blocks
-    const cleaned = textOutput.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(cleaned);
-  }
+  const parsed = parseGeminiJson(textOutput);
+
+  const rawStatus = (parsed.status || 'CAUTION').toUpperCase();
+  const status = ['SAFE', 'AVOID', 'CAUTION'].includes(rawStatus) ? rawStatus : 'CAUTION';
+  const reason = parsed.reason || (Array.isArray(parsed.reasons) ? parsed.reasons.join('. ') : 'Evaluated according to Low-Iodine Diet protocol.');
+  const problemIngredients = Array.isArray(parsed.problemIngredients)
+    ? parsed.problemIngredients
+    : Array.isArray(parsed.detectedProblemIngredients)
+    ? parsed.detectedProblemIngredients
+    : [];
+
+  return {
+    status,
+    reason,
+    problemIngredients,
+    // Extra helper properties for seamless UI display & compatibility
+    isSafe: status === 'SAFE',
+    reasons: [reason],
+    detectedProblemIngredients: problemIngredients,
+    safeSubstitutions: parsed.safeSubstitutions || (parsed.substitution ? [parsed.substitution] : []),
+    clinicalSummary: parsed.clinicalSummary || reason
+  };
 }
 
 /**
- * Optional Cloudinary Upload for packaging log
+ * Cloudinary Upload for packaging log
+ * Handles FormData POST to https://api.cloudinary.com/v1_1/${cloudName}/image/upload.
+ * If credentials are missing, logs a gentle warning and returns null without throwing or breaking UI.
  */
 export async function uploadToCloudinary(blob, cloudName, uploadPreset) {
-  if (!cloudName || !uploadPreset) {
+  const resolvedCloudName = cloudName || import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  const resolvedPreset = uploadPreset || import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+  if (!resolvedCloudName || !resolvedPreset) {
+    console.warn('Cloudinary upload skipped: missing cloudName or uploadPreset credentials.');
     return null;
   }
 
-  const formData = new FormData();
-  formData.append('file', blob);
-  formData.append('upload_preset', uploadPreset);
+  try {
+    const formData = new FormData();
+    formData.append('file', blob);
+    formData.append('upload_preset', resolvedPreset);
 
-  const url = `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/image/upload`;
-  const response = await fetch(url, {
-    method: 'POST',
-    body: formData
-  });
+    const url = `https://api.cloudinary.com/v1_1/${encodeURIComponent(resolvedCloudName)}/image/upload`;
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData
+    });
 
-  if (!response.ok) {
-    throw new Error(`Cloudinary upload failed: ${response.statusText}`);
+    if (!response.ok) {
+      console.warn(`Cloudinary upload returned status ${response.status}: ${response.statusText}`);
+      return null;
+    }
+
+    const result = await response.json();
+    return result.secure_url || result.url || null;
+  } catch (err) {
+    console.warn('Cloudinary upload error (non-fatal):', err);
+    return null;
   }
-
-  const result = await response.json();
-  return result.secure_url;
 }
