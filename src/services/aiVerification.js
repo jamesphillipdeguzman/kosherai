@@ -43,7 +43,7 @@ export async function compressImage(file, maxWidth = 1200, quality = 0.82) {
 /**
  * Client-Side OCR using Tesseract.js (cached by Service Worker)
  */
-export async function runClientOCR(imageSource, onProgress = () => {}) {
+export async function runClientOCR(imageSource, onProgress = () => { }) {
   try {
     onProgress({ status: 'loading_tesseract', progress: 0.1, message: 'Initializing OCR engine...' });
 
@@ -59,7 +59,7 @@ export async function runClientOCR(imageSource, onProgress = () => {}) {
     onProgress({ status: 'recognizing', progress: 0.3, message: 'Reading ingredient text...' });
 
     const worker = await window.Tesseract.createWorker('eng');
-    
+
     // Set logger if available
     const result = await worker.recognize(imageSource);
     await worker.terminate();
@@ -168,7 +168,7 @@ Return clean JSON:
 }
 `;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(activeKey)}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${encodeURIComponent(activeKey)}`;
 
   const parts = [];
   if (imageBase64) {
@@ -214,8 +214,8 @@ Return clean JSON:
   const problemIngredients = Array.isArray(parsed.problemIngredients)
     ? parsed.problemIngredients
     : Array.isArray(parsed.detectedProblemIngredients)
-    ? parsed.detectedProblemIngredients
-    : [];
+      ? parsed.detectedProblemIngredients
+      : [];
 
   return {
     status,
