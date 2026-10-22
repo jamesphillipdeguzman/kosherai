@@ -6,7 +6,8 @@ import { LID_DATABASE, STATUS } from '../data/lidDatabase.js';
 // High-risk prohibited keyword patterns for fast substring/regex detection
 const FORBIDDEN_RULES = [
   {
-    regex: /\b(iodi[sz]ed|potassium iodate|calcium iodate|potassium iodide|iodated|e916|e917|iodophor)\b/i,
+    regex: /(?<!\bnon[-\s]?|\bun[-\s]?)(?:iodi[sz]ed|iodated)\b|\b(potassium iodate|calcium iodate|potassium iodide|e916|e917|iodophor)\b/i,
+    exclude: /\b(non[- ]?iodi[sz]ed|un[- ]?iodi[sz]ed|noniodi[sz]ed)\b/i,
     name: 'Iodized Salt / Iodate Conditioners',
     reason: 'Contains fortified inorganic iodine or iodate dough conditioner (>70 mcg/serving).'
   },
@@ -61,7 +62,8 @@ const FORBIDDEN_RULES = [
     reason: 'Commercially processed with high-iodine brine/broth injections.'
   },
   {
-    regex: /\b(potatoes?|potato starch|potato flour|french fries|mashed potato|hash browns?|patatas)\b/i,
+    regex: /\b(?<!sweet\s)(potatoes?|potato starch|potato flour|french fries|mashed potato|hash browns?|patatas)\b/i,
+    exclude: /\bsweet\s*potat/i,
     name: 'Potatoes (All Varieties)',
     reason: 'Potatoes store ~60 mcg iodine per medium tuber, exceeding the 50 mcg/day diet ceiling.'
   },
@@ -100,7 +102,7 @@ const FORBIDDEN_RULES = [
 const CAUTION_RULES = [
   {
     regex: /\b(salt|sodium chloride)\b/i,
-    exclude: /\b(kosher|non-iodized|pickling|canning)\b/i,
+    exclude: /\b(kosher|non[- ]?iodi[sz]ed|un[- ]?iodi[sz]ed|noniodi[sz]ed|pickling|canning)\b/i,
     name: 'Unspecified Salt',
     reason: 'Packaging lists generic "salt". Unless labeled as non-iodized or kosher, commercially processed salt is usually iodized.'
   },
@@ -169,6 +171,9 @@ export function analyzeIngredients(rawText) {
   // 1. Scan across the entire text against forbidden rules
   for (const rule of FORBIDDEN_RULES) {
     if (rule.regex.test(normalized)) {
+      if (rule.exclude && rule.exclude.test(normalized)) {
+        continue;
+      }
       const match = normalized.match(rule.regex);
       detectedForbidden.push({
         name: rule.name,
@@ -202,6 +207,7 @@ export function analyzeIngredients(rawText) {
 
     for (const rule of FORBIDDEN_RULES) {
       if (rule.regex.test(seg)) {
+        if (rule.exclude && rule.exclude.test(seg)) continue;
         segmentStatus = STATUS.AVOID;
         matchedReason = rule.reason;
         matchedName = rule.name;

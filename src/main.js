@@ -8,7 +8,7 @@ import { renderCheckerTab } from './components/CheckerTab.js';
 import { renderScannerTab, executeScanWorkflow, SAMPLE_LABELS } from './components/ScannerTab.js';
 import { renderCheatSheetTab } from './components/CheatSheetTab.js';
 import { renderSubstitutesTab } from './components/SubstitutesTab.js';
-import { renderCookModeTab } from './components/CookModeTab.js';
+import { renderCookModeTab, lidRecipes } from './components/CookModeTab.js';
 import { renderSettingsModal } from './components/SettingsModal.js';
 import { renderItemDetailModal } from './components/ItemDetailModal.js';
 
@@ -58,6 +58,7 @@ const state = {
   checklistState: getChecklistState(),
   recipeText: '',
   recipeAnalysis: null,
+  recipeCategoryFilter: 'ALL',
 
   // Settings
   settings: getSettings(),
@@ -549,6 +550,33 @@ Filtered water`;
       render();
     });
   }
+
+  // Recipe Category Filter
+  document.querySelectorAll('.recipe-filter-btn[data-category]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cat = btn.getAttribute('data-category');
+      state.recipeCategoryFilter = cat;
+      render();
+    });
+  });
+
+  // Load into Recipe Auditor
+  document.querySelectorAll('.load-recipe-btn[data-recipe-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rid = btn.getAttribute('data-recipe-id');
+      const recipe = lidRecipes.find(r => r.id === rid);
+      if (recipe) {
+        state.recipeText = recipe.ingredients.join('\n');
+        state.recipeAnalysis = analyzeRecipe(recipe.title, state.recipeText);
+        render();
+        const textarea = document.querySelector('#recipe-textarea');
+        if (textarea) {
+          textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          textarea.focus();
+        }
+      }
+    });
+  });
 }
 
 // Helper: Processes scanned/entered text with Gemini AI (if key present) or offline rule engine

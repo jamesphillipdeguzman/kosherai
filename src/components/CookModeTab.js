@@ -1,13 +1,28 @@
-// Meal & Family Cook Mode Component (Pre-Cooking Checklist & Recipe Analyzer)
+// Meal & Family Cook Mode Component (Pre-Cooking Checklist, Recipe Analyzer & Practical Dishes)
 import { PRE_COOKING_CHECKLIST } from '../data/protocolRules.js';
 import { analyzeRecipe } from '../services/ruleEngine.js';
+import lidRecipes from '../data/lidRecipes.json';
+
+export { lidRecipes };
+
+const CATEGORIES = ['All', 'Breakfast', 'Mains', 'Soups & Stews', 'Snacks & Sides'];
 
 export function renderCookModeTab(state) {
-  const { checklistState = {}, recipeAnalysis = null, recipeText = '' } = state;
+  const { 
+    checklistState = {}, 
+    recipeAnalysis = null, 
+    recipeText = '',
+    recipeCategoryFilter = 'ALL'
+  } = state;
 
   const totalChecks = PRE_COOKING_CHECKLIST.length;
   const checkedCount = PRE_COOKING_CHECKLIST.filter(item => checklistState[item.id]).length;
   const isAllClear = checkedCount === totalChecks;
+
+  const activeCategory = recipeCategoryFilter || 'ALL';
+  const filteredRecipes = (activeCategory === 'ALL' || activeCategory === 'All')
+    ? lidRecipes
+    : lidRecipes.filter(r => r.category.toLowerCase() === activeCategory.toLowerCase());
 
   return `
     <div class="cook-container">
@@ -97,7 +112,126 @@ export function renderCookModeTab(state) {
         <!-- Recipe Audit Output -->
         ${recipeAnalysis ? renderRecipeResults(recipeAnalysis) : ''}
       </div>
+
+      <!-- Practical LID / RAI Compliant Dishes Section -->
+      <section class="practical-recipes-section">
+        <div class="practical-recipes-header">
+          <div>
+            <h2 class="practical-recipes-title">
+              <span>🍳</span> Practical LID / RAI Compliant Dishes
+            </h2>
+            <p class="practical-recipes-subtitle">
+              Curated home-cooked meals strictly &lt;5 mcg iodine per serving. Free of commercial dairy, sea salt, egg yolks, and bouillons.
+            </p>
+          </div>
+          <span class="recipe-count-badge">${filteredRecipes.length} Dishes</span>
+        </div>
+
+        <!-- Category Filter Bar -->
+        <div class="recipe-filter-bar" role="tablist" aria-label="Recipe categories">
+          ${CATEGORIES.map(cat => {
+            const isSelected = (cat === 'All' && (activeCategory === 'ALL' || activeCategory === 'All')) || 
+                               (cat.toLowerCase() === activeCategory.toLowerCase());
+            return `
+              <button 
+                class="recipe-filter-btn ${isSelected ? 'active' : ''}" 
+                data-category="${cat === 'All' ? 'ALL' : cat}"
+                role="tab"
+                aria-selected="${isSelected}"
+              >
+                ${cat}
+              </button>
+            `;
+          }).join('')}
+        </div>
+
+        <!-- Recipe Cards Grid -->
+        <div class="recipes-grid">
+          ${filteredRecipes.map(recipe => renderRecipeCard(recipe)).join('')}
+        </div>
+      </section>
     </div>
+  `;
+}
+
+function renderRecipeCard(recipe) {
+  return `
+    <article class="recipe-card" id="recipe-${recipe.id}">
+      <div class="recipe-card-header">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px;">
+          <span class="recipe-category-pill">${escapeHtml(recipe.category)}</span>
+          <div class="recipe-time-tag">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.8;">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span>Prep: ${escapeHtml(recipe.prepTime)} • Cook: ${escapeHtml(recipe.cookTime)}</span>
+          </div>
+        </div>
+        <h3 class="recipe-card-title">${escapeHtml(recipe.title)}</h3>
+        <div class="recipe-clinical-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+          <span>${escapeHtml(recipe.clinicalBadge)}</span>
+        </div>
+      </div>
+
+      <div class="recipe-card-body">
+        <!-- Ingredients List -->
+        <div class="recipe-card-section">
+          <div class="recipe-section-heading">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 11l3 3L22 4"></path>
+              <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
+            </svg>
+            <span>Ingredients (${recipe.ingredients.length})</span>
+          </div>
+          <ul class="recipe-ingredients-list">
+            ${recipe.ingredients.map(ing => `<li>${escapeHtml(ing)}</li>`).join('')}
+          </ul>
+        </div>
+
+        <!-- Step-by-Step Directions -->
+        <div class="recipe-card-section">
+          <div class="recipe-section-heading">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+            <span>Preparation Directions</span>
+          </div>
+          <ol class="recipe-directions-list">
+            ${recipe.instructions.map(step => `<li>${escapeHtml(step)}</li>`).join('')}
+          </ol>
+        </div>
+
+        <!-- Clinical Note Callout -->
+        <div class="recipe-clinical-callout">
+          <div class="callout-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="12" y1="8" x2="12" y2="16"></line>
+              <line x1="8" y1="12" x2="16" y2="12"></line>
+            </svg>
+            <span class="callout-title">Clinical Protocol Rationale</span>
+          </div>
+          <p class="callout-text">${escapeHtml(recipe.clinicalNote)}</p>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <div class="recipe-card-footer">
+        <button class="btn-primary load-recipe-btn" data-recipe-id="${recipe.id}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 18h12"></path>
+            <path d="M3 22h18"></path>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16"></path>
+            <path d="M14 2v6h6"></path>
+          </svg>
+          <span>Load into Recipe Auditor</span>
+        </button>
+      </div>
+    </article>
   `;
 }
 
