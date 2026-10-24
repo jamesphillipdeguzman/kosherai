@@ -1399,6 +1399,47 @@ main.app-container {
   padding: 24px;
 }
 
+/* History Card & Inspection Modal Utilities */
+.scan-history-card {
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.scan-history-card:hover {
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  transform: translateY(-1px);
+  background: var(--bg-card-hover) !important;
+}
+.scan-history-card:active {
+  transform: scale(0.99) !important;
+}
+
+.max-h-72 {
+  max-height: 18rem !important;
+}
+.object-contain {
+  object-fit: contain !important;
+}
+.mx-auto {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+.bg-black\/80 {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+}
+.backdrop-blur-sm {
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+}
+.inset-0 {
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+}
+.z-50 {
+  z-index: 50 !important;
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;

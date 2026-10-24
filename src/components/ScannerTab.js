@@ -193,10 +193,22 @@ export async function executeScanWorkflow(file, context = {}) {
 
     // 6. Persist to history and display clear color-coded result cards
     if (scanAnalysis) {
+      const flaggedIngredients = [
+        ...(aiResult?.problemIngredients || []),
+        ...(scanAnalysis.detectedForbidden || []).map(f => f.matchedWord || f.name),
+        ...(scanAnalysis.detectedCaution || []).map(c => c.matchedWord || c.name)
+      ];
+      const uniqueFlagged = [...new Set(flaggedIngredients.map(t => String(t).trim()))].filter(Boolean);
+      const reason = aiResult?.reason || scanAnalysis.reason || (scanAnalysis.reasons && scanAnalysis.reasons[0]) || '';
+      const imageUrl = state.cloudinaryUrl || state.imagePreviewUrl || null;
+
       state.scanHistory = addScanToHistory({
         title: 'Scanned Food Label',
         rawText: extractedText || 'Packaging Image',
         status: scanAnalysis.status,
+        reason,
+        flaggedIngredients: uniqueFlagged,
+        imageUrl,
         cloudinaryUrl: state.cloudinaryUrl || null,
         analysis: scanAnalysis,
         aiAnalysis: state.aiAnalysis
@@ -279,7 +291,8 @@ export function renderScannerTab(state) {
     imagePreviewUrl,
     cloudinaryUrl,
     inputMode = 'camera', // 'camera' or 'text'
-    scanHistory = []
+    scanHistory = [],
+    selectedScanItem = null
   } = state;
 
   return `
@@ -388,6 +401,9 @@ export function renderScannerTab(state) {
 
       <!-- Scan History -->
       ${scanHistory.length > 0 ? renderScanHistory(scanHistory) : ''}
+
+      <!-- Detail Preview / Inspection Modal -->
+      ${selectedScanItem ? renderScanDetailModal(selectedScanItem) : ''}
     </div>
   `;
 }
@@ -589,34 +605,209 @@ function renderAiResult(ai) {
 
 function renderScanHistory(history) {
   return `
-    <div style="margin-top: 10px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+    <div style="margin-top: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
         <span class="section-label" style="margin: 0;">📜 Recent Scanned Labels (${history.length})</span>
         <button id="clear-scan-history-btn" style="background: none; border: none; color: var(--text-muted); font-size: 0.75rem; cursor: pointer; text-decoration: underline;">
           Clear History
         </button>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 8px;">
-        ${history.slice(0, 5).map(item => `
-          <div class="check-item" data-history-id="${item.id}" style="cursor: pointer; justify-content: space-between;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <span>${item.status === STATUS.SAFE || item.status === 'SAFE' ? '🟢' : item.status === STATUS.AVOID || item.status === 'AVOID' ? '🔴' : '🟡'}</span>
-              <div>
-                <div style="font-size: 0.88rem; font-weight: 700; color: var(--text-primary); max-width: 400px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                  ${escapeHtml(item.title || item.rawText.slice(0, 50) + '...')}
-                </div>
-                <div style="font-size: 0.72rem; color: var(--text-muted);">
-                  ${new Date(item.timestamp).toLocaleDateString()} ${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  ${item.cloudinaryUrl ? ' • ☁️ Archived' : ''}
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        ${history.slice(0, 10).map(item => {
+          const isSafe = item.status === STATUS.SAFE || item.status === 'SAFE';
+          const isAvoid = item.status === STATUS.AVOID || item.status === 'AVOID';
+          const hasImage = Boolean(item.imageUrl || item.cloudinaryUrl);
+
+          return `
+            <div 
+              class="check-item scan-history-card cursor-pointer hover:border-emerald-500/50 transition-all active:scale-[0.99]" 
+              data-history-id="${escapeHtml(item.id)}" 
+              style="cursor: pointer; justify-content: space-between; align-items: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); border-radius: var(--radius-md);"
+              title="Click to view archived image and clinical evaluation"
+            >
+              <div style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1;">
+                ${hasImage ? `
+                  <div style="width: 44px; height: 44px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); flex-shrink: 0; background: #000; display: flex; align-items: center; justify-content: center;">
+                    <img 
+                      src="${escapeHtml(item.imageUrl || item.cloudinaryUrl)}" 
+                      alt="Thumbnail" 
+                      style="width: 100%; height: 100%; object-fit: cover;" 
+                    />
+                  </div>
+                ` : `
+                  <div style="width: 44px; height: 44px; border-radius: 8px; background: var(--bg-card-subtle); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                    ${isSafe ? '🟢' : isAvoid ? '🔴' : '🟡'}
+                  </div>
+                `}
+
+                <div style="min-width: 0; flex: 1;">
+                  <div style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${escapeHtml(item.title || (item.rawText ? item.rawText.slice(0, 45) + '...' : 'Scanned Label'))}
+                  </div>
+                  <div style="font-size: 0.73rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
+                    <span>${new Date(item.timestamp).toLocaleDateString()} ${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    ${item.cloudinaryUrl ? '<span style="color: #38bdf8; font-weight: 600;">• ☁️ Cloudinary</span>' : (hasImage ? '<span style="color: var(--safe-green); font-weight: 600;">• 📷 Photo</span>' : '')}
+                  </div>
                 </div>
               </div>
+
+              <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: 10px;">
+                <span class="badge-status ${isSafe ? 'badge-safe' : isAvoid ? 'badge-avoid' : 'badge-caution'}">
+                  ${item.status}
+                </span>
+                <span style="color: var(--text-muted); font-size: 1.1rem; line-height: 1;">›</span>
+              </div>
             </div>
-            <span class="badge-status ${item.status === STATUS.SAFE || item.status === 'SAFE' ? 'badge-safe' : item.status === STATUS.AVOID || item.status === 'AVOID' ? 'badge-avoid' : 'badge-caution'}">
-              ${item.status}
-            </span>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+export function renderScanDetailModal(item) {
+  if (!item) return '';
+
+  const isSafe = item.status === STATUS.SAFE || item.status === 'SAFE';
+  const isAvoid = item.status === STATUS.AVOID || item.status === 'AVOID';
+  const isCaution = item.status === STATUS.CAUTION || item.status === 'CAUTION';
+
+  const statusBadgeClass = isSafe ? 'badge-safe' : (isAvoid ? 'badge-avoid' : 'badge-caution');
+  const statusEmoji = isSafe ? '🟢' : (isAvoid ? '🔴' : '🟡');
+  const statusText = isSafe ? 'SAFE ON LOW-IODINE DIET' : (isAvoid ? 'STRICTLY PROHIBITED (AVOID)' : 'CHECK LABEL CAREFULLY (CAUTION)');
+
+  const reasonText = item.reason ||
+    item.aiAnalysis?.reason ||
+    item.analysis?.reason ||
+    (item.analysis?.reasons && item.analysis.reasons[0]) ||
+    (isSafe ? 'No prohibited high-iodine ingredients or dairy detected.' : 'Contains flagged ingredients requiring avoidance or clinical caution.');
+
+  const flagged = item.flaggedIngredients || [
+    ...(item.aiAnalysis?.problemIngredients || []),
+    ...(item.analysis?.detectedForbidden || []).map(f => f.matchedWord || f.name),
+    ...(item.analysis?.detectedCaution || []).map(c => c.matchedWord || c.name)
+  ];
+  const uniqueFlagged = [...new Set(flagged.map(t => String(t).trim()))].filter(Boolean);
+
+  const imageUrl = item.imageUrl || item.cloudinaryUrl || null;
+  const isCloudinary = item.cloudinaryUrl || (imageUrl && imageUrl.includes('cloudinary.com'));
+  const cloudUrl = item.cloudinaryUrl || (isCloudinary ? imageUrl : null);
+
+  const formattedDate = item.timestamp
+    ? new Date(item.timestamp).toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    : 'Recent Scan';
+
+  return `
+    <div class="bg-black/80 backdrop-blur-sm fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay" id="scan-modal-overlay" role="dialog" aria-modal="true" style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; animation: fadeIn 0.2s ease;">
+      <div class="scan-detail-card modal-content" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; padding: 22px; box-shadow: 0 25px 60px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 16px;">
+        
+        <!-- Header -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 14px;">
+          <div>
+            <div style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
+              <span>ARCHIVED SCAN RECORD</span>
+              <span>•</span>
+              <span>${escapeHtml(formattedDate)}</span>
+            </div>
+            <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary); margin-top: 2px;">
+              ${escapeHtml(item.title || 'Scanned Food Label')}
+            </h3>
           </div>
-        `).join('')}
+          <button id="scan-modal-close-btn" class="btn-icon" aria-label="Close" style="background: var(--bg-card-subtle); border: 1px solid var(--border-color); color: var(--text-secondary); width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.1rem; flex-shrink: 0;">✕</button>
+        </div>
+
+        <!-- Image Preview or Placeholder -->
+        ${imageUrl ? `
+          <div style="background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+            <img 
+              src="${escapeHtml(imageUrl)}" 
+              alt="Archived Scanned Label" 
+              class="max-h-72 object-contain mx-auto" 
+              style="max-height: 18rem; width: auto; object-fit: contain; margin-left: auto; margin-right: auto; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 4px 14px rgba(0,0,0,0.5);"
+            />
+            ${cloudUrl ? `
+              <a href="${escapeHtml(cloudUrl)}" target="_blank" rel="noopener noreferrer" style="font-size: 0.78rem; font-weight: 600; color: #38bdf8; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; padding: 4px 10px; background: rgba(56, 189, 248, 0.1); border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.25);">
+                <span>☁️ View full resolution in Cloudinary Archive ↗</span>
+              </a>
+            ` : ''}
+          </div>
+        ` : `
+          <div style="background: var(--bg-card-subtle); border: 1px dashed var(--border-color); border-radius: 12px; padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+            <div style="font-size: 1.5rem; margin-bottom: 4px;">📝</div>
+            <div>Text-based scan (No camera photo archived)</div>
+            ${item.rawText ? `
+              <div style="margin-top: 8px; font-size: 0.78rem; color: var(--text-secondary); background: rgba(0,0,0,0.25); padding: 8px 12px; border-radius: 6px; font-family: var(--font-mono); max-height: 80px; overflow-y: auto; text-align: left;">
+                ${escapeHtml(item.rawText)}
+              </div>
+            ` : ''}
+          </div>
+        `}
+
+        <!-- Clinical Evaluation Status Banner -->
+        <div class="result-banner ${isSafe ? 'banner-safe' : (isAvoid ? 'banner-avoid' : 'banner-caution')}" style="padding: 12px 14px; border-radius: var(--radius-sm); margin: 0;">
+          <div class="banner-status-icon" style="font-size: 1.35rem;">${statusEmoji}</div>
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span class="banner-headline" style="font-size: 0.95rem;">${statusText}</span>
+              <span class="badge-status ${statusBadgeClass}">${item.status}</span>
+            </div>
+            <div style="font-size: 0.76rem; color: var(--text-secondary); margin-top: 2px;">
+              ${isSafe ? 'Compliant with Nuclear Medicine LID protocol' : isAvoid ? 'Prohibited: High iodine density / hidden additives' : 'Caution: Ambiguous salts or dairy sub-fractions'}
+            </div>
+          </div>
+        </div>
+
+        <!-- Clinical Assessment Reason -->
+        <div style="background: var(--bg-card-subtle); border-left: 3px solid ${isSafe ? 'var(--safe-green)' : (isAvoid ? 'var(--avoid-red)' : 'var(--caution-amber)')}; padding: 12px 14px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0;">
+          <div style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.04em; margin-bottom: 4px;">
+            Clinical Assessment Reason:
+          </div>
+          <div style="font-size: 0.86rem; color: var(--text-primary); line-height: 1.45;">
+            ${escapeHtml(reasonText)}
+          </div>
+        </div>
+
+        <!-- Flagged Problem Ingredients (if any) -->
+        ${uniqueFlagged.length > 0 ? `
+          <div>
+            <div style="font-size: 0.78rem; font-weight: 700; color: ${isAvoid ? '#f87171' : '#fbbf24'}; margin-bottom: 8px;">
+              ⚠️ Flagged Problem Ingredients (${uniqueFlagged.length}):
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+              ${uniqueFlagged.map(term => `
+                <span class="ingredient-token ${isAvoid ? 'token-avoid' : 'token-caution'}">
+                  <span>${isAvoid ? '✕' : '!'}</span>
+                  <span>${escapeHtml(term)}</span>
+                </span>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Evaluation Timestamp Footer Info -->
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted); padding: 0 4px;">
+          <span>Evaluated on:</span>
+          <span style="font-weight: 600; color: var(--text-secondary);">${escapeHtml(formattedDate)}</span>
+        </div>
+
+        <!-- Actions -->
+        <div style="display: flex; gap: 10px; justify-content: flex-end; align-items: center; border-top: 1px solid var(--border-color); padding-top: 14px; margin-top: 4px;">
+          <button id="scan-modal-reaudit-btn" class="btn-secondary" style="padding: 8px 14px; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 6px;">
+            <span>✨</span>
+            <span>Re-Audit with AI</span>
+          </button>
+          <button id="scan-modal-done-btn" class="btn-primary" style="padding: 8px 20px; font-size: 0.85rem;">
+            Done
+          </button>
+        </div>
+
       </div>
     </div>
   `;

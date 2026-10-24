@@ -56,14 +56,47 @@ export function getScanHistory() {
 export function addScanToHistory(scanRecord) {
   try {
     const history = getScanHistory();
+    const flaggedIngredients = scanRecord.flaggedIngredients || (scanRecord.analysis ? [
+      ...(scanRecord.aiAnalysis?.problemIngredients || []),
+      ...(scanRecord.analysis.detectedForbidden || []).map(f => f.matchedWord || f.name),
+      ...(scanRecord.analysis.detectedCaution || []).map(c => c.matchedWord || c.name)
+    ] : []);
+    const uniqueFlagged = [...new Set(flaggedIngredients.map(t => String(t).trim()))].filter(Boolean);
+    const reason = scanRecord.reason || scanRecord.aiAnalysis?.reason || scanRecord.analysis?.reason || (scanRecord.analysis?.reasons && scanRecord.analysis.reasons[0]) || '';
+    const imageUrl = scanRecord.imageUrl || scanRecord.cloudinaryUrl || scanRecord.imagePreviewUrl || null;
+
     const record = {
-      id: 'scan_' + Date.now(),
-      timestamp: new Date().toISOString(),
+      id: scanRecord.id || ('scan_' + Date.now()),
+      timestamp: scanRecord.timestamp || new Date().toISOString(),
+      status: scanRecord.status || 'SAFE',
+      reason,
+      flaggedIngredients: uniqueFlagged,
+      imageUrl,
       ...scanRecord
     };
+    record.reason = reason;
+    record.flaggedIngredients = uniqueFlagged;
+    record.imageUrl = imageUrl;
+
     // Keep last 30 scans
-    const updated = [record, ...history.slice(0, 29)];
-    localStorage.setItem(KEYS.SCAN_HISTORY, JSON.stringify(updated));
+    let updated = [record, ...history.slice(0, 29)];
+    try {
+      localStorage.setItem(KEYS.SCAN_HISTORY, JSON.stringify(updated));
+    } catch (quotaErr) {
+      console.warn('Storage quota exceeded, preserving recent images and trimming older ones...', quotaErr);
+      updated = updated.map((item, idx) => {
+        if (idx > 2 && item.imageUrl && item.imageUrl.startsWith('data:')) {
+          return { ...item, imageUrl: null };
+        }
+        return item;
+      });
+      try {
+        localStorage.setItem(KEYS.SCAN_HISTORY, JSON.stringify(updated));
+      } catch (e2) {
+        const stripped = updated.map(item => item.imageUrl?.startsWith('data:') ? { ...item, imageUrl: null } : item);
+        localStorage.setItem(KEYS.SCAN_HISTORY, JSON.stringify(stripped));
+      }
+    }
     return updated;
   } catch (e) {
     console.error('Failed to add scan to history', e);

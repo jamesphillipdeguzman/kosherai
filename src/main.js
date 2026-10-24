@@ -47,6 +47,7 @@ const state = {
   aiAnalysis: null,
   aiLoading: false,
   scanHistory: getScanHistory(),
+  selectedScanItem: null,
 
   // Cheat Sheet Tab
   cheatSearch: '',
@@ -425,19 +426,95 @@ function attachEventHandlers() {
     });
   }
 
-  // Re-load item from history
-  document.querySelectorAll('.check-item[data-history-id]').forEach(item => {
+  // Open Inspection Modal when history item is clicked
+  document.querySelectorAll('[data-history-id]').forEach(item => {
     item.addEventListener('click', () => {
       const hid = item.getAttribute('data-history-id');
       const record = state.scanHistory.find(h => h.id === hid);
       if (record) {
-        state.scanText = record.rawText;
-        state.scanAnalysis = record.analysis;
-        state.imagePreviewUrl = null;
+        state.selectedScanItem = record;
         render();
       }
     });
   });
+
+  // Scan Detail Modal Close / Done
+  const scanModalCloseBtn = document.querySelector('#scan-modal-close-btn');
+  const scanModalDoneBtn = document.querySelector('#scan-modal-done-btn');
+  const scanModalOverlay = document.querySelector('#scan-modal-overlay');
+
+  if (scanModalCloseBtn) {
+    scanModalCloseBtn.addEventListener('click', () => {
+      state.selectedScanItem = null;
+      render();
+    });
+  }
+  if (scanModalDoneBtn) {
+    scanModalDoneBtn.addEventListener('click', () => {
+      state.selectedScanItem = null;
+      render();
+    });
+  }
+  if (scanModalOverlay) {
+    scanModalOverlay.addEventListener('click', (e) => {
+      if (e.target === scanModalOverlay) {
+        state.selectedScanItem = null;
+        render();
+      }
+    });
+  }
+
+  // Scan Detail Modal: Re-Audit with AI
+  const scanModalReauditBtn = document.querySelector('#scan-modal-reaudit-btn');
+  if (scanModalReauditBtn) {
+    scanModalReauditBtn.addEventListener('click', async () => {
+      const record = state.selectedScanItem;
+      if (!record) return;
+
+      // Close modal and restore record data to active scanner view
+      state.selectedScanItem = null;
+      state.scanText = record.rawText || record.analysis?.rawText || '';
+      state.imagePreviewUrl = record.imageUrl || null;
+      state.cloudinaryUrl = record.cloudinaryUrl || null;
+      state.scanAnalysis = record.analysis || null;
+      state.aiAnalysis = record.aiAnalysis || null;
+
+      const settings = getSettings();
+      const activeKey = settings.geminiApiKey;
+      if (!activeKey) {
+        alert('Please add your Gemini API Key in Settings (top right gear icon) to run deep AI reasoning.');
+        state.settingsOpen = true;
+        render();
+        return;
+      }
+
+      state.aiLoading = true;
+      render();
+
+      try {
+        const payload = (record.imageUrl && record.imageUrl.startsWith('data:') && (!state.scanText || state.scanText.length < 15))
+          ? {
+              text: state.scanText || 'Analyze the food packaging label ingredients for Low-Iodine Diet compliance.',
+              imageBase64: record.imageUrl,
+              mimeType: 'image/jpeg'
+            }
+          : (state.scanText || 'Food Label');
+
+        const result = await verifyWithGeminiAI(payload, activeKey);
+        state.aiAnalysis = result;
+        if (state.scanAnalysis) {
+          state.scanAnalysis.status = result.status;
+          state.scanAnalysis.source = 'GEMINI_AI';
+          state.scanAnalysis.reason = result.reason;
+        }
+      } catch (err) {
+        alert('AI Verification Error: ' + err.message);
+      } finally {
+        state.aiLoading = false;
+        render();
+      }
+    });
+  }
 
   // ==================== CHEAT SHEET TAB EVENTS ====================
   const cheatSearchInput = document.querySelector('#cheat-search-input');
@@ -635,10 +712,22 @@ async function processScanText(text, title = 'Food Label') {
   }
 
   state.scanAnalysis = analysis;
+  const flaggedIngredients = [
+    ...(state.aiAnalysis?.problemIngredients || []),
+    ...(analysis.detectedForbidden || []).map(f => f.matchedWord || f.name),
+    ...(analysis.detectedCaution || []).map(c => c.matchedWord || c.name)
+  ];
+  const uniqueFlagged = [...new Set(flaggedIngredients.map(t => String(t).trim()))].filter(Boolean);
+  const reason = state.aiAnalysis?.reason || analysis.reason || (analysis.reasons && analysis.reasons[0]) || '';
+
   state.scanHistory = addScanToHistory({
     title,
     rawText: text,
     status: analysis.status,
+    reason,
+    flaggedIngredients: uniqueFlagged,
+    imageUrl: state.imagePreviewUrl || null,
+    cloudinaryUrl: state.cloudinaryUrl || null,
     analysis,
     aiAnalysis: state.aiAnalysis
   });
