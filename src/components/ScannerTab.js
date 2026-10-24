@@ -1,9 +1,27 @@
-// Packaging Ingredient Scanner Component (Camera / OCR + AI Deep Verification)
 import { STATUS } from '../data/lidDatabase.js';
 import { SMART_SUBSTITUTES } from '../data/protocolRules.js';
 import { compressImage, runClientOCR, verifyWithGeminiAI, uploadToCloudinary } from '../services/aiVerification.js';
 import { analyzeIngredients } from '../services/ruleEngine.js';
-import { getSettings } from '../services/storage.js';
+import { getSettings, getScanHistory, saveScanResult, clearScanHistory } from '../services/storage.js';
+
+/**
+ * Fetches and synchronizes scan history from Neon PostgreSQL
+ * Call on mount and after every scan completion
+ */
+export async function fetchAndSyncHistory(state, render) {
+  try {
+    const updated = await getScanHistory();
+    if (updated && Array.isArray(updated)) {
+      state.scanHistory = updated;
+      if (typeof render === 'function') render();
+    }
+    return updated;
+  } catch (err) {
+    console.warn('[ScannerTab] Failed to sync scan history:', err);
+    return state?.scanHistory || [];
+  }
+}
+
 
 export const SAMPLE_LABELS = [
   {
@@ -202,7 +220,8 @@ export async function executeScanWorkflow(file, context = {}) {
       const reason = aiResult?.reason || scanAnalysis.reason || (scanAnalysis.reasons && scanAnalysis.reasons[0]) || '';
       const imageUrl = state.cloudinaryUrl || state.imagePreviewUrl || null;
 
-      state.scanHistory = addScanToHistory({
+      state.scanHistory = saveScanResult({
+        id: 'scan_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
         title: 'Scanned Food Label',
         rawText: extractedText || 'Packaging Image',
         status: scanAnalysis.status,
@@ -216,6 +235,9 @@ export async function executeScanWorkflow(file, context = {}) {
     }
 
     render();
+
+    // Refresh history from remote to sync multi-device scan records immediately
+    fetchAndSyncHistory(state, render).catch(() => {});
   } catch (err) {
     console.error('Scan workflow error:', err);
     state.ocrStatus = null;
@@ -606,48 +628,59 @@ function renderAiResult(ai) {
 function renderScanHistory(history) {
   return `
     <div style="margin-top: 24px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <span class="section-label" style="margin: 0;">📜 Recent Scanned Labels (${history.length})</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="section-label" style="margin: 0;">📜 Scan History (${history.length})</span>
+          <span style="font-size: 0.72rem; padding: 2px 7px; background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 999px; font-weight: 600;">
+            Neon Cloud Synced
+          </span>
+        </div>
         <button id="clear-scan-history-btn" style="background: none; border: none; color: var(--text-muted); font-size: 0.75rem; cursor: pointer; text-decoration: underline;">
           Clear History
         </button>
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 10px;">
-        ${history.slice(0, 10).map(item => {
+        ${history.slice(0, 15).map(item => {
           const isSafe = item.status === STATUS.SAFE || item.status === 'SAFE';
           const isAvoid = item.status === STATUS.AVOID || item.status === 'AVOID';
           const hasImage = Boolean(item.imageUrl || item.cloudinaryUrl);
+          const timeStr = item.createdAt || item.timestamp;
+          const displayDate = timeStr 
+            ? `${new Date(timeStr).toLocaleDateString()} ${new Date(timeStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+            : 'Recent';
 
           return `
             <div 
               class="check-item scan-history-card cursor-pointer hover:border-emerald-500/50 transition-all active:scale-[0.99]" 
               data-history-id="${escapeHtml(item.id)}" 
-              style="cursor: pointer; justify-content: space-between; align-items: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); border-radius: var(--radius-md);"
-              title="Click to view archived image and clinical evaluation"
+              style="cursor: pointer; justify-content: space-between; align-items: center; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); border-radius: var(--radius-md); padding: 12px 14px;"
+              title="Click to view archived label and clinical parameters"
             >
               <div style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1;">
                 ${hasImage ? `
-                  <div style="width: 44px; height: 44px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); flex-shrink: 0; background: #000; display: flex; align-items: center; justify-content: center;">
+                  <div style="width: 46px; height: 46px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); flex-shrink: 0; background: #000; display: flex; align-items: center; justify-content: center;">
                     <img 
                       src="${escapeHtml(item.imageUrl || item.cloudinaryUrl)}" 
                       alt="Thumbnail" 
+                      loading="lazy"
                       style="width: 100%; height: 100%; object-fit: cover;" 
                     />
                   </div>
                 ` : `
-                  <div style="width: 44px; height: 44px; border-radius: 8px; background: var(--bg-card-subtle); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                  <div style="width: 46px; height: 46px; border-radius: 8px; background: var(--bg-card-subtle); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
                     ${isSafe ? '🟢' : isAvoid ? '🔴' : '🟡'}
                   </div>
                 `}
 
                 <div style="min-width: 0; flex: 1;">
-                  <div style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    ${escapeHtml(item.title || (item.rawText ? item.rawText.slice(0, 45) + '...' : 'Scanned Label'))}
+                  <div style="font-size: 0.92rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    ${escapeHtml(item.title || (item.rawText ? item.rawText.slice(0, 45) + '...' : 'Scanned Food Label'))}
                   </div>
-                  <div style="font-size: 0.73rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px;">
-                    <span>${new Date(item.timestamp).toLocaleDateString()} ${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    ${item.cloudinaryUrl ? '<span style="color: #38bdf8; font-weight: 600;">• ☁️ Cloudinary</span>' : (hasImage ? '<span style="color: var(--safe-green); font-weight: 600;">• 📷 Photo</span>' : '')}
+                  <div style="font-size: 0.74rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 3px;">
+                    <span>${displayDate}</span>
+                    ${item.imageUrl ? '<span style="color: #38bdf8; font-weight: 600;">• ☁️ Remote Photo</span>' : ''}
+                    ${item.flaggedIngredients && item.flaggedIngredients.length > 0 ? `<span style="color: #f87171;">• ${item.flaggedIngredients.length} flagged</span>` : ''}
                   </div>
                 </div>
               </div>
@@ -656,7 +689,7 @@ function renderScanHistory(history) {
                 <span class="badge-status ${isSafe ? 'badge-safe' : isAvoid ? 'badge-avoid' : 'badge-caution'}">
                   ${item.status}
                 </span>
-                <span style="color: var(--text-muted); font-size: 1.1rem; line-height: 1;">›</span>
+                <span style="color: var(--text-muted); font-size: 1.15rem; line-height: 1;">›</span>
               </div>
             </div>
           `;
@@ -692,10 +725,10 @@ export function renderScanDetailModal(item) {
 
   const imageUrl = item.imageUrl || item.cloudinaryUrl || null;
   const isCloudinary = item.cloudinaryUrl || (imageUrl && imageUrl.includes('cloudinary.com'));
-  const cloudUrl = item.cloudinaryUrl || (isCloudinary ? imageUrl : null);
 
-  const formattedDate = item.timestamp
-    ? new Date(item.timestamp).toLocaleString(undefined, {
+  const timeVal = item.createdAt || item.timestamp;
+  const formattedDate = timeVal
+    ? new Date(timeVal).toLocaleString(undefined, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -705,45 +738,46 @@ export function renderScanDetailModal(item) {
     : 'Recent Scan';
 
   return `
-    <div class="bg-black/80 backdrop-blur-sm fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay" id="scan-modal-overlay" role="dialog" aria-modal="true" style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; animation: fadeIn 0.2s ease;">
-      <div class="scan-detail-card modal-content" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; padding: 22px; box-shadow: 0 25px 60px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 16px;">
+    <div class="modal-overlay" id="scan-modal-overlay" role="dialog" aria-modal="true" style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 12px; animation: fadeIn 0.2s ease;">
+      <div class="scan-detail-card modal-content" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); width: 100%; max-width: 520px; max-height: 92vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; box-shadow: 0 25px 60px rgba(0,0,0,0.7); display: flex; flex-direction: column; gap: 14px;">
         
         <!-- Header -->
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 14px;">
-          <div>
-            <div style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
-              <span>ARCHIVED SCAN RECORD</span>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+          <div style="min-width: 0; flex: 1;">
+            <div style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              <span style="color: #38bdf8;">☁️ NEON ARCHIVED SCAN</span>
               <span>•</span>
               <span>${escapeHtml(formattedDate)}</span>
             </div>
-            <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary); margin-top: 2px;">
+            <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary); margin-top: 4px; word-break: break-word;">
               ${escapeHtml(item.title || 'Scanned Food Label')}
             </h3>
           </div>
           <button id="scan-modal-close-btn" class="btn-icon" aria-label="Close" style="background: var(--bg-card-subtle); border: 1px solid var(--border-color); color: var(--text-secondary); width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.1rem; flex-shrink: 0;">✕</button>
         </div>
 
-        <!-- Image Preview or Placeholder -->
+        <!-- Remote Image Preview or Text Label Preview -->
         ${imageUrl ? `
-          <div style="background: rgba(0,0,0,0.4); border: 1px solid var(--border-color); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+          <div style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
             <img 
               src="${escapeHtml(imageUrl)}" 
               alt="Archived Scanned Label" 
-              class="max-h-72 object-contain mx-auto" 
-              style="max-height: 18rem; width: auto; object-fit: contain; margin-left: auto; margin-right: auto; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 4px 14px rgba(0,0,0,0.5);"
+              loading="lazy"
+              style="max-height: min(280px, 45vh); width: auto; max-width: 100%; object-fit: contain; margin-left: auto; margin-right: auto; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 16px rgba(0,0,0,0.5);"
+              onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\'padding:16px;color:var(--text-muted);font-size:0.85rem;\'>⚠️ Image preview unavailable</div>';"
             />
-            ${cloudUrl ? `
-              <a href="${escapeHtml(cloudUrl)}" target="_blank" rel="noopener noreferrer" style="font-size: 0.78rem; font-weight: 600; color: #38bdf8; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; padding: 4px 10px; background: rgba(56, 189, 248, 0.1); border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.25);">
-                <span>☁️ View full resolution in Cloudinary Archive ↗</span>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
+              <a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener noreferrer" style="font-size: 0.78rem; font-weight: 600; color: #38bdf8; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; padding: 5px 12px; background: rgba(56, 189, 248, 0.1); border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.25);">
+                <span>${isCloudinary ? '☁️ View in Cloudinary Archive ↗' : '🔗 Open Full-Resolution Image ↗'}</span>
               </a>
-            ` : ''}
+            </div>
           </div>
         ` : `
-          <div style="background: var(--bg-card-subtle); border: 1px dashed var(--border-color); border-radius: 12px; padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
-            <div style="font-size: 1.5rem; margin-bottom: 4px;">📝</div>
-            <div>Text-based scan (No camera photo archived)</div>
+          <div style="background: var(--bg-card-subtle); border: 1px dashed var(--border-color); border-radius: 12px; padding: 14px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+            <div style="font-size: 1.4rem; margin-bottom: 2px;">📝</div>
+            <div style="font-weight: 600;">Text Ingredient Scan (No Image)</div>
             ${item.rawText ? `
-              <div style="margin-top: 8px; font-size: 0.78rem; color: var(--text-secondary); background: rgba(0,0,0,0.25); padding: 8px 12px; border-radius: 6px; font-family: var(--font-mono); max-height: 80px; overflow-y: auto; text-align: left;">
+              <div style="margin-top: 8px; font-size: 0.78rem; color: var(--text-secondary); background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; font-family: var(--font-mono); max-height: 90px; overflow-y: auto; text-align: left; line-height: 1.4;">
                 ${escapeHtml(item.rawText)}
               </div>
             ` : ''}
@@ -753,8 +787,8 @@ export function renderScanDetailModal(item) {
         <!-- Clinical Evaluation Status Banner -->
         <div class="result-banner ${isSafe ? 'banner-safe' : (isAvoid ? 'banner-avoid' : 'banner-caution')}" style="padding: 12px 14px; border-radius: var(--radius-sm); margin: 0;">
           <div class="banner-status-icon" style="font-size: 1.35rem;">${statusEmoji}</div>
-          <div style="flex: 1;">
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
               <span class="banner-headline" style="font-size: 0.95rem;">${statusText}</span>
               <span class="badge-status ${statusBadgeClass}">${item.status}</span>
             </div>
@@ -766,7 +800,7 @@ export function renderScanDetailModal(item) {
 
         <!-- Clinical Assessment Reason -->
         <div style="background: var(--bg-card-subtle); border-left: 3px solid ${isSafe ? 'var(--safe-green)' : (isAvoid ? 'var(--avoid-red)' : 'var(--caution-amber)')}; padding: 12px 14px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0;">
-          <div style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.04em; margin-bottom: 4px;">
+          <div style="font-size: 0.74rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.04em; margin-bottom: 4px;">
             Clinical Assessment Reason:
           </div>
           <div style="font-size: 0.86rem; color: var(--text-primary); line-height: 1.45;">
@@ -777,7 +811,7 @@ export function renderScanDetailModal(item) {
         <!-- Flagged Problem Ingredients (if any) -->
         ${uniqueFlagged.length > 0 ? `
           <div>
-            <div style="font-size: 0.78rem; font-weight: 700; color: ${isAvoid ? '#f87171' : '#fbbf24'}; margin-bottom: 8px;">
+            <div style="font-size: 0.78rem; font-weight: 700; color: ${isAvoid ? '#f87171' : '#fbbf24'}; margin-bottom: 6px;">
               ⚠️ Flagged Problem Ingredients (${uniqueFlagged.length}):
             </div>
             <div style="display: flex; flex-wrap: wrap; gap: 6px;">
@@ -789,23 +823,44 @@ export function renderScanDetailModal(item) {
               `).join('')}
             </div>
           </div>
-        ` : ''}
+        ` : `
+          <div style="font-size: 0.78rem; color: #34d399; display: flex; align-items: center; gap: 6px;">
+            <span>✓</span>
+            <span>Zero prohibited iodine sources or high-risk additives flagged.</span>
+          </div>
+        `}
 
-        <!-- Evaluation Timestamp Footer Info -->
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted); padding: 0 4px;">
-          <span>Evaluated on:</span>
-          <span style="font-weight: 600; color: var(--text-secondary);">${escapeHtml(formattedDate)}</span>
+        <!-- Scan Parameters Grid -->
+        <div style="background: var(--bg-card-subtle); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; font-size: 0.75rem;">
+          <div>
+            <span style="color: var(--text-muted); display: block;">Record ID:</span>
+            <span style="font-family: var(--font-mono); color: var(--text-primary); font-size: 0.72rem; word-break: break-all;">${escapeHtml(item.id || 'N/A')}</span>
+          </div>
+          <div>
+            <span style="color: var(--text-muted); display: block;">Sync State:</span>
+            <span style="color: #38bdf8; font-weight: 600;">☁️ Neon PostgreSQL</span>
+          </div>
+          <div>
+            <span style="color: var(--text-muted); display: block;">Evaluated At:</span>
+            <span style="color: var(--text-secondary); font-weight: 600;">${escapeHtml(formattedDate)}</span>
+          </div>
         </div>
 
         <!-- Actions -->
-        <div style="display: flex; gap: 10px; justify-content: flex-end; align-items: center; border-top: 1px solid var(--border-color); padding-top: 14px; margin-top: 4px;">
-          <button id="scan-modal-reaudit-btn" class="btn-secondary" style="padding: 8px 14px; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 6px;">
-            <span>✨</span>
-            <span>Re-Audit with AI</span>
+        <div style="display: flex; gap: 10px; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 4px; flex-wrap: wrap;">
+          <button id="scan-modal-delete-btn" class="btn-secondary" data-delete-scan-id="${escapeHtml(item.id)}" style="padding: 8px 12px; font-size: 0.8rem; color: #f87171; border-color: rgba(239, 68, 68, 0.3);">
+            🗑️ Delete
           </button>
-          <button id="scan-modal-done-btn" class="btn-primary" style="padding: 8px 20px; font-size: 0.85rem;">
-            Done
-          </button>
+          
+          <div style="display: flex; gap: 8px; margin-left: auto;">
+            <button id="scan-modal-reaudit-btn" class="btn-secondary" style="padding: 8px 14px; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 6px;">
+              <span>✨</span>
+              <span>Re-Audit with AI</span>
+            </button>
+            <button id="scan-modal-done-btn" class="btn-primary" style="padding: 8px 18px; font-size: 0.85rem;">
+              Done
+            </button>
+          </div>
         </div>
 
       </div>

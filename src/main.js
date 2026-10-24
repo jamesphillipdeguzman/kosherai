@@ -18,8 +18,10 @@ import {
   getSettings,
   saveSettings,
   getScanHistory,
+  saveScanResult,
   addScanToHistory,
   clearScanHistory,
+  getLocalScanHistory,
   getChecklistState,
   saveChecklistState
 } from './services/storage.js';
@@ -46,7 +48,7 @@ const state = {
   imagePreviewUrl: null,
   aiAnalysis: null,
   aiLoading: false,
-  scanHistory: getScanHistory(),
+  scanHistory: getLocalScanHistory(),
   selectedScanItem: null,
 
   // Cheat Sheet Tab
@@ -125,6 +127,9 @@ function attachEventHandlers() {
         state.activeTab = tab;
         window.scrollTo({ top: 0, behavior: 'smooth' });
         render();
+        if (tab === 'scanner') {
+          refreshScanHistory();
+        }
       }
     });
   });
@@ -419,10 +424,12 @@ function attachEventHandlers() {
   // Clear Scan History
   const clearHistoryBtn = document.querySelector('#clear-scan-history-btn');
   if (clearHistoryBtn) {
-    clearHistoryBtn.addEventListener('click', () => {
-      clearScanHistory();
-      state.scanHistory = [];
-      render();
+    clearHistoryBtn.addEventListener('click', async () => {
+      if (confirm('Clear all scan history? This will remove local and cloud synchronized records.')) {
+        await clearScanHistory();
+        state.scanHistory = [];
+        render();
+      }
     });
   }
 
@@ -437,6 +444,21 @@ function attachEventHandlers() {
       }
     });
   });
+
+  // Modal Delete Single Scan Record
+  const scanModalDeleteBtn = document.querySelector('#scan-modal-delete-btn');
+  if (scanModalDeleteBtn) {
+    scanModalDeleteBtn.addEventListener('click', async () => {
+      const id = scanModalDeleteBtn.getAttribute('data-delete-scan-id');
+      if (id) {
+        await clearScanHistory(id);
+        state.selectedScanItem = null;
+        state.scanHistory = state.scanHistory.filter(h => h.id !== id);
+        render();
+        refreshScanHistory();
+      }
+    });
+  }
 
   // Scan Detail Modal Close / Done
   const scanModalCloseBtn = document.querySelector('#scan-modal-close-btn');
@@ -720,7 +742,7 @@ async function processScanText(text, title = 'Food Label') {
   const uniqueFlagged = [...new Set(flaggedIngredients.map(t => String(t).trim()))].filter(Boolean);
   const reason = state.aiAnalysis?.reason || analysis.reason || (analysis.reasons && analysis.reasons[0]) || '';
 
-  state.scanHistory = addScanToHistory({
+  state.scanHistory = saveScanResult({
     title,
     rawText: text,
     status: analysis.status,
@@ -733,12 +755,29 @@ async function processScanText(text, title = 'Food Label') {
   });
 
   render();
+  refreshScanHistory();
+}
+
+/**
+ * Fetches latest scan history from Neon PostgreSQL and updates state
+ */
+export async function refreshScanHistory() {
+  try {
+    const history = await getScanHistory();
+    if (history && Array.isArray(history)) {
+      state.scanHistory = history;
+      render();
+    }
+  } catch (err) {
+    console.warn('[KosherAI] Failed to refresh scan history:', err);
+  }
 }
 
 // Connectivity change listener
 window.addEventListener('online', () => {
   state.isOnline = true;
   render();
+  refreshScanHistory();
 });
 window.addEventListener('offline', () => {
   state.isOnline = false;
@@ -759,5 +798,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Initial Render
+// Initial Render and mount sync from Neon PostgreSQL
 render();
+refreshScanHistory();
+
