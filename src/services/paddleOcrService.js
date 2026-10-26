@@ -59,13 +59,13 @@ async function getOrt() {
   }
 
   try {
-    const mod = await import('@microsoft/onnxruntime-web');
+    const mod = await import('onnxruntime-web');
     ortInstance = mod.default || mod;
     return ortInstance;
   } catch (err) {
     // Dynamic CDN fallback if package not pre-bundled
     if (typeof window !== 'undefined') {
-      await loadScript('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.all.min.js');
+      await loadScript('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.0/dist/ort.all.min.js');
       if (window.ort) {
         ortInstance = window.ort;
         return ortInstance;
@@ -832,12 +832,18 @@ export function parseStructuredReceiptText(rawInput) {
     const line = rawLines[i];
     const lower = line.toLowerCase();
 
+    // Filter out common receipt metadata lines so they don't become pendingItemName
+    if (/^(store|date|time|cashier|terminal|pos|tin|inv|or#|si#|tel|trx|invoice|receipt)\b/i.test(line)) {
+      pendingItemName = null;
+      continue;
+    }
+
     // Check for totals or payment confirmations
-    if (lower.includes('total') || lower.includes('amount due') || lower.includes('cash') || lower.includes('tendered') || lower.includes('bdo') || lower.includes('gcash')) {
+    if (lower.includes('total') || lower.includes('amount due') || lower.includes('subtotal') || lower.includes('cash') || lower.includes('tendered') || lower.includes('change') || lower.includes('bdo') || lower.includes('bpi') || lower.includes('gcash') || lower.includes('visa') || lower.includes('mastercard')) {
       const totalMatch = line.match(/(?:TOTAL|AMOUNT\s*DUE|CASH|TENDERED|BDO|BPI|GCASH|MASTERCARD|VISA)\b.*?([₱P]?\s*(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})/i);
       if (totalMatch && totalMatch[1]) {
         const val = parseReceiptAmount(totalMatch[1]);
-        if (val > 0 && (totalAmountPaid === 0 || lower.includes('total'))) {
+        if (val > 0 && (totalAmountPaid === 0 || lower.includes('total') || lower.includes('amount due'))) {
           totalAmountPaid = val;
         }
       }
@@ -864,32 +870,19 @@ export function parseStructuredReceiptText(rawInput) {
       }
     }
 
-    // Pattern A: Single line with item name and price (e.g. "CALSAN CHEW TAB 60S  P1,757.50")
-    const matchA = line.match(singleLinePriceRegex);
-    if (matchA) {
-      const rawName = matchA[1].replace(/^[0-9\*\#\-\.]+\s*/, '').trim();
-      const price = parseReceiptAmount(matchA[2]);
-
-      if (rawName.length >= 2 && price > 0 && price < 150000) {
-        items.push(createReceiptItem(items.length + 1, rawName, price, line));
-        pendingItemName = null;
-        continue;
-      }
-    }
-
-    // Pattern B: Quantity and unit price row (e.g. "2 @ 878.75    1,757.50")
-    const matchQty = line.match(qtyAtPriceRegex);
-    if (matchQty && pendingItemName) {
+    // Pattern 1: Quantity and unit price row (e.g. "2 PC @ 878.75    P1,757.50" or "10 PC @ 9.50  P95.00")
+    const matchQty = line.match(/^(\d+(?:\.\d+)?)\s*(?:[A-Za-z]+)?\s*(?:@|x|\*)\s*(?:[₱P]\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})\s*(?:[₱P]\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})?/i);
+    if (matchQty) {
       const q = parseFloat(matchQty[1]) || 1;
       const uPrice = parseReceiptAmount(matchQty[2]);
-      const linePriceMatch = line.match(/((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?:\s*[A-Za-z])?$/);
-      const lTotal = linePriceMatch ? parseReceiptAmount(linePriceMatch[1]) : q * uPrice;
+      const lTotal = matchQty[3] ? parseReceiptAmount(matchQty[3]) : (q * uPrice);
+      const name = pendingItemName || 'Grocery Item';
 
       items.push({
         id: items.length + 1,
-        name: pendingItemName,
-        description: pendingItemName,
-        rawReceiptText: `${pendingItemName} \n ${line}`,
+        name,
+        description: name,
+        rawReceiptText: pendingItemName ? `${pendingItemName} \n ${line}` : line,
         qty: q,
         quantity: q,
         unit: 'pcs',
@@ -906,7 +899,22 @@ export function parseStructuredReceiptText(rawInput) {
       continue;
     }
 
-    // Pattern C: Standalone price on next line after item name
+    // Pattern 2: Single line with item name and price (e.g. "CALSAN CHEW TAB 60S  P1,757.50")
+    if (!line.includes('@')) {
+      const matchA = line.match(singleLinePriceRegex);
+      if (matchA) {
+        const rawName = matchA[1].replace(/^[0-9\*\#\-\.]+\s*/, '').trim();
+        const price = parseReceiptAmount(matchA[2]);
+
+        if (rawName.length >= 2 && price > 0 && price < 150000) {
+          items.push(createReceiptItem(items.length + 1, rawName, price, line));
+          pendingItemName = null;
+          continue;
+        }
+      }
+    }
+
+    // Pattern 3: Standalone price on next line after item name
     const matchStandalone = line.match(standalonePriceRegex);
     if (matchStandalone && pendingItemName) {
       const price = parseReceiptAmount(matchStandalone[1]);
