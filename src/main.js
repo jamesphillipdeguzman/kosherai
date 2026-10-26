@@ -41,6 +41,8 @@ import {
   PROJECT_CONFIG
 } from './services/courseProjectStorage.js';
 
+import { LID_DATABASE } from './data/lidDatabase.js';
+
 // Theme Initialization (Default Dark, persists in localStorage)
 const initialTheme = localStorage.getItem('theme') || 'dark';
 if (initialTheme === 'light') {
