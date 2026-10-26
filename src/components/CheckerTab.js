@@ -1,25 +1,34 @@
-// Quick Search & Checker Tab Component (Offline First)
-import { LID_CATEGORIES, STATUS } from '../data/lidDatabase.js';
+// Quick Search & Multi-Diet Checker Tab Component (Offline First)
+import { LID_CATEGORIES, STATUS, getItemDietaryInfo, getItemStatus } from '../data/lidDatabase.js';
+import { searchDatabase } from '../services/ruleEngine.js';
 
 export function renderCheckerTab(state) {
   const { searchQuery, statusFilter, categoryFilter, searchResults } = state;
+  const activeDiet = state.activeDiet || 'lid';
 
   const quickTags = [
-    'Potatoes',
     'Sayote',
+    'Patis',
+    'Isaw',
+    'Munggo',
+    'Tuyo',
+    'Toyomansi',
+    'White Rice',
+    'Banana Ketchup',
     'Kosher Salt',
-    'Soy Sauce',
-    'Cow Milk',
+    'Chicken Breast',
     'Egg Whites',
-    'Carrageenan',
-    'Tuna',
-    'Kalabasa',
-    'Red Dye #3',
-    'Commercial Bread',
-    'Chicken Breast'
+    'Kalabasa'
   ];
 
   const categories = Object.values(LID_CATEGORIES);
+
+  // Compute reactive counts matching active diet and current query/category
+  const baseMatches = searchDatabase(searchQuery, 'ALL', categoryFilter, activeDiet);
+  const totalCount = baseMatches.length;
+  const safeCount = baseMatches.filter(r => getItemStatus(r, activeDiet) === STATUS.SAFE).length;
+  const avoidCount = baseMatches.filter(r => getItemStatus(r, activeDiet) === STATUS.AVOID).length;
+  const cautionCount = baseMatches.filter(r => getItemStatus(r, activeDiet) === STATUS.CAUTION).length;
 
   return `
     <div class="checker-tab-view">
@@ -34,7 +43,7 @@ export function renderCheckerTab(state) {
           type="text" 
           id="checker-search-input" 
           class="search-input" 
-          placeholder="Search 100+ ingredients, brands, or additives (e.g. sayote, toyo, carrageenan)..." 
+          placeholder="Search 100+ Pinoy ingredients, brands, or additives (e.g. sayote, isaw, patis, munggo)..." 
           value="${escapeHtml(searchQuery || '')}"
           autocomplete="off"
           spellcheck="false"
@@ -58,19 +67,19 @@ export function renderCheckerTab(state) {
         `).join('')}
       </div>
 
-      <!-- Filters Row -->
+      <!-- Filters Row with Dynamic Multi-Diet Counts -->
       <div class="filters-bar">
         <button class="filter-btn ${statusFilter === 'ALL' ? 'active' : ''}" data-status="ALL">
-          All Items
+          All Items (${totalCount})
         </button>
         <button class="filter-btn ${statusFilter === STATUS.SAFE ? 'active' : ''}" data-status="${STATUS.SAFE}">
-          🟢 Safe (${searchResults.filter(r => r.status === STATUS.SAFE).length})
+          🟢 Safe (${safeCount})
         </button>
         <button class="filter-btn filter-avoid ${statusFilter === STATUS.AVOID ? 'active' : ''}" data-status="${STATUS.AVOID}">
-          🔴 Avoid (${searchResults.filter(r => r.status === STATUS.AVOID).length})
+          🔴 Avoid (${avoidCount})
         </button>
         <button class="filter-btn filter-caution ${statusFilter === STATUS.CAUTION ? 'active' : ''}" data-status="${STATUS.CAUTION}">
-          🟡 Caution (${searchResults.filter(r => r.status === STATUS.CAUTION).length})
+          🟡 Caution (${cautionCount})
         </button>
 
         <select id="category-filter-select" class="category-select" aria-label="Filter by Category">
@@ -81,35 +90,38 @@ export function renderCheckerTab(state) {
         </select>
       </div>
 
-      <!-- Search Results Grid -->
+      <!-- Search Results Grid with Reactive Badges & Pinoy Swaps -->
       <div class="results-grid" id="results-grid">
-        ${searchResults.length > 0 ? searchResults.map(item => renderIngredientCard(item)).join('') : renderEmptyState(searchQuery)}
+        ${searchResults.length > 0 ? searchResults.map(item => renderIngredientCard(item, activeDiet)).join('') : renderEmptyState(searchQuery)}
       </div>
     </div>
   `;
 }
 
-function renderIngredientCard(item) {
-  const isSafe = item.status === STATUS.SAFE;
-  const isAvoid = item.status === STATUS.AVOID;
-  const isCaution = item.status === STATUS.CAUTION;
+function renderIngredientCard(item, activeDiet = 'lid') {
+  const info = getItemDietaryInfo(item, activeDiet);
+  const isSafe = info.status === STATUS.SAFE;
+  const isAvoid = info.status === STATUS.AVOID;
+  const isCaution = info.status === STATUS.CAUTION;
 
   let statusClass = 'status-safe';
   let badgeClass = 'badge-safe';
   let badgeIcon = '🟢';
-  let iodineClass = 'iodine-safe';
+  let metricClass = 'iodine-safe';
 
   if (isAvoid) {
     statusClass = 'status-avoid';
     badgeClass = 'badge-avoid';
     badgeIcon = '🔴';
-    iodineClass = 'iodine-high';
+    metricClass = 'iodine-high';
   } else if (isCaution) {
     statusClass = 'status-caution';
     badgeClass = 'badge-caution';
     badgeIcon = '🟡';
-    iodineClass = 'iodine-warn';
+    metricClass = 'iodine-warn';
   }
+
+  const swaps = info.substitutes || [];
 
   return `
     <div class="ingredient-card ${statusClass}" data-item-id="${item.id}" role="button" tabindex="0">
@@ -119,21 +131,21 @@ function renderIngredientCard(item) {
           <span class="card-category">${escapeHtml(item.category)}</span>
         </div>
         <span class="badge-status ${badgeClass}">
-          ${badgeIcon} ${item.status}
+          ${badgeIcon} ${info.status}
         </span>
       </div>
 
-      <div class="card-iodine-bar ${iodineClass}">
-        <span>📊 Iodine:</span>
-        <span>${escapeHtml(item.iodineContent)}</span>
+      <div class="card-iodine-bar ${metricClass}">
+        <span>📊 ${escapeHtml(info.metricLabel)}:</span>
+        <span style="font-size: 0.78rem;">${escapeHtml(info.metricValue || info.note || '')}</span>
       </div>
 
       <p class="card-desc">${escapeHtml(item.description)}</p>
 
-      ${item.substitutes && item.substitutes.length > 0 ? `
+      ${swaps && swaps.length > 0 ? `
         <div class="card-substitutes-preview">
-          <span>🔄 Safe Swap:</span>
-          <strong>${escapeHtml(item.substitutes[0])}</strong>
+          <span>🔄 Pinoy Smart Swap:</span>
+          <strong>${escapeHtml(swaps[0])}</strong>
         </div>
       ` : ''}
     </div>
@@ -146,7 +158,7 @@ function renderEmptyState(query) {
       <span class="empty-state-icon">🔍</span>
       <h3 class="empty-state-title">No exact matches for "${escapeHtml(query)}"</h3>
       <p class="empty-state-desc">
-        Try checking different spellings, botanical names (e.g., <em>sayote</em> instead of squash), or switch to the <strong>Scanner tab</strong> to read full package labels!
+        Try checking different Pinoy food terms (e.g., <em>sayote</em>, <em>patis</em>, <em>isaw</em>, <em>munggo</em>), or switch to the <strong>Scanner tab</strong> to read full package labels!
       </p>
     </div>
   `;

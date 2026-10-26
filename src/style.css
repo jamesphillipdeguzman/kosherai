@@ -419,6 +419,57 @@ html.dark .brand-subtitle,
   gap: 10px;
 }
 
+/* Multi-Diet Header Picker Dropdown */
+.header-diet-picker-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.diet-select-badge {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  background: rgba(13, 148, 136, 0.12);
+  border: 1px solid rgba(13, 148, 136, 0.35);
+  border-radius: var(--radius-full);
+  padding: 4px 12px 4px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.diet-select-badge:hover {
+  background: rgba(13, 148, 136, 0.22);
+  border-color: rgba(13, 148, 136, 0.6);
+}
+
+.diet-select-icon {
+  font-size: 1rem;
+  margin-right: 6px;
+  pointer-events: none;
+}
+
+.header-diet-dropdown {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding-right: 14px;
+  outline: none;
+}
+
+.diet-select-chevron {
+  position: absolute;
+  right: 8px;
+  font-size: 0.65rem;
+  color: #0d9488;
+  pointer-events: none;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;

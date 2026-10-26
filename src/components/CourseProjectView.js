@@ -28,6 +28,7 @@ import {
 
 import { compressImage, scanSupermarketReceipt } from '../services/aiVerification.js';
 import { LID_DATABASE, STATUS } from '../data/lidDatabase.js';
+import { getDietProfile } from '../data/dietProfiles.js';
 import lidRecipes from '../data/lidRecipes.json';
 
 export function renderCourseProjectView(state) {
@@ -823,6 +824,47 @@ function renderReceiptScanModal(state) {
     }
   }
 
+  // Active Diet Analysis Summary Badge
+  const activeDietKey = state.activeDiet || 'lid';
+  const dietProfile = getDietProfile(activeDietKey);
+  const dietName = scanData?.activeDietName || dietProfile.name;
+
+  let safeCount = scanData?.safeItemCount;
+  let flaggedCount = scanData?.flaggedItemCount;
+
+  if ((safeCount === undefined || isNaN(safeCount)) && scanData?.items) {
+    flaggedCount = scanData.items.filter(it => it.isSafeForDiet === false || it.dietStatus === 'AVOID').length;
+    safeCount = scanData.items.length - flaggedCount;
+  }
+
+  const dietBadgeHtml = scanData ? `
+    <div class="p-3 rounded-xl border mb-3 flex items-center justify-between gap-3 ${
+      (flaggedCount || 0) > 0
+        ? 'bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200'
+        : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-900 dark:text-emerald-200'
+    }">
+      <div class="flex items-center gap-2.5">
+        <span class="text-xl">${dietProfile.icon}</span>
+        <div>
+          <div class="font-bold text-xs uppercase tracking-wider text-slate-900 dark:text-white">
+            Analyzed for: ${escapeHtml(dietName)}
+          </div>
+          <div class="text-xs opacity-90 mt-0.5">
+            ${safeCount !== undefined ? `<strong>${safeCount} Safe</strong> • ` : ''}
+            ${flaggedCount > 0 ? `<strong class="text-rose-600 dark:text-rose-400">${flaggedCount} Flagged Items</strong>` : 'All items protocol compliant!'}
+          </div>
+        </div>
+      </div>
+      <span class="text-xs px-2.5 py-1 rounded-full font-bold shrink-0 ${
+        flaggedCount > 0
+          ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300'
+          : 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300'
+      }">
+        ${flaggedCount > 0 ? `⚠️ ${flaggedCount} Flagged` : '✓ Protocol Compliant'}
+      </span>
+    </div>
+  ` : '';
+
   return `
     <div class="modal-overlay" id="receipt-modal-overlay">
       <div class="modal-content receipt-modal-large" role="dialog" aria-modal="true">
@@ -885,8 +927,10 @@ function renderReceiptScanModal(state) {
 
               ${mathAlertHtml}
               ${duplicateAlertHtml}
+              ${dietBadgeHtml}
 
               <form id="receipt-verification-form" class="flex flex-col gap-4">
+
                 <!-- 1. Store Name & Purchase Date (2-column responsive subgrid) -->
                 <div class="form-row-grid grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div class="form-group">
@@ -957,7 +1001,15 @@ function renderReceiptScanModal(state) {
                         ${(scanData?.items && scanData.items.length > 0) ? scanData.items.map((item, idx) => `
                           <tr data-row-idx="${idx}">
                             <td>
-                              <input type="text" class="table-input item-name-val" value="${escapeHtml(item.name)}" required />
+                              <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <input type="text" class="table-input item-name-val" value="${escapeHtml(item.name)}" required />
+                                ${(item.isSafeForDiet === false || item.dietStatus === 'AVOID') ? `
+                                  <div class="text-[11px] text-rose-700 dark:text-rose-300 flex flex-wrap items-center gap-1 font-medium bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                                    <span>⚠️ ${escapeHtml(item.dietFlagReason || 'Flagged for ' + dietProfile.shortName)}</span>
+                                    ${item.suggestedSwap ? `<span>• Swap: <strong>${escapeHtml(item.suggestedSwap)}</strong></span>` : ''}
+                                  </div>
+                                ` : ''}
+                              </div>
                             </td>
                             <td>
                               <input type="number" step="0.1" min="0.1" class="table-input item-qty-val" value="${item.quantity || 1}" style="width: 100%; text-align: center;" />

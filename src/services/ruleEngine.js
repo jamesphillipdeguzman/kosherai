@@ -1,7 +1,7 @@
 // Offline LID Clinical Rule Engine & Ingredient Parser
 // Evaluates raw text, scanned packaging OCR, and search queries against the clinical protocol
 
-import { LID_DATABASE, STATUS } from '../data/lidDatabase.js';
+import { LID_DATABASE, STATUS, getItemStatus } from '../data/lidDatabase.js';
 
 // High-risk prohibited keyword patterns for fast substring/regex detection
 const FORBIDDEN_RULES = [
@@ -272,50 +272,45 @@ export function analyzeIngredients(rawText) {
 }
 
 /**
- * Searches the offline LID database
+ * Searches the offline food database reactively against the active dietary profile
  */
-export function searchDatabase(query, filterStatus = 'ALL', filterCategory = 'ALL') {
-  if (!query || !query.trim()) {
-    let results = LID_DATABASE;
-    if (filterStatus !== 'ALL') {
-      results = results.filter(item => item.status === filterStatus);
-    }
-    if (filterCategory !== 'ALL') {
-      results = results.filter(item => item.category === filterCategory);
-    }
-    return results;
+export function searchDatabase(query, filterStatus = 'ALL', filterCategory = 'ALL', activeDiet = 'lid') {
+  let results = LID_DATABASE;
+
+  if (query && query.trim()) {
+    const cleanQ = cleanToken(query);
+
+    results = results.filter(item => {
+      const nameMatch = cleanToken(item.name).includes(cleanQ);
+      const aliasMatch = (item.aliases || []).some(a => cleanToken(a).includes(cleanQ));
+      const descMatch = cleanToken(item.description || '').includes(cleanQ);
+      const catMatch = cleanToken(item.category || '').includes(cleanQ);
+      const noteMatch = cleanToken(item.clinicalNotes || '').includes(cleanQ);
+      const dietNote = cleanToken(item.dietaryStatus?.[activeDiet]?.note || '');
+
+      return nameMatch || aliasMatch || descMatch || catMatch || noteMatch || dietNote;
+    });
+
+    // Sort: Exact name matches first, then alias matches, then description
+    results.sort((a, b) => {
+      const aExact = cleanToken(a.name) === cleanQ;
+      const bExact = cleanToken(b.name) === cleanQ;
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
+      return 0;
+    });
   }
-
-  const cleanQ = cleanToken(query);
-
-  let filtered = LID_DATABASE.filter(item => {
-    const nameMatch = cleanToken(item.name).includes(cleanQ);
-    const aliasMatch = item.aliases.some(a => cleanToken(a).includes(cleanQ));
-    const descMatch = cleanToken(item.description).includes(cleanQ);
-    const catMatch = cleanToken(item.category).includes(cleanQ);
-    const noteMatch = cleanToken(item.clinicalNotes).includes(cleanQ);
-
-    return nameMatch || aliasMatch || descMatch || catMatch || noteMatch;
-  });
 
   if (filterStatus !== 'ALL') {
-    filtered = filtered.filter(item => item.status === filterStatus);
+    results = results.filter(item => getItemStatus(item, activeDiet) === filterStatus);
   }
   if (filterCategory !== 'ALL') {
-    filtered = filtered.filter(item => item.category === filterCategory);
+    results = results.filter(item => item.category === filterCategory);
   }
 
-  // Sort: Exact name matches first, then alias matches, then description
-  filtered.sort((a, b) => {
-    const aExact = cleanToken(a.name) === cleanQ;
-    const bExact = cleanToken(b.name) === cleanQ;
-    if (aExact && !bExact) return -1;
-    if (!aExact && bExact) return 1;
-    return 0;
-  });
-
-  return filtered;
+  return results;
 }
+
 
 /**
  * Evaluates an entire recipe with ingredient lines

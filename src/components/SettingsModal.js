@@ -1,6 +1,7 @@
-// Settings Modal Component (Theme Switcher, Project Visibility, API Keys, Cloudinary, Local Cache & Disclaimer)
+// Settings Modal Component (Multi-Diet Selector, Theme Switcher, Project Visibility, API Keys, Cloudinary, Local Cache & Disclaimer)
+import { DIET_PROFILES } from '../data/dietProfiles.js';
 
-export function renderSettingsModal(settings = {}, currentTheme = 'dark', showProjectTab = true) {
+export function renderSettingsModal(settings = {}, currentTheme = 'dark', showProjectTab = true, activeDiet = 'lid') {
   const isDark = currentTheme === 'dark';
 
   return `
@@ -10,15 +11,33 @@ export function renderSettingsModal(settings = {}, currentTheme = 'dark', showPr
           <div>
             <h2 id="settings-title" class="modal-title">Settings & Preferences</h2>
             <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">
-              Theme, project module visibility, and clinical AI configurations.
+              Diet profile, theme, project visibility, and clinical AI configurations.
             </div>
           </div>
           <button class="btn-icon" id="settings-close-btn" aria-label="Close Settings">✕</button>
         </div>
 
         <form id="settings-form">
-          <!-- 1. Interface Theme Switcher -->
+          <!-- 1. Dietary Protocol Profile Selector (LID Default) -->
           <div class="form-group">
+            <label class="form-label" for="settings-diet-select">
+              <span>Active Dietary Protocol</span>
+              <span class="settings-sub-badge" style="color: var(--safe-green);">Default: LID</span>
+            </label>
+            <select id="settings-diet-select" class="form-input" style="cursor: pointer; font-weight: 600; font-size: 0.88rem; padding: 10px 14px;">
+              ${Object.values(DIET_PROFILES).map(profile => `
+                <option value="${profile.id}" ${profile.id === activeDiet ? 'selected' : ''}>
+                  ${profile.icon} ${profile.name} — ${profile.target}
+                </option>
+              `).join('')}
+            </select>
+            <div class="form-help">
+              Tailors ingredient safety badges, smart substitutes, and Gemini receipt verification.
+            </div>
+          </div>
+
+          <!-- 2. Interface Theme Switcher -->
+          <div class="form-group" style="padding-top: 8px; border-top: 1px solid var(--border-color);">
             <label class="form-label">
               <span>Interface Theme</span>
               <span class="settings-sub-badge">${isDark ? '🌙 Dark Mode Active' : '☀️ Light Mode Active'}</span>
@@ -50,7 +69,7 @@ export function renderSettingsModal(settings = {}, currentTheme = 'dark', showPr
             </div>
           </div>
 
-          <!-- 2. Project Tab Visibility Switch -->
+          <!-- 3. Project Tab Visibility Switch -->
           <div class="form-group settings-toggle-group">
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 14px;">
               <div style="flex: 1;">
@@ -68,7 +87,7 @@ export function renderSettingsModal(settings = {}, currentTheme = 'dark', showPr
             </div>
           </div>
 
-          <!-- 3. Gemini AI Key -->
+          <!-- 4. Gemini AI Key -->
           <div class="form-group" style="padding-top: 8px; border-top: 1px solid var(--border-color);">
             <label class="form-label" for="gemini-key-input">
               <span>Google Gemini API Key</span>
@@ -88,7 +107,7 @@ export function renderSettingsModal(settings = {}, currentTheme = 'dark', showPr
             </div>
           </div>
 
-          <!-- 4. Cloudinary Settings (Optional) -->
+          <!-- 5. Cloudinary Settings (Optional) -->
           <div class="form-group">
             <label class="form-label">
               <span>Cloudinary Storage</span>
@@ -113,7 +132,7 @@ export function renderSettingsModal(settings = {}, currentTheme = 'dark', showPr
             <div class="form-help">Saves scanned grocery photos to your personal Cloudinary cloud.</div>
           </div>
 
-          <!-- 5. Daily Target -->
+          <!-- 6. Target Date -->
           <div class="form-group">
             <label class="form-label" for="prep-date-input">
               <span>Target RAI Treatment Date</span>
@@ -126,7 +145,7 @@ export function renderSettingsModal(settings = {}, currentTheme = 'dark', showPr
             />
           </div>
 
-          <!-- 6. Offline Storage Stats & Reset -->
+          <!-- 7. Offline Storage Stats & Reset -->
           <div class="form-group" style="padding-top: 8px; border-top: 1px solid var(--border-color);">
             <label class="form-label">Offline Data & Storage</label>
             <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card-subtle); padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.82rem;">
@@ -137,9 +156,9 @@ export function renderSettingsModal(settings = {}, currentTheme = 'dark', showPr
             </div>
           </div>
 
-          <!-- 7. Clinical Disclaimer -->
+          <!-- 8. Clinical Disclaimer -->
           <div class="settings-disclaimer-box">
-            ⚠️ <strong>Medical Protocol Notice:</strong> KosherAI is an educational clinical companion. Always follow the specific timeline and orders of your attending nuclear medicine physician.
+            ⚠️ <strong>Medical Protocol Notice:</strong> KosherAI is an educational clinical companion. Always follow the specific timeline and orders of your attending physician or registered dietitian.
           </div>
 
           <!-- Action Buttons -->

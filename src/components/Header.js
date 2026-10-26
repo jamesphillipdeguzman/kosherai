@@ -1,6 +1,9 @@
-// App Header Component with Connectivity Status & Settings Trigger
+// App Header Component with Multi-Diet Selector, Connectivity Status & Settings Trigger
+import { DIET_PROFILES, getDietProfile } from '../data/dietProfiles.js';
 
-export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', showProjectTab = true) {
+export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', showProjectTab = true, activeDiet = 'lid') {
+  const currentProfile = getDietProfile(activeDiet);
+
   return `
     <header class="app-header">
       <div class="brand-wrapper inline-flex items-center gap-2 bg-slate-100/90 dark:bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-200/70 dark:border-slate-700/60 shadow-sm backdrop-blur-md" id="brand-logo-btn">
@@ -8,14 +11,30 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
         <div>
           <div class="brand-title text-slate-900 dark:text-white font-black text-xl tracking-tight">
             KosherAI
-            <span class="brand-badge">${appMode === 'course' ? 'SUSTAIN' : 'LID RAI'}</span>
+            <span class="brand-badge">${appMode === 'course' ? 'SUSTAIN' : currentProfile.badge}</span>
           </div>
-          <div class="brand-subtitle text-slate-600 dark:text-slate-400 text-xs font-medium">${appMode === 'course' ? 'Six-Week Food Cost & Waste Study' : 'Low-Iodine Diet Clinical Companion'}</div>
+          <div class="brand-subtitle text-slate-600 dark:text-slate-400 text-xs font-medium">${appMode === 'course' ? 'Six-Week Food Cost & Waste Study' : currentProfile.name}</div>
         </div>
       </div>
 
       <div class="header-actions">
-        <div class="status-pill" title="${isOnline ? 'Online - AI Verification Available' : 'Offline Mode - Local Database Active'}">
+        <!-- Multi-Diet Profile Selector Dropdown (LID Default) -->
+        <div class="header-diet-picker-wrap" title="Active Dietary Protocol">
+          <label for="header-diet-selector" class="sr-only">Select Diet Protocol</label>
+          <div class="diet-select-badge">
+            <span class="diet-select-icon">${currentProfile.icon}</span>
+            <select id="header-diet-selector" class="header-diet-dropdown" aria-label="Select Dietary Protocol">
+              ${Object.values(DIET_PROFILES).map(profile => `
+                <option value="${profile.id}" ${profile.id === activeDiet ? 'selected' : ''}>
+                  ${profile.icon} ${profile.name}
+                </option>
+              `).join('')}
+            </select>
+            <span class="diet-select-chevron">▾</span>
+          </div>
+        </div>
+
+        <div class="status-pill hidden sm:inline-flex" title="${isOnline ? 'Online - AI Verification Available' : 'Offline Mode - Local Database Active'}">
           <span class="status-dot ${isOnline ? '' : 'offline'}"></span>
           <span>${isOnline ? 'Offline-Ready' : 'Offline Active'}</span>
         </div>
@@ -34,7 +53,7 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
       ${showProjectTab ? `
         <div class="mode-switcher-bar" role="tablist" aria-label="Application View Mode">
           <button class="mode-tab-btn ${appMode === 'diet' ? 'active' : ''}" data-app-mode="diet" role="tab" aria-selected="${appMode === 'diet'}">
-            🛡️ LID Diet Protocol
+            ${currentProfile.icon} ${currentProfile.shortName}
           </button>
           <button class="mode-tab-btn course-mode ${appMode === 'course' ? 'active' : ''}" data-app-mode="course" role="tab" aria-selected="${appMode === 'course'}">
             📊 6-Week Project (Oct 31)
@@ -45,13 +64,13 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
       ${appMode === 'diet' ? `
         <div class="protocol-banner">
           <div class="banner-content">
-            <span class="banner-icon">🛡️</span>
+            <span class="banner-icon">${currentProfile.icon}</span>
             <div>
-              <div class="banner-title">Clinical Target: &lt;50 mcg Iodine/Day</div>
-              <div class="banner-desc">Deplete thyroid iodine reserves prior to Radioactive Iodine ablation.</div>
+              <div class="banner-title">${currentProfile.target}</div>
+              <div class="banner-desc">${currentProfile.tagline}</div>
             </div>
           </div>
-          <div class="banner-target">Strict LID</div>
+          <div class="banner-target">${currentProfile.shortName}</div>
         </div>
       ` : ''}
     </div>

@@ -154,7 +154,7 @@ export async function executeScanWorkflow(file, context = {}) {
               mimeType: 'image/jpeg'
             };
 
-        aiResult = await verifyWithGeminiAI(payload, apiKey);
+        aiResult = await verifyWithGeminiAI(payload, apiKey, state.activeDiet || 'lid');
         state.aiAnalysis = aiResult;
 
         // Map Gemini AI response into a rich scanAnalysis object

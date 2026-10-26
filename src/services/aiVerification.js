@@ -114,7 +114,7 @@ export function parseGeminiJson(rawText) {
  * Deep Clinical AI Verification via Gemini API
  * Calls gemini-2.5-flash to enforce strict Radioactive Iodine (RAI) / Low-Iodine Diet protocol
  */
-export async function verifyWithGeminiAI(ingredientTextOrPayload, apiKey) {
+export async function verifyWithGeminiAI(ingredientTextOrPayload, apiKey, activeDiet = 'lid') {
   const activeKey = (apiKey?.trim() || import.meta.env.VITE_GEMINI_API_KEY || '').trim();
   if (!activeKey) {
     throw new Error('Please add your Gemini API Key in Settings or set VITE_GEMINI_API_KEY to enable online AI deep reasoning.');
@@ -126,12 +126,9 @@ export async function verifyWithGeminiAI(ingredientTextOrPayload, apiKey) {
   const imageBase64 = isMultimodal ? ingredientTextOrPayload.imageBase64 : null;
   const mimeType = isMultimodal && ingredientTextOrPayload.mimeType ? ingredientTextOrPayload.mimeType : 'image/jpeg';
 
-  const prompt = `
-You are a nuclear medicine clinical endocrinology AI specialist for Radioactive Iodine (RAI) therapy preparation.
-Patients MUST adhere to a strict Low-Iodine Diet (LID) (<50 mcg iodine/day).
-
-Protocol Ground Rules:
-- Flag any hidden dairy, whey, egg yolk, sea salt, iodized salt, fish, seafood, carrageenan, agar-agar, Red Dye #3, soy/soybeans, potatoes, or iodate dough conditioners.
+  let clinicalSpecialty = `nuclear medicine clinical endocrinology AI specialist for Radioactive Iodine (RAI) therapy preparation. Patients MUST adhere to a strict Low-Iodine Diet (LID) (<50 mcg iodine/day).`;
+  let protocolRules = `
+Protocol Ground Rules (Low-Iodine Diet - LID Protocol):
 - STRICTLY FORBIDDEN (AVOID):
   * Hidden dairy, whey, milk, cheese, butter, yogurt, casein, cream, milk chocolate
   * Egg yolks, whole eggs, mayonnaise with yolks
@@ -139,31 +136,106 @@ Protocol Ground Rules:
   * Marine fish, shellfish, crustaceans, fish sauce (patis), oyster sauce
   * Carrageenan (E407), agar-agar (E406), alginate (E401-E404), seaweed, nori, kelp
   * FD&C Red Dye #3 (erythrosine / E127 - 58% elemental iodine)
-  * Soybeans, soy sauce (toyo), tofu, edamame, soy protein, soy isoflavones (NIS inhibitors)
+  * Soybeans, soy sauce (toyo), tofu, edamame, soy protein, soy isoflavones
   * Potatoes (russet/red/chips ~60mcg), watercress, cassava (kamoteng kahoy), millet
   * Cruciferous vegetables (cabbage, broccoli, cauliflower, brussels sprouts)
   * Iodate dough conditioners (potassium iodate, calcium iodate)
   * Prunes, bananas, pineapple, strawberries, cranberries
 - STRICTLY SAFE:
   * Pure non-iodized kosher salt (Morton Coarse, Diamond Crystal), pickling salt
-  * Pure egg whites
-  * Fresh unbrined chicken, beef, pork
+  * Pure egg whites, fresh unbrined chicken, beef, pork
   * Sayote, kalabasa (squash), bell peppers, zucchini, eggplant, tomatoes, onions, garlic
-  * Plain white/brown rice, rolled oats, unbleached flour, pure cornstarch
-  * 100% pure vegetable oils (olive, coconut, canola)
-  * Pure black pepper, chili peppers (siling labuyo), pure spices
+  * Plain white/brown rice, rolled oats, unbleached flour, pure cornstarch, pure vegetable oils
 - CAUTION:
   * Unspecified "salt" on commercial packages (usually iodized)
   * "Natural flavors", "artificial flavors", or ambiguous "dough conditioners"
   * Commercial plant milks with added sea salt or carrageenan
+`;
 
-Analyze the following food ingredient text or packaging label:
+  if (activeDiet === 'low_purine') {
+    clinicalSpecialty = `clinical rheumatology and nutrition AI specialist for hyperuricemia, gout prevention, and low-purine dietary management.`;
+    protocolRules = `
+Protocol Ground Rules (Low-Purine / Anti-Uric Acid):
+- STRICTLY FORBIDDEN (AVOID):
+  * Internal organs / organ meats: isaw, atay (liver), bopis, dinuguan, puso, balunbalunan, kidney, bone marrow
+  * High-purine seafood: sardines (sardinas), anchovies (dilis), mackerel, tuna in oil, shellfish (tahong, talaba, alimasag, hipon, oyster, crabs)
+  * Rich meat gravies, meat extracts, bouillon cubes, bagoong, patis
+  * Legumes with elevated purines: mung beans (munggo), lentils in high volume
+  * Alcohol, beer, brewer's yeast, nutritional yeast
+- STRICTLY SAFE:
+  * Chicken breast (lean, moderate portions), lean pork/beef loin
+  * Sayote, kalabasa, carrots, cucumber, cabbage, leafy greens
+  * Low-fat dairy, egg whites, whole eggs (eggs are very low purine)
+  * Rice, oats, corn, fruits (cherries, berries, apples), calamansi juice, high water intake
+- CAUTION:
+  * Moderately high purine items: pork cuts with fat, beef, chicken thigh, beans/tofu
+`;
+  } else if (activeDiet === 'low_sodium') {
+    clinicalSpecialty = `cardiovascular cardiology and nephrology clinical nutrition AI specialist for hypertension, heart-failure, kidney health, and DASH protocol.`;
+    protocolRules = `
+Protocol Ground Rules (Low-Sodium / Heart-Care DASH Protocol):
+- STRICTLY FORBIDDEN (AVOID):
+  * High-sodium condiments: fish sauce (patis), shrimp paste (bagoong), soy sauce (toyo/toyomansi), MSG (vetsin), bouillon cubes (Knorr/Maggi)
+  * Preserved/cured meats: spam, corned beef, tocino, longganisa, hotdog, bacon, ham
+  * Dried / salted seafood: tuyo, daing, tinapa, salted eggs (itlog na maalat)
+  * Instant processed foods: instant noodles (pancit canton, ramen), canned soups, potato chips, chicharon
+- STRICTLY SAFE:
+  * Fresh unbrined meats (fresh chicken breast, fresh pork/beef cuts without marinade)
+  * Fresh vegetables: sayote, kalabasa, pechay, kangkong, tomatoes, onions, garlic, ginger
+  * Flavor enhancers: fresh calamansi juice, siling labuyo (chili), black pepper, vinegar, garlic, herbs
+  * Plain grains: plain boiled rice, rolled oats, sweet potatoes without added salt
+- CAUTION:
+  * Commercial breads, canned tomato paste, commercial broths with reduced sodium
+`;
+  } else if (activeDiet === 'diabetic') {
+    clinicalSpecialty = `clinical endocrinology and diabetes education AI specialist for glycemic control and diabetes prevention.`;
+    protocolRules = `
+Protocol Ground Rules (Diabetic / Low-Glycemic Index Protocol):
+- STRICTLY FORBIDDEN (AVOID):
+  * Added sugars and high-fructose syrups: white/brown sugar, condensed milk (condensada), sweet evaporated milk, honey, molasses, high-fructose corn syrup
+  * Sweet Filipino sauces: banana ketchup, sweet-style spaghetti sauce, Mang Tomas, sweet teriyaki
+  * High-sugar beverages: soft drinks, sweetened fruit juices, milk tea, 3-in-1 coffee mixes
+  * High-GI refined carbohydrates: white bread, pandesal, pastries, kakanin with heavy sugar
+- STRICTLY SAFE:
+  * Non-starchy vegetables: sayote, leafy greens (kangkong, pechay), cauliflower, green beans, tomatoes
+  * Lean proteins: chicken, fish, eggs, tofu, lean pork
+  * Low-GI complex carbs in moderation: brown rice, quinoa, rolled oats, whole grains
+  * Natural flavorings: calamansi, garlic, vinegar, black pepper, stevia/monkfruit
+- CAUTION:
+  * White rice (moderation required), ripe mango, banana, sweetened soy milk
+`;
+  } else if (activeDiet === 'pinoy_keto') {
+    clinicalSpecialty = `ketogenic clinical nutrition AI specialist for low-carbohydrate / high-fat dietary management.`;
+    protocolRules = `
+Protocol Ground Rules (Pinoy Keto / Low-Carb Protocol):
+- STRICTLY FORBIDDEN (AVOID):
+  * Starchy staples: white rice (bigas/kanin), brown rice, noodles (bihon, canton, ramen), bread, pandesal, pasta
+  * High-carb root vegetables: potatoes, sweet potatoes (kamote), cassava (kamoteng kahoy), gabi
+  * Sugars: cane sugar, banana ketchup, sweet sauces, condensed milk, sweet desserts
+  * High-carb tropical fruits: mangoes, bananas, pineapple, watermelon
+- STRICTLY SAFE:
+  * High-protein and healthy fats: pork belly (liempo/lechon kawali without sweet sauce), chicken with skin, beef, eggs
+  * Low-carb vegetables: cauliflower (cauliflower rice), sayote, kangkong, pechay, cucumber, eggplant
+  * Healthy fats: coconut oil, extra virgin olive oil, real butter, avocado
+  * Low-carb seasonings: patis (in moderation), vinegar, calamansi (light), garlic, black pepper, siling labuyo
+- CAUTION:
+  * Onions, carrots, tomatoes in large amounts, processed sausages with flour fillers
+`;
+  }
+
+  const prompt = `
+You are a ${clinicalSpecialty}
+Analyze the following food ingredient text or packaging label against the active protocol.
+
+${protocolRules}
+
+Target Ingredients or Label:
 """${ingredientText}"""
 
 Return clean JSON:
 {
   "status": "SAFE" | "AVOID" | "CAUTION",
-  "reason": "Brief explanation why",
+  "reason": "Brief clinical explanation why based on the active diet protocol",
   "problemIngredients": ["ingredient1", "ingredient2"]
 }
 `;
@@ -278,7 +350,7 @@ export async function uploadToCloudinary(blob, cloudName, uploadPreset) {
  *  2. The device is detected as strictly offline (!navigator.onLine)
  *  3. The API responds with a definitive server error (500/503/400)
  */
-export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, clientApiKey = '') {
+export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, clientApiKey = '', activeDiet = 'lid') {
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
   // Condition 2: Strict offline check upfront
@@ -335,7 +407,8 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, cli
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         imageBase64: dataUrl,
-        mimeType: 'image/jpeg'
+        mimeType: 'image/jpeg',
+        activeDiet: activeDiet || 'lid'
       }),
       signal: controller.signal
     });

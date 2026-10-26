@@ -1,5 +1,10 @@
-// Comprehensive Clinical Low-Iodine Diet (LID) Database for RAI Patients
-// Follows strict clinical protocol for Radioactive Iodine Therapy preparation (<50 mcg iodine/day)
+// Multi-Diet Philippine Food Database (LID Default Protocol)
+// Supports:
+//  1. 'lid' — Low-Iodine Diet Protocol (Default, <50 mcg iodine/day)
+//  2. 'low_purine' — Low-Purine / Anti-Uric Acid (Gout Prevention)
+//  3. 'low_sodium' — Low-Sodium / Heart-Care DASH (Hypertension & Renal)
+//  4. 'diabetic' — Diabetic / Low-GI (Glycemic Control)
+//  5. 'pinoy_keto' — Pinoy Keto / Low-Carb (Weight Loss & Metabolic)
 
 export const LID_CATEGORIES = {
   PROTEINS: 'Meat & Proteins',
@@ -18,8 +23,63 @@ export const STATUS = {
   CAUTION: 'CAUTION'
 };
 
+/**
+ * Resolves diet-specific status, clinical guidance, metric value, and Pinoy smart swaps
+ */
+export function getItemDietaryInfo(item, dietKey = 'lid') {
+  if (!item) {
+    return {
+      status: STATUS.SAFE,
+      note: '',
+      substitutes: [],
+      metricLabel: 'Iodine Impact',
+      metricValue: '0 mcg'
+    };
+  }
+
+  const dietMap = item.dietaryStatus || {};
+  const currentDiet = dietMap[dietKey] || dietMap.lid;
+
+  // Metric labels per diet
+  const metricLabels = {
+    lid: 'Iodine Impact',
+    low_purine: 'Purine Content',
+    low_sodium: 'Sodium Impact',
+    diabetic: 'Glycemic Impact',
+    pinoy_keto: 'Net Carbs'
+  };
+
+  const metricLabel = metricLabels[dietKey] || 'Dietary Impact';
+
+  if (currentDiet) {
+    return {
+      status: currentDiet.status || item.status || STATUS.SAFE,
+      note: currentDiet.note || item.clinicalNotes || item.description || '',
+      substitutes: currentDiet.substitutes || item.substitutes || [],
+      metricLabel,
+      metricValue: currentDiet.metricValue || (dietKey === 'lid' ? item.iodineContent : currentDiet.note || '')
+    };
+  }
+
+  return {
+    status: item.status || STATUS.SAFE,
+    note: item.clinicalNotes || '',
+    substitutes: item.substitutes || [],
+    metricLabel,
+    metricValue: dietKey === 'lid' ? item.iodineContent : ''
+  };
+}
+
+export function getItemStatus(item, dietKey = 'lid') {
+  return getItemDietaryInfo(item, dietKey).status;
+}
+
+export function getItemSubstitutes(item, dietKey = 'lid') {
+  return getItemDietaryInfo(item, dietKey).substitutes;
+}
+
 export const LID_DATABASE = [
-  // ==================== SALTS & SEASONINGS ====================
+  // ==================== SALTS & CONDIMENTS ====================
   {
     id: 'salt-kosher',
     name: 'Kosher Salt (Non-Iodized)',
@@ -27,86 +87,106 @@ export const LID_DATABASE = [
     status: STATUS.SAFE,
     aliases: ['pure kosher salt', 'diamond crystal kosher salt', 'morton coarse kosher salt', 'non-iodized salt', 'pickling salt', 'canning salt', 'pure sodium chloride'],
     iodineContent: '< 1 mcg per serving (Negligible)',
-    description: '100% pure coarse salt without potassium iodide or yellow prussiate of soda. This is the cornerstone salt for all home cooking on LID.',
+    description: '100% pure coarse salt without potassium iodide. The cornerstone salt for home cooking on LID.',
     substitutes: [],
-    clinicalNotes: 'Check label to ensure it does not state "This salt supplies iodide, a necessary nutrient". Diamond Crystal (red box) and Morton Coarse Kosher (blue box without iodine) are gold standards.'
+    clinicalNotes: 'Check label: ensure it states "This salt does not supply iodide". Diamond Crystal and Morton Coarse are gold standards.',
+    dietaryStatus: {
+      lid: { status: STATUS.SAFE, note: '< 1 mcg iodine. Gold standard salt for RAI therapy preparation.', substitutes: [] },
+      low_purine: { status: STATUS.SAFE, note: 'Purine-free. Safe for seasoning low-purine dishes.', substitutes: [] },
+      low_sodium: { status: STATUS.CAUTION, note: 'Pure sodium chloride (~590mg Na/g). Use very sparingly under DASH restrictions.', substitutes: ['Fresh calamansi juice', 'Garlic powder', 'Siling labuyo'] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero carbohydrates and zero glycemic impact.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Crucial for replenishing electrolytes in keto adaptation.', substitutes: [] }
+    }
   },
   {
     id: 'salt-iodized',
     name: 'Iodized Salt / Table Salt',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.AVOID,
-    aliases: ['table salt', 'iodized table salt', 'iodated salt', 'rock salt (iodized)', 'refined salt', 'iodized rock salt'],
+    aliases: ['table salt', 'iodized table salt', 'iodated salt', 'refined salt', 'iodized rock salt'],
     iodineContent: '~71 mcg per 1/4 tsp (Exceeds daily max in one pinch)',
     description: 'Commercial table salt fortified with potassium iodide or potassium iodate. Strictly forbidden on LID.',
     substitutes: ['Non-iodized pure kosher salt', 'Pickling salt', 'Canning salt'],
-    clinicalNotes: 'Mandatory iodization laws in many countries mean nearly all commercial table salt and restaurant meals contain excessive iodine.'
+    clinicalNotes: 'Mandatory iodization laws in the Philippines mean nearly all commercial table salt contains excessive iodine.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: '~71 mcg per 1/4 tsp. Saturated with inorganic iodide. Severe contraindication for RAI.', substitutes: ['Non-iodized kosher salt', 'Pickling salt'] },
+      low_purine: { status: STATUS.SAFE, note: 'Contains no purines; safe for gout prevention.', substitutes: [] },
+      low_sodium: { status: STATUS.AVOID, note: 'Dense sodium source (~2,300mg Na per tsp). Limit strictly to lower arterial pressure.', substitutes: ['Calamansi + siling labuyo', 'Potassium salt substitute (if cleared by doctor)'] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero carbs, but high sodium increases diabetic cardiovascular risk.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Replenishes sodium on keto, but prioritize unrefined salts.', substitutes: [] }
+    }
   },
   {
     id: 'salt-sea',
     name: 'Sea Salt & Himalayan Pink Salt',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.AVOID,
-    aliases: ['sea salt', 'flaky sea salt', 'maldon salt', 'himalayan salt', 'pink salt', 'fleur de sel', 'celtic salt', 'black salt', 'kala namak'],
+    aliases: ['sea salt', 'flaky sea salt', 'maldon salt', 'himalayan salt', 'pink salt', 'fleur de sel', 'celtic salt', 'black salt'],
     iodineContent: 'Variable, often 20-50+ mcg per tsp plus trace oceanic iodides',
-    description: 'Derived from evaporated sea water or mineral deposits containing unpredictable levels of naturally occurring iodine.',
+    description: 'Derived from evaporated sea water or mineral deposits containing unpredictable levels of marine iodine.',
     substitutes: ['Non-iodized kosher salt', 'Pure pickling salt'],
-    clinicalNotes: 'Even non-iodized sea salt carries marine iodine residue and is contraindicated by most RAI nuclear medicine teams.'
-  },
-  {
-    id: 'pepper-black-white',
-    name: 'Pure Black & White Pepper',
-    category: LID_CATEGORIES.CONDIMENTS,
-    status: STATUS.SAFE,
-    aliases: ['black pepper', 'white pepper', 'peppercorns', 'ground black pepper', 'cracked pepper'],
-    iodineContent: '0 mcg',
-    description: 'Pure Piper nigrum peppercorns. Safe for seasoning all meats and vegetables.',
-    substitutes: [],
-    clinicalNotes: 'Ensure no seasoned pepper blends that list added salt or anti-caking additives.'
-  },
-  {
-    id: 'pure-spices-herbs',
-    name: 'Pure Spices & Dried Herbs',
-    category: LID_CATEGORIES.CONDIMENTS,
-    status: STATUS.SAFE,
-    aliases: ['garlic powder (pure)', 'onion powder (pure)', 'paprika', 'cumin', 'oregano', 'basil', 'thyme', 'rosemary', 'cinnamon', 'turmeric', 'chili powder (pure)', 'bay leaves', 'coriander'],
-    iodineContent: '0 mcg',
-    description: 'Pure single-ingredient dried herbs and spices without added salt or fillers.',
-    substitutes: [],
-    clinicalNotes: 'Always inspect the ingredient list to ensure "salt" is not included (e.g., use pure garlic powder, NOT garlic salt).'
-  },
-  {
-    id: 'fresh-chilies',
-    name: 'Fresh Chilies (Siling Haba & Labuyo)',
-    category: LID_CATEGORIES.CONDIMENTS,
-    status: STATUS.SAFE,
-    aliases: ['siling labuyo', 'siling haba', 'birds eye chili', 'jalapeno', 'serrano', 'cayenne fresh', 'red chili'],
-    iodineContent: '0 mcg',
-    description: 'Fresh pepper pods are completely safe and excellent for adding intense flavor without sodium.',
-    substitutes: [],
-    clinicalNotes: 'Great for building rich broths and sautéed dishes.'
+    clinicalNotes: 'Even non-iodized sea salt carries marine iodine residue and is contraindicated by most RAI nuclear medicine teams.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Marine oceanic salts retain natural iodides that compromise RAI ablation.', substitutes: ['Non-iodized kosher salt'] },
+      low_purine: { status: STATUS.SAFE, note: 'Zero purine content.', substitutes: [] },
+      low_sodium: { status: STATUS.CAUTION, note: 'Same sodium density as table salt (~2,000mg/tsp). Use sparingly.', substitutes: ['Fresh herbs', 'Calamansi juice'] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero glycemic effect.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Popular electrolyte source on keto diets.', substitutes: [] }
+    }
   },
   {
     id: 'soy-sauce',
     name: 'Soy Sauce (Toyo)',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.AVOID,
-    aliases: ['soy sauce', 'toyo', 'tamari', 'shoyu', 'liquid aminos', 'bragg liquid aminos', 'dark soy sauce', 'light soy sauce'],
+    aliases: ['soy sauce', 'toyo', 'tamari', 'shoyu', 'liquid aminos', 'dark soy sauce', 'light soy sauce'],
     iodineContent: 'Very High (~50-90 mcg per tbsp from iodized salt + soybean isoflavones)',
-    description: 'Made from fermented soybeans, wheat, and high amounts of iodized brine. Soybeans actively block thyroidal iodine uptake.',
-    substitutes: ['Homemade garlic-vinegar reduction', 'Coconut aminos made with verified non-iodized kosher salt', 'Balsamic reduction'],
-    clinicalNotes: 'Soy is a double-threat: high iodine from commercial brine, plus soybean isoflavones (genistein/daidzein) inhibit the thyroid sodium-iodide symporter (NIS).'
+    description: 'Made from fermented soybeans, wheat, and iodized brine. Soybeans actively block thyroidal iodine uptake.',
+    substitutes: ['Homemade garlic-vinegar reduction', 'Coconut aminos with verified non-iodized salt', 'Balsamic reduction'],
+    clinicalNotes: 'Soy is a double threat: high iodine from commercial brine, plus genistein/daidzein inhibit thyroid NIS receptors.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'High iodine brine + soybean isoflavones block RAI absorption. Absolute ban.', substitutes: ['Homemade garlic-vinegar reduction', 'Balsamic glaze'] },
+      low_purine: { status: STATUS.CAUTION, note: 'Moderate purine from fermented soybeans. High intake can trigger uric acid rise.', substitutes: ['Vinegar dip with garlic', 'Calamansi reduction'] },
+      low_sodium: { status: STATUS.AVOID, note: 'Extreme sodium: ~900–1,000mg sodium per single tablespoon! Major hypertension hazard.', substitutes: ['Fresh calamansi juice + crushed siling labuyo', 'Garlic vinegar (Sukang Paombong)'] },
+      diabetic: { status: STATUS.CAUTION, note: 'Commercial brands often add sugar or caramel coloring. Check nutrition facts.', substitutes: ['Sugar-free coconut aminos'] },
+      pinoy_keto: { status: STATUS.CAUTION, note: 'Often contains wheat and added sugars (1–3g carbs/tbsp). Choose tamari or coconut aminos.', substitutes: ['Tamari (gluten-free)', 'Coconut aminos'] }
+    }
   },
   {
     id: 'fish-sauce-patis',
-    name: 'Fish Sauce (Patis) & Bagoong',
+    name: 'Fish Sauce (Patis) & Bagoong Alamang',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.AVOID,
-    aliases: ['patis', 'fish sauce', 'bagoong', 'bagoong alamang', 'shrimp paste', 'anchovy sauce', 'nam pla', 'nuoc mam'],
+    aliases: ['patis', 'fish sauce', 'bagoong', 'bagoong alamang', 'shrimp paste', 'anchovy sauce', 'nam pla'],
     iodineContent: 'Extremely High (Seafood extract + solar sea salt)',
     description: 'Fermented fish/krill liquid loaded with marine iodine and salt. Absolute contraindication.',
-    substitutes: ['Garlic-infused olive oil with pure kosher salt and a squeeze of lemon or calamansi'],
-    clinicalNotes: 'Even small drops can ruin preparation for radioactive iodine ablation.'
+    substitutes: ['Garlic-infused olive oil with kosher salt and calamansi', 'Calamansi juice + siling labuyo'],
+    clinicalNotes: 'Even small drops can ruin preparation for radioactive iodine ablation.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Extremely high marine iodine from fermented fish and solar sea salt.', substitutes: ['Garlic-infused oil + kosher salt + calamansi'] },
+      low_purine: { status: STATUS.AVOID, note: 'Highly concentrated purines from fermented small fish/krill. Direct gout flare trigger.', substitutes: ['Calamansi juice + siling labuyo + garlic'] },
+      low_sodium: { status: STATUS.AVOID, note: 'Massive sodium: ~1,200–1,400mg sodium per tablespoon. Dangerous for heart and kidney patients.', substitutes: ['Calamansi juice + garlic + siling labuyo dip', 'Spiced native cane vinegar'] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero carbohydrates, but high sodium accelerates diabetic nephropathy.', substitutes: ['Calamansi + garlic'] },
+      pinoy_keto: { status: STATUS.CAUTION, note: 'Zero carbs, but extreme sodium causes water retention; consume with high water intake.', substitutes: ['Garlic-vinegar reduction'] }
+    }
+  },
+  {
+    id: 'toyomansi-condiment',
+    name: 'Toyomansi & Commercial Seasoning Liquids',
+    category: LID_CATEGORIES.CONDIMENTS,
+    status: STATUS.AVOID,
+    aliases: ['toyomansi', 'silver swan toyomansi', 'datu puti toyomansi', 'maggi savor', 'knorr liquid seasoning'],
+    iodineContent: 'Very High (Iodized salt + hydrolyzed soy protein + preservatives)',
+    description: 'Blended soy sauce, calamansi flavor, MSG, and preservatives. Heavy sodium and soy isoflavones.',
+    substitutes: ['Fresh squeezed calamansi juice mixed with garlic and pure vinegar', 'Fresh lemon juice with chili'],
+    clinicalNotes: 'Contains iodized salt, hydrolyzed soy protein, and flavor enhancers prohibited on protocol.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Contains iodized brine and soy protein hydrolysates.', substitutes: ['Fresh calamansi juice + sukang paombong + crushed siling labuyo'] },
+      low_purine: { status: STATUS.CAUTION, note: 'Soy extracts and yeast enhancers may elevate purines.', substitutes: ['Pure calamansi + chili dip'] },
+      low_sodium: { status: STATUS.AVOID, note: 'Massive sodium bomb (>800mg per tbsp). Avoid for blood pressure management.', substitutes: ['Pure calamansi + crushed garlic + siling labuyo dip'] },
+      diabetic: { status: STATUS.CAUTION, note: 'Commercial blends frequently add corn syrup and sugar.', substitutes: ['Fresh calamansi juice + pure vinegar'] },
+      pinoy_keto: { status: STATUS.CAUTION, note: 'Often contains sugar and wheat starch fillers.', substitutes: ['Fresh calamansi + coconut aminos'] }
+    }
   },
   {
     id: 'oyster-sauce',
@@ -115,99 +195,198 @@ export const LID_DATABASE = [
     status: STATUS.AVOID,
     aliases: ['oyster sauce', 'mama sita oyster sauce', 'lee kum kee oyster sauce', 'crab paste', 'aligue', 'belacan'],
     iodineContent: 'Extremely High (Oyster extracts, seafood base, iodized salt)',
-    description: 'Thick brown sauce derived from boiled oysters and seasoned with sea salt and flavor enhancers.',
-    substitutes: ['Sautéed garlic and caramelized shallots in olive oil with pure kosher salt and a splash of white vinegar'],
-    clinicalNotes: 'Strictly prohibited due to direct mollusk derivation.'
+    description: 'Thick brown sauce derived from boiled oysters, seasoned with sea salt and caramel color.',
+    substitutes: ['Sautéed garlic and caramelized shallots in olive oil with kosher salt and white vinegar'],
+    clinicalNotes: 'Strictly prohibited due to direct mollusk derivation.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Direct oyster mollusk derivative packed with oceanic iodine.', substitutes: ['Caramelized shallot & garlic puree in olive oil'] },
+      low_purine: { status: STATUS.AVOID, note: 'Oysters are high-purine mollusks. Known trigger for acute gout.', substitutes: ['Sautéed mushrooms and onions in olive oil'] },
+      low_sodium: { status: STATUS.AVOID, note: 'High sodium (>500mg/tbsp) combined with sugar and MSG.', substitutes: ['Caramelized garlic and shallots with vinegar'] },
+      diabetic: { status: STATUS.AVOID, note: 'High added sugar and cornstarch fillers (~5g sugar per tbsp).', substitutes: ['Sugar-free mushroom glaze'] },
+      pinoy_keto: { status: STATUS.AVOID, note: 'Thickened with cornstarch and sugar (high carb density).', substitutes: ['Garlic butter with pure pepper'] }
+    }
+  },
+  {
+    id: 'banana-ketchup',
+    name: 'Banana Ketchup (UFC, Papa, Jufran)',
+    category: LID_CATEGORIES.CONDIMENTS,
+    status: STATUS.AVOID,
+    aliases: ['banana ketchup', 'ufc banana sauce', 'jufran ketchup', 'papa ketchup', 'tamis-anghang ketchup'],
+    iodineContent: 'Moderate (Bananas + commercial iodized salt + red dye)',
+    description: 'Sweet Filipino condiment made from mashed bananas, sugar, vinegar, spices, iodized salt, and Red #3.',
+    substitutes: ['Homemade fresh tomato salsa with non-iodized salt and calamansi', 'Pure tomato paste with apple cider vinegar'],
+    clinicalNotes: 'Combines multiple LID hazards: bananas, iodized salt, and synthetic FD&C Red Dye #3.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Tri-hazard for LID: banana base + iodized salt + FD&C Red Dye #3.', substitutes: ['Fresh tomato salsa with non-iodized kosher salt'] },
+      low_purine: { status: STATUS.SAFE, note: 'Low purines from fruit and sugar base.', substitutes: [] },
+      low_sodium: { status: STATUS.CAUTION, note: 'Contains ~250mg sodium per 2 tbsp plus preservatives.', substitutes: ['Fresh homemade tomato dip'] },
+      diabetic: { status: STATUS.AVOID, note: 'High sugar content (~4-6g sugar per tablespoon). Spikes blood sugar rapidly.', substitutes: ['Fresh blended tomatoes + stevia + vinegar', 'Unsweetened tomato paste'] },
+      pinoy_keto: { status: STATUS.AVOID, note: 'Packed with sucrose and refined starch. Knocks out ketosis.', substitutes: ['Sugar-free keto ketchup', 'Fresh calamansi and chili dip'] }
+    }
+  },
+  {
+    id: 'fresh-chilies',
+    name: 'Fresh Chilies (Siling Labuyo & Siling Haba)',
+    category: LID_CATEGORIES.CONDIMENTS,
+    status: STATUS.SAFE,
+    aliases: ['siling labuyo', 'siling haba', 'birds eye chili', 'jalapeno', 'serrano', 'red chili'],
+    iodineContent: '0 mcg',
+    description: 'Fresh pepper pods are completely safe and add intense, lively flavor to all Pinoy dishes.',
+    substitutes: [],
+    clinicalNotes: 'Great for building rich flavor without sodium or iodized condiments.',
+    dietaryStatus: {
+      lid: { status: STATUS.SAFE, note: '0 mcg iodine. Adds vibrant spicy flavor without any thyroid risk.', substitutes: [] },
+      low_purine: { status: STATUS.SAFE, note: 'Purine-free. Capsaicin has anti-inflammatory properties.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'The ultimate zero-sodium flavor enhancer for hypertension patients!', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero glycemic impact. May help insulin sensitivity.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Keto staple for spicy Filipino dishes.', substitutes: [] }
+    }
   },
   {
     id: 'pure-oils',
-    name: '100% Pure Vegetable Oils',
+    name: '100% Pure Vegetable Oils (Coconut, Olive, Canola)',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.SAFE,
-    aliases: ['pure coconut oil', 'canola oil', 'extra virgin olive oil', 'corn oil', 'avocado oil', 'sunflower oil', 'sesame oil (pure)'],
+    aliases: ['pure coconut oil', 'canola oil', 'extra virgin olive oil', 'corn oil', 'avocado oil', 'sunflower oil'],
     iodineContent: '0 mcg',
-    description: 'Pure pressed vegetable and nut oils are 100% lipid and free from iodine.',
+    description: 'Pure pressed vegetable and nut oils are 100% lipid and free from iodine and purines.',
     substitutes: [],
-    clinicalNotes: 'Avoid blended oils that state "butter flavor" or unverified emulsifiers.'
+    clinicalNotes: 'Avoid blended oils that state "butter flavor" or unverified emulsifiers.',
+    dietaryStatus: {
+      lid: { status: STATUS.SAFE, note: 'Pure lipids contain 0 mcg iodine. Safe cooking fat.', substitutes: [] },
+      low_purine: { status: STATUS.SAFE, note: 'Zero purines. Safe cooking medium.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Naturally sodium-free heart-healthy fat (especially Olive/Avocado).', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero carbs, zero glycemic index.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Premier healthy fat staple for fueling nutritional ketosis.', substitutes: [] }
+    }
   },
   {
     id: 'vinegars',
-    name: 'Pure Vinegars (White, Cane, Apple Cider)',
+    name: 'Pure Vinegars (Cane, Coconut, Apple Cider, White)',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.SAFE,
-    aliases: ['white vinegar', 'sukang paombong', 'sukang iloko', 'cane vinegar', 'apple cider vinegar', 'distilled vinegar'],
+    aliases: ['sukang paombong', 'sukang iloko', 'cane vinegar', 'coconut vinegar', 'apple cider vinegar', 'distilled white vinegar'],
     iodineContent: '0 mcg',
-    description: 'Natural fermented vinegars without added salt or caramel color derived from dairy.',
+    description: 'Natural fermented vinegars without added salt or caramel color.',
     substitutes: [],
-    clinicalNotes: 'Verify label: only water and vinegar acidity. Do not use seasoned vinegar blends containing iodized salt.'
-  },
-  {
-    id: 'mayonnaise',
-    name: 'Commercial Mayonnaise',
-    category: LID_CATEGORIES.CONDIMENTS,
-    status: STATUS.AVOID,
-    aliases: ['mayo', 'hellmanns', 'kewpie', 'best foods mayonnaise', 'sandwich spread'],
-    iodineContent: '~15-30 mcg per serving (Whole egg yolks + iodized salt)',
-    description: 'Standard mayonnaise is an emulsion of egg yolks, oil, and iodized salt.',
-    substitutes: ['Homemade egg-white vegan mayo made with pasteurized egg whites, canola oil, pure kosher salt, and lemon juice', 'Mashed avocado with lemon and kosher salt'],
-    clinicalNotes: 'Egg yolks are strictly forbidden on LID.'
+    clinicalNotes: 'Verify label: only water and vinegar acidity. Avoid seasoned blends with iodized salt.',
+    dietaryStatus: {
+      lid: { status: STATUS.SAFE, note: 'Pure fermented acetic acid without iodine. Great for paksiw and adobo.', substitutes: [] },
+      low_purine: { status: STATUS.SAFE, note: 'Purine-free. Acetic acid assists metabolic clearance.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Zero sodium. The essential acidic base for low-sodium Filipino cuisine.', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Helps blunt post-meal blood glucose spikes.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Zero carb culinary staple.', substitutes: [] }
+    }
   },
 
   // ==================== MEAT & PROTEINS ====================
   {
+    id: 'organ-meats-isaw-atay',
+    name: 'Organ Meats (Isaw, Bopis, Atay / Pork & Chicken Liver)',
+    category: LID_CATEGORIES.PROTEINS,
+    status: STATUS.SAFE,
+    aliases: ['isaw', 'bopis', 'atay', 'pork liver', 'chicken liver', 'liver', 'bituka', 'tripe', 'goto', 'dinuguan'],
+    iodineContent: '~5-12 mcg per 100g (Low if fresh and unbrined)',
+    description: 'Filipino street food and stew delicacies made from internal organs and intestines.',
+    substitutes: ['Skinless chicken breast', 'Lean pork tenderloin', 'Tofu (for non-LID)'],
+    clinicalNotes: 'Safe for LID only if cooked from fresh raw cuts with kosher salt. Street-food isaw is boiled with iodized salt.',
+    dietaryStatus: {
+      lid: { status: STATUS.SAFE, note: 'Naturally low in iodine if cooked raw at home without iodized salt.', substitutes: [] },
+      low_purine: { status: STATUS.AVOID, note: 'Extremely high purines (>400mg/100g). Liver and intestines trigger severe gout flares.', substitutes: ['Skinless chicken breast', 'Sayote cubes', 'Egg whites'] },
+      low_sodium: { status: STATUS.CAUTION, note: 'Safe if fresh; street food isaw/bopis is boiled with heavy iodized salt & patis.', substitutes: ['Fresh pan-seared chicken breast'] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero carbs, nutrient-dense protein with high iron and vitamin A.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'High fat and protein, zero carbs. Excellent for keto.', substitutes: [] }
+    }
+  },
+  {
     id: 'fresh-chicken',
-    name: 'Fresh Chicken (Unbrined & Uncured)',
+    name: 'Fresh Chicken (Breast, Thigh - Unbrined & Uncured)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.SAFE,
     aliases: ['chicken breast (fresh)', 'chicken thigh', 'chicken wings', 'fresh whole chicken', 'manok'],
     iodineContent: '~5-10 mcg per 100g (Naturally low)',
-    description: 'Fresh supermarket raw chicken cutlets that have not been injected with saline or broth solutions.',
+    description: 'Fresh supermarket raw chicken cutlets not injected with broth or saline solutions.',
     substitutes: [],
-    clinicalNotes: 'Read the packaging label carefully: avoid chicken stating "contains up to 15% solution of broth, salt, or sodium phosphate". Buy 100% natural, unseasoned fresh cuts.'
+    clinicalNotes: 'Check packaging: avoid chicken stating "contains up to 15% solution of broth or salt".',
+    dietaryStatus: {
+      lid: { status: STATUS.SAFE, note: 'Naturally low iodine (~5–10 mcg/100g). Primary protein staple for LID.', substitutes: [] },
+      low_purine: { status: STATUS.SAFE, note: 'Moderate purine: skinless chicken breast is the safest meat for gout patients.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Naturally low sodium (~70mg/100g). Ideal for DASH and renal diets.', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Lean protein with zero glycemic index. Helps stabilize blood sugar.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'High protein staple for keto meal plans.', substitutes: [] }
+    }
+  },
+  {
+    id: 'fresh-pork',
+    name: 'Fresh Pork (Uncured & Raw - Liempo, Kasim, Loin)',
+    category: LID_CATEGORIES.PROTEINS,
+    status: STATUS.SAFE,
+    aliases: ['pork chops', 'pork tenderloin', 'pork belly (fresh)', 'ground pork', 'baboy', 'liempo (fresh)', 'kasim'],
+    iodineContent: '~3-6 mcg per 100g',
+    description: 'Fresh butcher pork cuts without brine injection, curing salt, or preservatives.',
+    substitutes: [],
+    clinicalNotes: 'Avoid cured pork: tocino, longganisa, ham, bacon, spam, or hotdogs, as all contain iodized salt and nitrites.',
+    dietaryStatus: {
+      lid: { status: STATUS.SAFE, note: 'Raw fresh pork cuts are low in iodine. Avoid cured versions (tocino/longganisa).', substitutes: [] },
+      low_purine: { status: STATUS.CAUTION, note: 'Moderate purines (~120mg/100g). Limit portion sizes for active gout.', substitutes: ['Skinless chicken breast', 'Egg whites'] },
+      low_sodium: { status: STATUS.SAFE, note: 'Naturally low sodium in raw fresh form. Avoid cured pork.', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero carbs, high satiety protein.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Pork belly (liempo) is a cornerstone fat and protein source for Pinoy keto.', substitutes: [] }
+    }
   },
   {
     id: 'fresh-beef',
-    name: 'Fresh Beef (Uncured & Raw)',
+    name: 'Fresh Beef (Uncured & Raw - Sirloin, Brisket)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.SAFE,
     aliases: ['beef steak', 'ground beef (fresh)', 'beef roast', 'beef ribs', 'sirloin', 'tenderloin', 'baka'],
     iodineContent: '~2-5 mcg per 100g',
-    description: 'Unprocessed fresh butcher cuts of beef. Safe protein staple for LID.',
+    description: 'Unprocessed fresh butcher cuts of beef. Safe protein staple.',
     substitutes: [],
-    clinicalNotes: 'Avoid pre-marinated beef, corned beef, pastrami, beef patties with added salt, or deli cold cuts.'
+    clinicalNotes: 'Avoid pre-marinated beef, corned beef, pastrami, or patties with added iodized salt.',
+    dietaryStatus: {
+      lid: { status: STATUS.SAFE, note: 'Raw fresh beef contains only 2–5 mcg iodine per 100g. Safe for LID.', substitutes: [] },
+      low_purine: { status: STATUS.CAUTION, note: 'Moderate-high purine (~110-150mg/100g). Restrict to small portions (<100g) on low-purine diet.', substitutes: ['Skinless chicken breast'] },
+      low_sodium: { status: STATUS.SAFE, note: 'Naturally low in sodium in fresh cuts.', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero carbs, zero sugar.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Premier nutrient-dense red meat for keto diets.', substitutes: [] }
+    }
   },
   {
-    id: 'fresh-pork',
-    name: 'Fresh Pork (Uncured & Raw)',
-    category: LID_CATEGORIES.PROTEINS,
-    status: STATUS.SAFE,
-    aliases: ['pork chops', 'pork tenderloin', 'pork belly (fresh)', 'ground pork', 'baboy'],
-    iodineContent: '~3-6 mcg per 100g',
-    description: 'Fresh butcher pork cuts without brine injection or cure.',
-    substitutes: [],
-    clinicalNotes: 'Avoid ham, bacon, sausages, tocino, longganisa, spam, or hotdogs, as all cured meats contain copious iodized salt and preservatives.'
-  },
-  {
-    id: 'turkey-breast',
-    name: 'Turkey Breast',
+    id: 'mung-beans-munggo',
+    name: 'Mung Beans (Ginisang Munggo / Balatong)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.AVOID,
-    aliases: ['turkey', 'turkey breast', 'ground turkey', 'roast turkey deli meat'],
-    iodineContent: '~30-40+ mcg (Frequently factory-injected with iodized broth)',
-    description: 'Commercially processed turkey is heavily brined with salt solutions to prevent dryness. Protocol specifies avoiding turkey breast.',
-    substitutes: ['Fresh chicken breast (100% natural, no broth injection)', 'Fresh pork loin'],
-    clinicalNotes: 'Excluded specifically in the clinical protocol due to industry-wide basting/brine injection.'
+    aliases: ['munggo', 'mongo', 'mung beans', 'green mung beans', 'balatong', 'ginisang munggo'],
+    iodineContent: 'Moderate to High (Legume root nodules absorb soil iodides readily)',
+    description: 'Traditional Friday Filipino bean stew seasoned with garlic, onions, and greens.',
+    substitutes: ['Sayote and kalabasa stew', 'Ginisang upo or patola'],
+    clinicalNotes: 'Green pod beans and dried munggo are specifically restricted on the LID medical protocol.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Soil iodides concentrate in dried legume beans. Forbidden on LID.', substitutes: ['Sayote and kalabasa stew', 'Ginisang patola'] },
+      low_purine: { status: STATUS.AVOID, note: 'High purines (~150–200mg/100g). Classic Filipino trigger for acute gout attacks.', substitutes: ['Sayote cubes', 'Kalabasa', 'Tofu (moderate)'] },
+      low_sodium: { status: STATUS.SAFE, note: 'Plain boiled munggo is naturally very low sodium and high in potassium/magnesium.', substitutes: [] },
+      diabetic: { status: STATUS.CAUTION, note: 'Complex carbs with high fiber; moderates glucose, but portion control is needed.', substitutes: ['Cauliflower rice with greens'] },
+      pinoy_keto: { status: STATUS.AVOID, note: 'High in starch (~40g net carbs per cup). Knocks out ketosis.', substitutes: ['Sautéed spinach with ground pork', 'Ginisang sayote'] }
+    }
   },
   {
     id: 'egg-whites',
     name: 'Egg Whites (Pure)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.SAFE,
-    aliases: ['pure egg whites', 'egg white', 'liquid egg whites (100% pure)', 'separated egg whites'],
+    aliases: ['pure egg whites', 'egg white', 'liquid egg whites', 'separated egg whites'],
     iodineContent: '< 1 mcg per white',
-    description: 'The white albumen of the egg contains virtually zero iodine. Excellent protein source for LID.',
+    description: 'The white albumen of the egg contains virtually zero iodine and zero purines. Excellent protein source.',
     substitutes: [],
-    clinicalNotes: 'Must be meticulously separated from the yolk. Discard if any trace of yellow yolk breaks into the white.'
+    clinicalNotes: 'Must be meticulously separated from the yolk. Discard if any yellow yolk breaks into the white.',
+    dietaryStatus: {
+      lid: { status: STATUS.SAFE, note: '< 1 mcg iodine. Perfect protein source for RAI prep.', substitutes: [] },
+      low_purine: { status: STATUS.SAFE, note: 'Virtually zero purines! The best protein choice for severe gout sufferers.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Naturally low sodium (~55mg/white). Safe for heart/kidney.', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero carbs, pure protein that stabilizes blood sugar.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Pure lean protein, zero carbs.', substitutes: [] }
+    }
   },
   {
     id: 'egg-yolks-whole',
@@ -217,52 +396,87 @@ export const LID_DATABASE = [
     aliases: ['whole egg', 'egg yolk', 'scrambled eggs', 'boiled egg', 'sunny side up', 'salted egg', 'itlog na maalat'],
     iodineContent: '~12-25 mcg per single yolk (Chicken feed is fortified with iodine)',
     description: 'Iodine concentrates almost entirely in the yolk of the egg.',
-    substitutes: ['Pure separated egg whites (use 2 whites for every 1 whole egg in cooking/baking)'],
-    clinicalNotes: 'Also avoid any product with whole eggs: mayonnaise, custard, quiche, waffles, cakes, pasta.'
+    substitutes: ['Pure separated egg whites (use 2 whites for every 1 whole egg)'],
+    clinicalNotes: 'Avoid whole eggs and whole-egg products: mayonnaise, custard, quiche, waffles, pasta.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: '~12–25 mcg iodine per yolk. Iodine concentrates heavily in poultry yolks.', substitutes: ['Pure separated egg whites (2 whites = 1 egg)'] },
+      low_purine: { status: STATUS.SAFE, note: 'Eggs are very low in purines and safe for gout patients.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Fresh whole eggs are low sodium (~70mg). Salted eggs (itlog na maalat) are STRICTLY AVOID.', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'High choline and healthy fats with zero carbohydrates.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Gold standard keto food: perfect 1:1 fat-to-protein ratio.', substitutes: [] }
+    }
+  },
+  {
+    id: 'dried-fish-tuyo-daing',
+    name: 'Dried Salted Fish (Tuyo, Daing, Tinapa)',
+    category: LID_CATEGORIES.PROTEINS,
+    status: STATUS.AVOID,
+    aliases: ['tuyo', 'daing', 'tinapa', 'dried fish', 'daing na bangus (salted)', 'bulad', 'danggit'],
+    iodineContent: 'Extremely High (Marine fish + solar sea salt drying)',
+    description: 'Salt-cured and sun-dried or smoked fish. Highly concentrated in marine iodine, purines, and sodium.',
+    substitutes: ['Fresh pan-seared chicken breast', 'Fresh unbrined pork tenderloin'],
+    clinicalNotes: 'Tri-hazard: marine iodine from the fish, copious sea salt curing, and extreme purines.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Extreme marine iodine and sea salt curing. Absolute contraindication.', substitutes: ['Fresh pan-seared chicken cutlet'] },
+      low_purine: { status: STATUS.AVOID, note: 'Concentrated purines (>300mg/100g) from small dried fish trigger severe gout.', substitutes: ['Fresh skinless chicken breast', 'Egg whites'] },
+      low_sodium: { status: STATUS.AVOID, note: 'Astronomical sodium (>1,800mg per serving). Dangerous for hypertension and kidney care.', substitutes: ['Fresh unsalted fish pan-seared with calamansi'] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero carbs, but the extreme sodium elevates cardiovascular risks in diabetics.', substitutes: [] },
+      pinoy_keto: { status: STATUS.CAUTION, note: 'Zero carbs, but requires massive hydration due to salt load.', substitutes: ['Fresh pan-fried tilapia in olive oil'] }
+    }
   },
   {
     id: 'seafood-fish',
-    name: 'Fish (Tuna, Cod, Salmon, Tilapia, Bangus)',
+    name: 'Fresh Fish (Tuna, Salmon, Tilapia, Bangus)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.AVOID,
-    aliases: ['fish', 'tuna', 'canned tuna', 'cod', 'salmon', 'tilapia', 'bangus', 'milkfish', 'sardines', 'mackerel', 'sushi', 'sashimi', 'anchovies'],
+    aliases: ['fish', 'tuna', 'canned tuna', 'salmon', 'tilapia', 'bangus', 'milkfish', 'sardines', 'mackerel', 'sushi'],
     iodineContent: 'Extremely High (90 to 200+ mcg per serving)',
-    description: 'All marine and freshwater fish bioaccumulate iodine from water and oceanic algae.',
-    substitutes: ['Fresh raw chicken breast', 'Fresh pork tenderloin', 'Fresh lean beef'],
-    clinicalNotes: 'Even freshwater fish are prohibited on strict protocols to eliminate all risk of mislabeling or contamination.'
+    description: 'Marine and freshwater fish bioaccumulate environmental iodine.',
+    substitutes: ['Fresh raw chicken breast', 'Fresh pork loin', 'Fresh lean beef'],
+    clinicalNotes: 'Even freshwater fish are prohibited on strict LID protocols to eliminate all risk of mislabeling or contamination.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'High natural iodine bioaccumulated from water and algae.', substitutes: ['Fresh chicken breast', 'Fresh lean beef'] },
+      low_purine: { status: STATUS.CAUTION, note: 'Sardines and mackerel are high purine; white fish (tilapia/bangus) is moderate.', substitutes: ['Skinless chicken breast', 'Egg whites'] },
+      low_sodium: { status: STATUS.SAFE, note: 'Fresh unseasoned fish is naturally low in sodium and heart-protective.', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero carbs, high omega-3 fatty acids for cardiovascular health.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Premier healthy protein and fat source on keto.', substitutes: [] }
+    }
   },
   {
     id: 'shellfish-crustaceans',
-    name: 'Shellfish & Crustaceans (Shrimp, Crab, Lobster)',
+    name: 'Shellfish & Crustaceans (Tahong, Hipon, Alimango, Talaba)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.AVOID,
-    aliases: ['shrimp', 'hipon', 'prawns', 'crab', 'alimango', 'alimasag', 'lobster', 'crawfish', 'squid', 'pusit', 'octopus', 'clams', 'mussels', 'tahong', 'oysters'],
+    aliases: ['shrimp', 'hipon', 'prawns', 'crab', 'alimango', 'alimasag', 'lobster', 'squid', 'pusit', 'octopus', 'clams', 'mussels', 'tahong', 'oysters', 'talaba'],
     iodineContent: 'Extremely High (100 to 400+ mcg per serving)',
-    description: 'Marine filter-feeders that store maximal concentrations of elemental iodine.',
+    description: 'Marine filter-feeders that store maximal concentrations of elemental iodine and purines.',
     substitutes: ['Fresh unbrined chicken', 'Fresh beef'],
-    clinicalNotes: 'One serving of shrimp or mussels can saturate thyroid receptors for weeks and cause RAI therapy failure.'
+    clinicalNotes: 'One serving of shrimp or mussels can saturate thyroid receptors for weeks and cause RAI therapy failure.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Extreme marine iodine storage. Satures thyroid receptors for weeks.', substitutes: ['Fresh chicken breast', 'Fresh pork tenderloin'] },
+      low_purine: { status: STATUS.AVOID, note: 'Mussels (tahong), oysters (talaba), and shrimp are rich in purines. Primary gout trigger.', substitutes: ['Skinless chicken breast', 'Sayote and kalabasa stew'] },
+      low_sodium: { status: STATUS.CAUTION, note: 'Naturally higher in sodium than finfish; avoid canned or brined varieties.', substitutes: ['Fresh chicken breast'] },
+      diabetic: { status: STATUS.SAFE, note: 'Lean protein with zero carbs.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'High protein, low carb (squid has slight carbs, check portions).', substitutes: [] }
+    }
   },
   {
     id: 'tofu-soy-protein',
-    name: 'Tofu, Soy Protein & Edamame',
+    name: 'Tofu (Tokwa), Taho & Soy Protein',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.AVOID,
-    aliases: ['tofu', 'tokwa', 'taho', 'edamame', 'soy protein', 'soybeans', 'tempeh', 'textured vegetable protein', 'tvp'],
+    aliases: ['tofu', 'tokwa', 'taho', 'edamame', 'soy protein', 'soybeans', 'tempeh'],
     iodineContent: 'Variable, but soy isoflavones suppress thyroid iodine uptake (NIS inhibitor)',
-    description: 'Soy products contain genistein and daidzein which directly block the iodine uptake mechanism required for radioactive iodine treatment.',
+    description: 'Soy products contain genistein and daidzein which directly block the iodine uptake mechanism.',
     substitutes: ['Fresh beef', 'Fresh chicken', 'Egg whites'],
-    clinicalNotes: 'Soy must be avoided not just for iodine content, but because it acts as an NIS inhibitor.'
-  },
-  {
-    id: 'beans-legumes',
-    name: 'Lima Beans, Black Beans & Green Beans',
-    category: LID_CATEGORIES.PROTEINS,
-    status: STATUS.AVOID,
-    aliases: ['lima beans', 'black beans', 'green beans', 'string beans', 'baguio beans', 'kidney beans', 'pinto beans', 'lentils', 'chickpeas', 'garbanzos'],
-    iodineContent: 'Moderate to High (legume root nodules absorb soil iodides readily)',
-    description: 'Specific beans and pod vegetables specified for exclusion in the medical protocol.',
-    substitutes: ['Sayote', 'Kalabasa (squash)', 'Zucchini', 'Carrots'],
-    clinicalNotes: 'Green beans (Baguio beans) and lima beans are explicitly restricted on this protocol.'
+    clinicalNotes: 'Soy must be avoided not just for iodine content, but because it acts as an NIS inhibitor.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Soy isoflavones act as NIS inhibitors blocking radioactive iodine.', substitutes: ['Fresh chicken breast', 'Egg whites'] },
+      low_purine: { status: STATUS.CAUTION, note: 'Tofu has moderate purines, but plant purines are generally safer than organ meats.', substitutes: ['Egg whites', 'Skinless chicken breast'] },
+      low_sodium: { status: STATUS.SAFE, note: 'Fresh tokwa is naturally very low sodium.', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Low glycemic index, high protein and fiber. Excellent for blood sugar.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Firm tokwa is a great low-carb plant protein (~2g net carbs/100g).', substitutes: [] }
+    }
   },
 
   // ==================== PRODUCE (VEGETABLES & FRUITS) ====================
@@ -271,401 +485,264 @@ export const LID_DATABASE = [
     name: 'Sayote (Chayote Squash)',
     category: LID_CATEGORIES.PRODUCE,
     status: STATUS.SAFE,
-    aliases: ['sayote', 'chayote', 'mirliton', 'christophine', 'vegetable pear'],
+    aliases: ['sayote', 'chayote', 'mirliton', 'vegetable pear'],
     iodineContent: '0 mcg',
-    description: 'Crisp, mild gourd vegetable. The premier safe substitute for potatoes in soups, stews, and stir-fries.',
+    description: 'Crisp, mild gourd vegetable. The premier multi-diet safe substitute for potatoes.',
     substitutes: [],
-    clinicalNotes: 'Outstanding potato replacement for nilaga, tinola, chicken soups, and roasted vegetable medleys.'
+    clinicalNotes: 'Outstanding potato replacement for nilaga, tinola, chicken soups, and roasted vegetable medleys.',
+    dietaryStatus: {
+      lid: { status: STATUS.SAFE, note: '0 mcg iodine. The #1 safe potato substitute on Low-Iodine Diet.', substitutes: [] },
+      low_purine: { status: STATUS.SAFE, note: '0 purines! Alkalinizes urine and aids in uric acid clearance.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Virtually zero sodium with high potassium. Great for blood pressure.', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Very low glycemic index and low net carbs (~2g/100g).', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Versatile low-carb vegetable for stir-fries and tinola.', substitutes: [] }
+    }
   },
   {
     id: 'kalabasa-squash',
     name: 'Kalabasa (Squash / Kabocha)',
     category: LID_CATEGORIES.PRODUCE,
     status: STATUS.SAFE,
-    aliases: ['kalabasa', 'squash', 'kabocha', 'butternut squash', 'acorn squash', 'pumpkin (fresh)'],
+    aliases: ['kalabasa', 'squash', 'kabocha', 'butternut squash', 'pumpkin (fresh)'],
     iodineContent: '< 2 mcg (Very low)',
-    description: 'Sweet, hearty, nutritious orange flesh. Excellent source of healthy carbohydrates without the high iodine of potatoes.',
+    description: 'Sweet, hearty, nutritious orange flesh. Rich in Vitamin A and safe carbohydrates.',
     substitutes: [],
-    clinicalNotes: 'Great roasted with pure olive oil and non-iodized kosher salt, or mashed as a potato puree alternative.'
-  },
-  {
-    id: 'bell-peppers',
-    name: 'Bell Peppers (Capsicum)',
-    category: LID_CATEGORIES.PRODUCE,
-    status: STATUS.SAFE,
-    aliases: ['bell pepper', 'red bell pepper', 'green bell pepper', 'yellow bell pepper', 'capsicum'],
-    iodineContent: '0 mcg',
-    description: 'Sweet, crisp, full of Vitamin C and completely safe for all low-iodine cooking.',
-    substitutes: [],
-    clinicalNotes: 'Adds vibrant color and flavor to safe chicken, pork, and rice dishes.'
-  },
-  {
-    id: 'zucchini-eggplant',
-    name: 'Zucchini & Eggplant (Talong)',
-    category: LID_CATEGORIES.PRODUCE,
-    status: STATUS.SAFE,
-    aliases: ['zucchini', 'eggplant', 'talong', 'courgette', 'aubergine'],
-    iodineContent: '< 1 mcg',
-    description: 'Tender gourds and nightshades that absorb delicious seasonings without iodine.',
-    substitutes: [],
-    clinicalNotes: 'Can be grilled, roasted, or sautéed with garlic and olive oil.'
-  },
-  {
-    id: 'gourd-patola-upo-ampalaya',
-    name: 'Native Gourds (Patola, Upo, Ampalaya)',
-    category: LID_CATEGORIES.PRODUCE,
-    status: STATUS.SAFE,
-    aliases: ['patola', 'sponge gourd', 'luffa', 'upo', 'bottle gourd', 'calabash', 'ampalaya', 'bitter gourd', 'bitter melon'],
-    iodineContent: '0 mcg',
-    description: 'Traditional native vegetables clinically confirmed safe on this protocol.',
-    substitutes: [],
-    clinicalNotes: 'Safe for ginisang dishes seasoned with pure kosher salt, garlic, and fresh tomatoes.'
-  },
-  {
-    id: 'tomatoes-fresh',
-    name: 'Fresh Tomatoes & Fresh Onions',
-    category: LID_CATEGORIES.PRODUCE,
-    status: STATUS.SAFE,
-    aliases: ['fresh tomato', 'kamatis', 'onion', 'red onion', 'white onion', 'shallot', 'scallions', 'green onions', 'garlic', 'bawang', 'ginger', 'luya'],
-    iodineContent: '< 1 mcg (Natural background)',
-    description: 'The holy grail aromatic foundation for all homemade sauces, broths, and sautéing.',
-    substitutes: [],
-    clinicalNotes: 'Must be fresh whole produce. Do not buy jarred tomato sauces containing iodized salt.'
+    clinicalNotes: 'Great roasted with pure olive oil and non-iodized kosher salt, or mashed as a potato puree alternative.',
+    dietaryStatus: {
+      lid: { status: STATUS.SAFE, note: '< 2 mcg iodine. Hearty, safe source of carbohydrates.', substitutes: [] },
+      low_purine: { status: STATUS.SAFE, note: 'Zero purines. Safe vegetable for gout diets.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Low sodium, high potassium helps counter high blood pressure.', substitutes: [] },
+      diabetic: { status: STATUS.CAUTION, note: 'Moderate GI (approx 65). High in fiber, but eat in moderation.', substitutes: ['Sayote', 'Zucchini'] },
+      pinoy_keto: { status: STATUS.CAUTION, note: 'Contains ~7g net carbs per 100g. Count towards daily carb limits.', substitutes: ['Sayote', 'Cauliflower'] }
+    }
   },
   {
     id: 'potatoes-all',
-    name: 'Potatoes (All Varieties)',
+    name: 'Potatoes (All Varieties - French Fries, Chips, Mash)',
     category: LID_CATEGORIES.PRODUCE,
     status: STATUS.AVOID,
-    aliases: ['potato', 'potatoes', 'russet potato', 'red potato', 'french fries', 'potato chips', 'mashed potatoes', 'hash browns', 'patatas', 'potato starch'],
+    aliases: ['potato', 'potatoes', 'russet potato', 'french fries', 'potato chips', 'mashed potatoes', 'patatas'],
     iodineContent: '~60 mcg per medium potato (Exceeds daily total allowable limit)',
     description: 'Potatoes concentrate significant amounts of iodine from the soil and potato skin.',
-    substitutes: ['Sayote (chayote) cubes in soups', 'Kalabasa (squash) mashed or roasted', 'Extra carrots or zucchini'],
-    clinicalNotes: 'A common pitfall for patients! One baked potato can deliver 60 mcg of iodine, which alone breaches the 50 mcg/day LID ceiling.'
-  },
-  {
-    id: 'cassava-kamoteng-kahoy',
-    name: 'Cassava (Kamoteng Kahoy) & Millet',
-    category: LID_CATEGORIES.PRODUCE,
-    status: STATUS.AVOID,
-    aliases: ['cassava', 'kamoteng kahoy', 'manioc', 'yuca', 'tapioca (raw root)', 'millet', 'bajra'],
-    iodineContent: 'Goitrogenic cyanogenic glycosides that interfere with thyroid function',
-    description: 'Potent goitrogen that competes with thyroid hormone synthesis and iodide trapping.',
-    substitutes: ['White rice', 'Brown rice', 'Pure cornstarch', 'Oats'],
-    clinicalNotes: 'Explicitly forbidden under the goitrogen category of this clinical protocol.'
+    substitutes: ['Sayote (chayote) cubes in soups', 'Kalabasa (squash) mashed or roasted'],
+    clinicalNotes: 'A common pitfall! One baked potato can deliver 60 mcg of iodine, which alone breaches the 50 mcg/day LID ceiling.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: '~60 mcg iodine per tuber. Exceeds the 50 mcg daily ceiling.', substitutes: ['Sayote (chayote) cubes', 'Kalabasa cubes'] },
+      low_purine: { status: STATUS.SAFE, note: 'Low in purines and safe for gout patients.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Fresh potatoes are high potassium; avoid salted french fries/chips.', substitutes: [] },
+      diabetic: { status: STATUS.AVOID, note: 'Very high glycemic index (~85). Converts rapidly to blood glucose.', substitutes: ['Sayote', 'Mashed cauliflower', 'Turnip / Singkamas'] },
+      pinoy_keto: { status: STATUS.AVOID, note: 'Dense starchy tuber (~30g net carbs). Strictly forbidden on keto.', substitutes: ['Cauliflower mash', 'Radish', 'Sayote'] }
+    }
   },
   {
     id: 'cruciferous-veggies',
-    name: 'Cruciferous Vegetables (Cabbage, Broccoli, Cauliflower)',
+    name: 'Cruciferous Greens (Cabbage, Broccoli, Cauliflower, Pechay)',
     category: LID_CATEGORIES.PRODUCE,
     status: STATUS.AVOID,
-    aliases: ['cabbage', 'repolyo', 'broccoli', 'cauliflower', 'brussels sprouts', 'kale', 'bok choy', 'pechay', 'kohlrabi'],
+    aliases: ['cabbage', 'repolyo', 'broccoli', 'cauliflower', 'brussels sprouts', 'kale', 'bok choy', 'pechay'],
     iodineContent: 'High glucosinolates / goitrogens that inhibit thyroid iodide uptake',
-    description: 'Cruciferous greens contain thiocyanates and goitrogens that compromise the efficacy of radioactive iodine therapy.',
+    description: 'Cruciferous greens contain thiocyanates and goitrogens that compromise radioactive iodine efficacy.',
     substitutes: ['Sayote', 'Bell peppers', 'Kalabasa', 'Cucumbers', 'Zucchini', 'Carrots'],
-    clinicalNotes: 'Do not eat raw or cooked cruciferous vegetables during the 2-week preparation window.'
-  },
-  {
-    id: 'watercress',
-    name: 'Watercress',
-    category: LID_CATEGORIES.PRODUCE,
-    status: STATUS.AVOID,
-    aliases: ['watercress', 'cress'],
-    iodineContent: '~35-45 mcg per cup',
-    description: 'Aquatic plant that hyper-accumulates iodine and minerals from water sources.',
-    substitutes: ['Fresh crisp iceberg or romaine lettuce', 'Arugula (check with doctor)'],
-    clinicalNotes: 'Specifically prohibited by the clinical protocol.'
+    clinicalNotes: 'Do not eat raw or cooked cruciferous vegetables during the 2-week preparation window.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Contains goitrogens and thiocyanates that interfere with thyroid RAI trapping.', substitutes: ['Sayote', 'Bell peppers', 'Zucchini'] },
+      low_purine: { status: STATUS.SAFE, note: 'Vegetable purines in cabbage/cauliflower are safe and do not provoke gout.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Naturally low in sodium, rich in fiber and micronutrients.', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Low GI, fiber-packed superfood for blood sugar stabilization.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Cornerstone vegetable for keto: low net carbs, perfect rice substitute.', substitutes: [] }
+    }
   },
   {
     id: 'seaweed-all',
     name: 'Sea Vegetables & Seaweed (Nori, Kelp, Wakame, Lato)',
     category: LID_CATEGORIES.PRODUCE,
     status: STATUS.AVOID,
-    aliases: ['seaweed', 'kelp', 'kombu', 'wakame', 'nori', 'lato', 'sea grapes', 'ar-arusip', 'dulse', 'spirulina', 'chlorella', 'sea moss'],
+    aliases: ['seaweed', 'kelp', 'kombu', 'wakame', 'nori', 'lato', 'sea grapes', 'ar-arusip', 'spirulina', 'sea moss'],
     iodineContent: 'Catastrophic (Up to 2,000+ mcg in a single strip)',
-    description: 'The highest natural source of iodine on planet Earth. Even trace amounts will shut down radioactive iodine uptake completely.',
-    substitutes: ['Crispy oven-baked kale is NOT allowed either; try thinly sliced dehydrated zucchini chips with kosher salt'],
-    clinicalNotes: 'Strictly check snack foods, sushi wraps, and seasoning powders for seaweed flakes.'
+    description: 'The highest natural source of iodine on planet Earth.',
+    substitutes: ['Dehydrated zucchini chips with kosher salt'],
+    clinicalNotes: 'Even trace amounts will shut down radioactive iodine uptake completely.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'World’s richest iodine source (up to 2,000 mcg). Total therapy blocker.', substitutes: ['Dehydrated zucchini chips'] },
+      low_purine: { status: STATUS.SAFE, note: 'Generally low in purines, but avoid seaweed seasoned with fish extracts.', substitutes: [] },
+      low_sodium: { status: STATUS.AVOID, note: 'Natural oceanic salinity delivers excessive sodium.', substitutes: ['Fresh vegetable snacks'] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero sugar, rich in minerals.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Low carb, but verify no added sugars in flavored seaweed snacks.', substitutes: [] }
+    }
   },
   {
-    id: 'avoid-fruits',
-    name: 'Forbidden Fruits (Prunes, Bananas, Pineapple, Strawberries, Cranberries)',
-    category: LID_CATEGORIES.PRODUCE,
-    status: STATUS.AVOID,
-    aliases: ['prunes', 'dried prunes', 'banana', 'saging', 'pineapple', 'pinya', 'strawberries', 'cranberries', 'cranberry juice', 'maraschino cherries'],
-    iodineContent: 'Moderate to high iodine content per serving',
-    description: 'These specific fruits are documented to harbor higher botanical concentrations of iodine or are processed with Red Dye #3.',
-    substitutes: ['Fresh apples', 'Fresh watermelon (pakwan)', 'Fresh oranges', 'Fresh grapes', 'Calamansi', 'Mangoes', 'Melon'],
-    clinicalNotes: 'Bananas contain ~3 mcg each and pineapple/berries absorb mineral iodides. Follow the protocol and stick to permitted fruits.'
-  },
-  {
-    id: 'safe-fruits',
-    name: 'Permitted Fruits (Apples, Oranges, Calamansi, Watermelon, Grapes, Mango)',
+    id: 'bell-peppers',
+    name: 'Bell Peppers, Eggplant & Cucumbers',
     category: LID_CATEGORIES.PRODUCE,
     status: STATUS.SAFE,
-    aliases: ['apple', 'orange', 'calamansi', 'lemon', 'lime', 'watermelon', 'pakwan', 'grapes', 'mango', 'cantaloupe', 'honeydew', 'peaches', 'pears'],
-    iodineContent: '< 1 mcg (Trace)',
-    description: 'Clean, safe fruits for snacking, fresh juices, and desserts during LID.',
+    aliases: ['bell pepper', 'red bell pepper', 'green bell pepper', 'eggplant', 'talong', 'cucumber', 'pipino', 'zucchini'],
+    iodineContent: '< 1 mcg',
+    description: 'Sweet, crisp, full of Vitamin C and completely safe across all multi-diet protocols.',
     substitutes: [],
-    clinicalNotes: 'Wash thoroughly with fresh water before peeling and slicing.'
-  },
-
-  // ==================== DAIRY & EGGS ====================
-  {
-    id: 'cow-milk',
-    name: 'Cow’s Milk & Goat’s Milk',
-    category: LID_CATEGORIES.DAIRY_EGGS,
-    status: STATUS.AVOID,
-    aliases: ['milk', 'whole milk', 'skim milk', 'low fat milk', 'evaporated milk', 'condensed milk', 'powdered milk', 'gatas', 'goat milk', 'raw milk'],
-    iodineContent: '~80-110 mcg per cup (Exceeds daily allowance in 1 glass)',
-    description: 'Cattle udders are cleaned with iodophor iodine disinfectants and dairy feed is enriched with iodine supplements.',
-    substitutes: ['Homemade oat milk (filtered water + rolled oats + pure maple syrup, NO sea salt)', 'Black coffee / pure tea'],
-    clinicalNotes: 'Commercial milk is one of the leading contributors to high dietary iodine worldwide.'
+    clinicalNotes: 'Adds vibrant color, volume, and flavor without sodium or purines.',
+    dietaryStatus: {
+      lid: { status: STATUS.SAFE, note: '0 mcg iodine. Completely safe for all dishes.', substitutes: [] },
+      low_purine: { status: STATUS.SAFE, note: 'Zero purines. Safe and hydrating.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Zero sodium, rich in potassium and hydration.', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Very low glycemic index, high in antioxidant Vitamin C.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Low net carbs, excellent filler for keto stews.', substitutes: [] }
+    }
   },
   {
-    id: 'butter-margarine',
-    name: 'Butter & Commercial Margarine',
-    category: LID_CATEGORIES.DAIRY_EGGS,
-    status: STATUS.AVOID,
-    aliases: ['butter', 'mantekilya', 'salted butter', 'unsalted butter', 'ghee', 'clarified butter', 'margarine', 'star margarine', 'blue band'],
-    iodineContent: '~20-40 mcg per tbsp (Dairy lipids + dairy iodophors + iodized salt)',
-    description: 'Dairy fat concentrates dairy iodines, and commercial margarines contain dairy solids, whey, and iodized salt.',
-    substitutes: ['100% pure coconut oil', 'Extra virgin olive oil', 'Pure canola oil'],
-    clinicalNotes: 'Even "unsalted butter" contains natural dairy iodine from cow feed and iodophor udder washes.'
-  },
-  {
-    id: 'cheese-all',
-    name: 'All Cheeses (Cheddar, Mozzarella, Kesong Puti, Cottage)',
-    category: LID_CATEGORIES.DAIRY_EGGS,
-    status: STATUS.AVOID,
-    aliases: ['cheese', 'cheddar', 'mozzarella', 'parmesan', 'cottage cheese', 'kesong puti', 'cream cheese', 'ricotta', 'queso', 'processed cheese'],
-    iodineContent: 'Extremely High (Concentrated dairy milk solids)',
-    description: 'Because cheese is made by condensing large volumes of milk, the iodine content is multiplied exponentially.',
-    substitutes: ['Nutritional yeast (only if verified non-iodine fortified)', 'Creamy mashed avocado with kosher salt and lemon'],
-    clinicalNotes: 'All dairy cheese is strictly prohibited on the low-iodine diet.'
-  },
-  {
-    id: 'yogurt',
-    name: 'Yogurt & Cultured Dairy',
-    category: LID_CATEGORIES.DAIRY_EGGS,
-    status: STATUS.AVOID,
-    aliases: ['yogurt', 'greek yogurt', 'kefir', 'sour cream', 'curd', 'labneh'],
-    iodineContent: '~75-100 mcg per serving',
-    description: 'Fermented cow’s milk products harboring high dairy iodine.',
-    substitutes: ['Pure fresh fruit puree (mango, apple, watermelon)'],
-    clinicalNotes: 'Avoid completely.'
-  },
-  {
-    id: 'whey-casein',
-    name: 'Whey & Casein Protein',
-    category: LID_CATEGORIES.DAIRY_EGGS,
-    status: STATUS.AVOID,
-    aliases: ['whey', 'whey protein', 'casein', 'caseinate', 'sodium caseinate', 'calcium caseinate', 'milk solids', 'nonfat dry milk'],
-    iodineContent: 'High (Dairy isolates)',
-    description: 'Common additives in protein bars, packaged snacks, instant soups, and breads.',
-    substitutes: ['Pure egg white protein powder (unflavored, no additives)'],
-    clinicalNotes: 'Frequently sneaks into processed foods under "milk protein concentrate" or "whey".'
+    id: 'tomatoes-fresh',
+    name: 'Fresh Tomatoes, Onions, Garlic & Ginger',
+    category: LID_CATEGORIES.PRODUCE,
+    status: STATUS.SAFE,
+    aliases: ['fresh tomato', 'kamatis', 'onion', 'shallots', 'garlic', 'bawang', 'ginger', 'luya'],
+    iodineContent: '< 1 mcg',
+    description: 'The foundational aromatic base (Gisa) for healthy Filipino cooking.',
+    substitutes: [],
+    clinicalNotes: 'Must be fresh whole produce. Do not buy jarred pastes with iodized salt.',
+    dietaryStatus: {
+      lid: { status: STATUS.SAFE, note: '< 1 mcg iodine. The aromatic foundation of safe home cooking.', substitutes: [] },
+      low_purine: { status: STATUS.SAFE, note: 'Zero purines. Garlic and onions have anti-inflammatory benefits.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Builds delicious umami flavor without any added sodium.', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Low glycemic impact. Fresh garlic aids insulin sensitivity.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Essential aromatics for flavoring keto dishes.', substitutes: [] }
+    }
   },
 
   // ==================== GRAINS, FLOURS & BAKERY ====================
   {
     id: 'white-brown-rice',
-    name: 'White & Brown Rice',
+    name: 'White & Brown Rice (Sinandomeng, Dinorado, Jasmine)',
     category: LID_CATEGORIES.GRAINS,
     status: STATUS.SAFE,
-    aliases: ['white rice', 'brown rice', 'jasmine rice', 'basmati rice', 'sinandomeng', 'dinorado', 'red rice (pure)'],
+    aliases: ['white rice', 'brown rice', 'jasmine rice', 'sinandomeng', 'dinorado', 'red rice'],
     iodineContent: '< 1-2 mcg per cup',
-    description: 'The foundation of the low-iodine diet in the Philippines and across Asia. 100% safe when cooked in plain water.',
-    substitutes: [],
-    clinicalNotes: 'Cook at home in fresh water. Do not cook with packaged seasoning packs or restaurant bouillon.'
-  },
-  {
-    id: 'pure-flours',
-    name: 'Plain Unbleached Flour & Cornstarch',
-    category: LID_CATEGORIES.GRAINS,
-    status: STATUS.SAFE,
-    aliases: ['all purpose flour', 'unbleached flour', 'pure cornstarch', 'corn flour', 'wheat flour (plain)'],
-    iodineContent: '< 1 mcg',
-    description: 'Raw unconditioned baking flours and pure cornstarch used for thickening stews.',
-    substitutes: [],
-    clinicalNotes: 'Safe for homemade flatbreads, pancakes with egg whites, and thickening gravies with meat drippings.'
-  },
-  {
-    id: 'plain-oats',
-    name: 'Plain Rolled Oats & Steel-Cut Oats',
-    category: LID_CATEGORIES.GRAINS,
-    status: STATUS.SAFE,
-    aliases: ['rolled oats', 'steel cut oats', 'quaker oats (plain)', 'quick oats (plain)'],
-    iodineContent: '< 2 mcg per bowl',
-    description: 'Pure 100% oats without added flavorings or instant milk packets.',
-    substitutes: [],
-    clinicalNotes: 'Cook with water, a pinch of pure non-iodized kosher salt, and top with honey or pure maple syrup.'
-  },
-  {
-    id: 'plain-pasta',
-    name: 'Plain Dry Pasta (Egg-Free, Salt-Free)',
-    category: LID_CATEGORIES.GRAINS,
-    status: STATUS.SAFE,
-    aliases: ['dry pasta', 'spaghetti (dry)', 'penne (dry)', 'macaroni (dry, no egg)', 'semolina pasta'],
-    iodineContent: '< 2 mcg per serving',
-    description: 'Standard dried Italian-style pasta made strictly from semolina durum wheat and water.',
-    substitutes: [],
-    clinicalNotes: 'Check ingredient list: must contain ONLY semolina wheat. No eggs. Boil in water seasoned only with pure non-iodized kosher salt.'
+    description: 'The staple grain of the Philippines. 100% safe for LID when cooked in plain water.',
+    substitutes: ['Cauliflower rice (for Diabetic/Keto)'],
+    clinicalNotes: 'Cook at home in fresh water. Do not add restaurant bouillon cubes.',
+    dietaryStatus: {
+      lid: { status: STATUS.SAFE, note: '< 2 mcg iodine. The primary safe carbohydrate foundation for LID.', substitutes: [] },
+      low_purine: { status: STATUS.SAFE, note: 'Virtually purine-free. Safe staple for gout patients.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Zero sodium when cooked in plain water.', substitutes: [] },
+      diabetic: { status: STATUS.CAUTION, note: 'High glycemic index (~73 for white rice). Spikes blood sugar; switch to red/brown or cauliflower rice.', substitutes: ['Cauliflower rice', 'Red / Black heirloom rice', 'Shirataki rice'] },
+      pinoy_keto: { status: STATUS.AVOID, note: 'Very high carbs (~45g net carbs/cup). Eliminates ketosis.', substitutes: ['Riced cauliflower', 'Shirataki konjac rice'] }
+    }
   },
   {
     id: 'commercial-bread',
-    name: 'Commercial White Bread & Bakery Goods',
+    name: 'Commercial White Bread, Pandesal & Buns',
     category: LID_CATEGORIES.GRAINS,
     status: STATUS.AVOID,
-    aliases: ['white bread', 'pandesal (commercial)', 'sliced bread', 'tasty bread', 'hamburger buns', 'baguettes', 'croissants', 'pastries', 'dough conditioner'],
-    iodineContent: 'Extremely High (~150-300 mcg per slice if made with iodate dough conditioner)',
-    description: 'Industrial bakeries use potassium iodate or calcium iodate dough conditioners to improve volume and gluten structure.',
-    substitutes: ['Homemade bread made with unbleached flour, active dry yeast, water, pure oil, and pure non-iodized kosher salt', 'Plain boiled rice'],
-    clinicalNotes: 'A single commercial hamburger bun made with iodate conditioner can have 400 mcg of iodine. Strict avoidance of all commercial bread is essential unless the bakery certifies no iodates and non-iodized salt.'
+    aliases: ['white bread', 'pandesal', 'sliced bread', 'tasty bread', 'hamburger buns', 'baguettes', 'dough conditioner'],
+    iodineContent: 'Extremely High (~150-300 mcg per slice if made with iodate conditioner)',
+    description: 'Industrial bakeries use potassium iodate conditioners and iodized salt.',
+    substitutes: ['Homemade bread made with non-iodized salt and active yeast', 'Plain boiled rice'],
+    clinicalNotes: 'A single commercial burger bun can contain 400 mcg iodine due to iodate conditioners.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Potassium iodate dough conditioners deliver catastrophic doses of iodine.', substitutes: ['Homemade bread without iodate', 'Plain boiled rice'] },
+      low_purine: { status: STATUS.SAFE, note: 'Low in purines.', substitutes: [] },
+      low_sodium: { status: STATUS.CAUTION, note: 'Commercial bread is a stealth sodium source (~150-250mg per slice).', substitutes: ['Unsalted homemade bread'] },
+      diabetic: { status: STATUS.AVOID, note: 'Refined white flour converts quickly into glucose (high GI).', substitutes: ['100% whole grain sprouted bread', 'Low-carb almond bread'] },
+      pinoy_keto: { status: STATUS.AVOID, note: 'Dense refined wheat flour (~15g net carbs per slice).', substitutes: ['Almond flour keto pandesal', 'Cloud bread'] }
+    }
   },
 
-  // ==================== ADDITIVES, DYES & SUPPLEMENTS ====================
+  // ==================== DAIRY & SWEETS ====================
+  {
+    id: 'cow-milk',
+    name: 'Cow’s Milk & Goat’s Milk',
+    category: LID_CATEGORIES.DAIRY_EGGS,
+    status: STATUS.AVOID,
+    aliases: ['milk', 'whole milk', 'skim milk', 'evaporated milk', 'condensed milk', 'powdered milk', 'gatas'],
+    iodineContent: '~80-110 mcg per cup (Exceeds daily allowance in 1 glass)',
+    description: 'Cattle udders are cleaned with iodophor iodine disinfectants and dairy feed is enriched with iodine.',
+    substitutes: ['Homemade oat milk (filtered water + oats)', 'Black coffee / pure tea'],
+    clinicalNotes: 'Commercial milk is one of the leading contributors to dietary iodine.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: '~80–110 mcg iodine per glass from cattle feed and iodophor udder washes.', substitutes: ['Homemade oat milk', 'Water-based smoothies'] },
+      low_purine: { status: STATUS.SAFE, note: 'Low-fat dairy lowers serum uric acid and reduces gout risk.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Moderate sodium (~120mg/cup), safe in moderation.', substitutes: [] },
+      diabetic: { status: STATUS.CAUTION, note: 'Contains lactose (~12g sugar/cup). Choose unsweetened almond milk.', substitutes: ['Unsweetened almond milk'] },
+      pinoy_keto: { status: STATUS.CAUTION, note: 'Lactose contributes ~12g carbs per cup. Choose heavy cream or almond milk.', substitutes: ['Heavy whipping cream', 'Unsweetened almond milk'] }
+    }
+  },
+  {
+    id: 'sweetened-condensed-milk',
+    name: 'Sweetened Condensed Milk (Gatas Kondensada)',
+    category: LID_CATEGORIES.DAIRY_EGGS,
+    status: STATUS.AVOID,
+    aliases: ['condensed milk', 'sweetened condensed milk', 'alaska condensed', 'carnation condensed', 'kondensada'],
+    iodineContent: 'High (Concentrated dairy + iodized processing)',
+    description: 'Heavy dairy milk with over 55% sugar by weight. Widely used in desserts, halo-halo, and coffee.',
+    substitutes: ['Coconut milk with erythritol / stevia', 'Pure maple syrup with non-dairy milk'],
+    clinicalNotes: 'Dairy iodine concentration plus massive sugar content.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Concentrated dairy iodine plus commercial processing.', substitutes: ['Coconut cream + stevia / maple syrup'] },
+      low_purine: { status: STATUS.SAFE, note: 'Dairy purines are low, but high sugar can indirectly elevate uric acid.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Moderate sodium, but check portion size.', substitutes: [] },
+      diabetic: { status: STATUS.AVOID, note: 'Extreme sugar bomb (>22g sugar per 2 tablespoons). Rapid glucose spike.', substitutes: ['Unsweetened coconut cream + monk fruit sweetener'] },
+      pinoy_keto: { status: STATUS.AVOID, note: 'Over 55% pure sugar. Complete keto disqualifier.', substitutes: ['Heavy whipping cream + erythritol'] }
+    }
+  },
+  {
+    id: 'cheese-all',
+    name: 'All Cheeses (Cheddar, Mozzarella, Kesong Puti)',
+    category: LID_CATEGORIES.DAIRY_EGGS,
+    status: STATUS.AVOID,
+    aliases: ['cheese', 'cheddar', 'mozzarella', 'parmesan', 'kesong puti', 'cream cheese', 'processed cheese', 'eden cheese'],
+    iodineContent: 'Extremely High (Concentrated dairy milk solids)',
+    description: 'Because cheese condenses large volumes of milk, the iodine content is multiplied.',
+    substitutes: ['Mashed avocado with kosher salt and lemon'],
+    clinicalNotes: 'All dairy cheese is strictly prohibited on the low-iodine diet.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Heavily concentrated dairy milk solids laden with dairy iodides.', substitutes: ['Mashed avocado with pure lemon and kosher salt'] },
+      low_purine: { status: STATUS.SAFE, note: 'Dairy proteins are low in purines and help lower uric acid levels.', substitutes: [] },
+      low_sodium: { status: STATUS.AVOID, note: 'High sodium from curing salt (often 300–400mg per slice). Limit on DASH.', substitutes: ['Unsalted ricotta', 'Fresh kesong puti (unsalted)'] },
+      diabetic: { status: STATUS.SAFE, note: 'Low carbohydrate, high protein and fat.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Staple keto fat and protein food.', substitutes: [] }
+    }
+  },
+
+  // ==================== ADDITIVES & SUPPLEMENTS ====================
   {
     id: 'carrageenan-e407',
-    name: 'Carrageenan (E407) & Agar-Agar (E406)',
+    name: 'Carrageenan (E407) & Agar-Agar (Gulaman)',
     category: LID_CATEGORIES.ADDITIVES,
     status: STATUS.AVOID,
-    aliases: ['carrageenan', 'e407', 'agar', 'agar-agar', 'e406', 'gulaman', 'alginate', 'sodium alginate', 'e401', 'alginic acid', 'irish moss extract'],
+    aliases: ['carrageenan', 'e407', 'agar', 'agar-agar', 'gulaman', 'alginate', 'sodium alginate'],
     iodineContent: 'Massive (Direct sea algae polysaccharide derivative)',
-    description: 'Common thickener/stabilizer in almond milk, coconut milk, deli meats, ice cream, toothpastes, and jellies.',
-    substitutes: ['Pure cornstarch', 'Tapioca starch (refined)', 'Pectin (pure fruit)'],
-    clinicalNotes: 'Scrutinize every packaged food label for carrageenan or E407. It is one of the most widespread hidden sea additives.'
+    description: 'Common thickener in almond milk, deli meats, ice cream, and jellies.',
+    substitutes: ['Pure cornstarch', 'Tapioca starch', 'Pectin'],
+    clinicalNotes: 'One of the most widespread hidden sea additives in processed foods.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Seaweed extract saturated with marine iodine.', substitutes: ['Pure cornstarch', 'Pectin'] },
+      low_purine: { status: STATUS.SAFE, note: 'Zero purine content.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Zero sodium.', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Soluble fiber, zero glycemic effect.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Zero net carbs.', substitutes: [] }
+    }
   },
   {
     id: 'red-dye-3-erythrosine',
     name: 'FD&C Red Dye #3 (Erythrosine / E127)',
     category: LID_CATEGORIES.ADDITIVES,
     status: STATUS.AVOID,
-    aliases: ['red dye #3', 'red #3', 'erythrosine', 'e127', 'fd&c red 3', 'maraschino red'],
+    aliases: ['red dye #3', 'red #3', 'erythrosine', 'e127', 'fd&c red 3'],
     iodineContent: 'Molecule is 58% elemental iodine by molecular weight!',
-    description: 'Synthetic food coloring containing four iodine atoms per molecule. Widely used in cherries, candy, cake frostings, syrups, and pediatric meds.',
-    substitutes: ['Beet juice concentrate', 'FD&C Red #40 (Allura Red - safe synthetic color without iodine)'],
-    clinicalNotes: 'Red #3 releases free iodide upon metabolism. Absolute ban during RAI preparation.'
-  },
-  {
-    id: 'blackstrap-molasses',
-    name: 'Blackstrap Molasses',
-    category: LID_CATEGORIES.ADDITIVES,
-    status: STATUS.AVOID,
-    aliases: ['blackstrap molasses', 'blackstrap'],
-    iodineContent: '~30-40 mcg per tbsp',
-    description: 'Boiled cane syrup residue that concentrates all minerals, including heavy amounts of soil iodides.',
-    substitutes: ['Pure maple syrup', 'Pure honey', 'Unsulfured standard light molasses'],
-    clinicalNotes: 'The protocol specifies avoiding blackstrap molasses. Standard unsulfured light molasses is permissible.'
-  },
-  {
-    id: 'multivitamins-iodine',
-    name: 'Multivitamins & Kelp Supplements',
-    category: LID_CATEGORIES.ADDITIVES,
-    status: STATUS.AVOID,
-    aliases: ['multivitamin', 'iodine pill', 'kelp pill', 'sea kelp supplement', 'prenatal vitamins', 'mineral supplement', 'thyroid support supplement'],
-    iodineContent: '150 to 500+ mcg per tablet (100% to 330%+ daily value)',
-    description: 'Most standard multivitamins and thyroid supplements contain 150 mcg potassium iodide.',
-    substitutes: ['Iodine-free multivitamin (if prescribed by physician)', 'Single pure vitamin D or vitamin C without iodine'],
-    clinicalNotes: 'Discontinue all multivitamins at least 2 weeks before RAI therapy, as instructed by your endocrinologist.'
-  },
-  {
-    id: 'medications-iodine',
-    name: 'Iodine Medications (Amiodarone, Betadine, Cough Syrups)',
-    category: LID_CATEGORIES.ADDITIVES,
-    status: STATUS.AVOID,
-    aliases: ['amiodarone', 'cordarone', 'povidone-iodine', 'betadine', 'potassium iodide syrup', 'sski', 'lugols solution', 'ct contrast dye'],
-    iodineContent: 'Gigantic (Milligrams to grams of iodine)',
-    description: 'Topical povidone iodine antiseptic, antiarrhythmic medication amiodarone, and radiological CT iodinated contrast.',
-    substitutes: ['Chlorhexidine or soap and water for wound cleansing', 'Non-contrast CT imaging'],
-    clinicalNotes: 'Alert your physician immediately if you have received IV contrast dye or take amiodarone, as this can delay RAI therapy for months.'
-  },
-
-  // ==================== BEVERAGES ====================
-  {
-    id: 'coffee-tea-black',
-    name: 'Pure Black Coffee & Pure Tea',
-    category: LID_CATEGORIES.BEVERAGES,
-    status: STATUS.SAFE,
-    aliases: ['black coffee', 'espresso', 'brewed coffee', 'green tea (pure)', 'black tea', 'peppermint tea', 'chamomile tea'],
-    iodineContent: '0 mcg',
-    description: 'Pure brewed tea leaves and roasted coffee beans steeped in filtered water.',
-    substitutes: [],
-    clinicalNotes: 'Drink black or sweeten with pure sugar or pure maple syrup. Do NOT add cow’s milk, soy milk, or commercial dairy creamers.'
-  },
-  {
-    id: 'lemonade-sodas',
-    name: 'Fresh Lemonade & Pure Sodas',
-    category: LID_CATEGORIES.BEVERAGES,
-    status: STATUS.SAFE,
-    aliases: ['lemonade (fresh)', 'calamansi juice (fresh)', 'seltzer water', 'sparkling water', 'club soda', 'coca-cola (check red dye)', 'sprite'],
-    iodineContent: '0 mcg',
-    description: 'Homemade fresh citrus juices and clear sodas sweetened with pure sugar.',
-    substitutes: [],
-    clinicalNotes: 'Check colored sodas and fruit punches for Red Dye #3 (E127).'
-  },
-
-  // ==================== CAUTION ITEMS (CHECK LABEL) ====================
-  {
-    id: 'canned-tomatoes-plain',
-    name: 'Canned Plain Tomatoes & Tomato Paste',
-    category: LID_CATEGORIES.CONDIMENTS,
-    status: STATUS.CAUTION,
-    aliases: ['canned tomatoes', 'crushed tomatoes', 'tomato paste', 'tomato sauce (canned)'],
-    iodineContent: 'Variable (Depends on salt used in canning)',
-    description: 'May be safe IF canned with plain non-iodized salt or salt-free. Many commercial canneries use iodized salt.',
-    substitutes: ['Fresh whole tomatoes blanched and pureed at home'],
-    clinicalNotes: 'Carefully verify the label: if it says "salt" without specifying non-iodized, assume it is iodized and avoid.'
-  },
-  {
-    id: 'commercial-plant-milks',
-    name: 'Commercial Oat & Almond Milks',
-    category: LID_CATEGORIES.DAIRY_EGGS,
-    status: STATUS.CAUTION,
-    aliases: ['almond milk', 'oat milk', 'rice milk', 'coconut milk (packaged)'],
-    iodineContent: 'Safe if pure; DANGEROUS if fortified with sea salt or carrageenan',
-    description: 'Many commercial brands fortify plant milks with sea salt for flavor and carrageenan (E407) for texture.',
-    substitutes: ['Homemade oat milk (blend rolled oats and water, strain through cheesecloth)'],
-    clinicalNotes: 'Inspect ingredient list: Must NOT contain carrageenan, sea salt, or soy protein.'
-  },
-  {
-    id: 'frozen-vegetables',
-    name: 'Frozen Plain Vegetables',
-    category: LID_CATEGORIES.PRODUCE,
-    status: STATUS.CAUTION,
-    aliases: ['frozen vegetables', 'frozen mixed veggies', 'frozen carrots', 'frozen corn'],
-    iodineContent: 'Safe if 100% single ingredient; dangerous if seasoned',
-    description: 'Ensure the ingredient list contains only the named safe vegetable, with NO added salt, butter sauce, or preservatives.',
-    substitutes: ['Fresh raw vegetables from produce section'],
-    clinicalNotes: 'Avoid frozen blends containing lima beans, green beans, broccoli, or potatoes.'
-  },
-  {
-    id: 'dark-chocolate',
-    name: 'Dark Chocolate (Dairy-Free)',
-    category: LID_CATEGORIES.SNACKS_SWEETS,
-    status: STATUS.CAUTION,
-    aliases: ['dark chocolate', 'cocoa powder', 'baking chocolate'],
-    iodineContent: 'Safe if 100% pure cacao without milk solids or soy lecithin',
-    description: 'Milk chocolate is strictly forbidden. Dark chocolate is permitted ONLY if certified dairy-free and without soy lecithin.',
-    substitutes: ['Pure unsweetened cocoa powder cooked with sugar, water, and coconut oil'],
-    clinicalNotes: 'Check for "milk solids", "whey", "butter oil", or "soy lecithin".'
-  },
-  {
-    id: 'restaurant-food',
-    name: 'Restaurant & Takeout Food',
-    category: LID_CATEGORIES.CONDIMENTS,
-    status: STATUS.AVOID,
-    aliases: ['restaurant meal', 'fast food', 'takeout', 'hotel food', 'canteen food', 'carinderia'],
-    iodineContent: 'Extremely High (Universal use of iodized salt, MSG blends, and margarine)',
-    description: 'Commercial kitchens almost universally use iodized salt, bouillon cubes, butter, and seafood sauces.',
-    substitutes: ['Home-cooked meals prepared in advance and packed in containers'],
-    clinicalNotes: 'Dining out is the #1 cause of unintentional diet failure during RAI prep. Cook your own food during the 2-week restriction.'
+    description: 'Synthetic food coloring containing four iodine atoms per molecule.',
+    substitutes: ['Beet juice concentrate', 'FD&C Red #40 (Allura Red)'],
+    clinicalNotes: 'Red #3 releases free iodide upon metabolism. Absolute ban during RAI preparation.',
+    dietaryStatus: {
+      lid: { status: STATUS.AVOID, note: 'Chemical molecule contains 58% elemental iodine by weight!', substitutes: ['Beet juice concentrate', 'FD&C Red #40'] },
+      low_purine: { status: STATUS.SAFE, note: 'Zero purines.', substitutes: [] },
+      low_sodium: { status: STATUS.SAFE, note: 'Zero sodium.', substitutes: [] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero carbs, but avoid colored sugary snacks.', substitutes: [] },
+      pinoy_keto: { status: STATUS.SAFE, note: 'Zero carbs.', substitutes: [] }
+    }
   }
 ];
 
 // Quick index maps for high-performance offline searching
 export const SEARCH_INDEX = LID_DATABASE.flatMap(item => {
-  const terms = [item.name, ...item.aliases];
+  const terms = [item.name, ...(item.aliases || [])];
   return terms.map(term => ({
     term: term.toLowerCase().trim(),
     item

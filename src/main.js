@@ -42,6 +42,7 @@ import {
 } from './services/courseProjectStorage.js';
 
 import { LID_DATABASE } from './data/lidDatabase.js';
+import { getActiveDiet, setActiveDiet } from './data/dietProfiles.js';
 
 // Theme Initialization (Default Dark, persists in localStorage)
 const initialTheme = localStorage.getItem('kosherai_theme') || localStorage.getItem('theme') || 'dark';
@@ -73,6 +74,7 @@ window.addEventListener('scroll', () => {
 const state = {
   theme: initialTheme,
   showProjectTab: initialShowProjectTab,
+  activeDiet: getActiveDiet(),
 
   // App Mode Switcher: 'diet' (LID Clinical Protocol) | 'course' (Six-Week Sustainability Project)
   appMode: (initialShowProjectTab ? (localStorage.getItem('kosherai_app_mode') || 'course') : 'diet'),
@@ -146,7 +148,8 @@ function render() {
   state.searchResults = searchDatabase(
     state.searchQuery,
     state.statusFilter,
-    state.categoryFilter
+    state.categoryFilter,
+    state.activeDiet
   );
 
   let activeContentHtml = '';
@@ -186,7 +189,7 @@ function render() {
       <div class="ambient-streak ambient-streak-2"></div>
     </div>
 
-    ${renderHeader(state.isOnline, state.appMode, state.showProjectTab)}
+    ${renderHeader(state.isOnline, state.appMode, state.showProjectTab, state.activeDiet)}
     
     <main class="app-container pt-24">
       ${activeContentHtml}
@@ -194,8 +197,8 @@ function render() {
 
     ${renderBottomNav(currentNavTab, state.appMode)}
 
-    ${state.selectedItem ? renderItemDetailModal(state.selectedItem) : ''}
-    ${state.settingsOpen ? renderSettingsModal(state.settings, state.theme, state.showProjectTab) : ''}
+    ${state.selectedItem ? renderItemDetailModal(state.selectedItem, state.activeDiet) : ''}
+    ${state.settingsOpen ? renderSettingsModal(state.settings, state.theme, state.showProjectTab, state.activeDiet) : ''}
   `;
 
   attachEventHandlers();
@@ -203,6 +206,25 @@ function render() {
 
 // Event Delegation & Handler Attachments
 function attachEventHandlers() {
+  // Diet Profile Selector (Header & Settings Modal)
+  const headerDietSelector = document.querySelector('#header-diet-selector');
+  if (headerDietSelector) {
+    headerDietSelector.addEventListener('change', (e) => {
+      const selected = e.target.value;
+      state.activeDiet = setActiveDiet(selected);
+      render();
+    });
+  }
+
+  const settingsDietSelect = document.querySelector('#settings-diet-select');
+  if (settingsDietSelect) {
+    settingsDietSelect.addEventListener('change', (e) => {
+      const selected = e.target.value;
+      state.activeDiet = setActiveDiet(selected);
+      render();
+    });
+  }
+
   // App Mode Switcher (Diet Protocol vs. 6-Week Project)
   document.querySelectorAll('.mode-tab-btn[data-app-mode]').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -552,7 +574,7 @@ function attachEventHandlers() {
       render();
 
       try {
-        const result = await verifyWithGeminiAI(state.scanText, activeKey);
+        const result = await verifyWithGeminiAI(state.scanText, activeKey, state.activeDiet || 'lid');
         state.aiAnalysis = result;
         if (state.scanAnalysis) {
           state.scanAnalysis.status = result.status;
@@ -669,7 +691,7 @@ function attachEventHandlers() {
             }
           : (state.scanText || 'Food Label');
 
-        const result = await verifyWithGeminiAI(payload, activeKey);
+        const result = await verifyWithGeminiAI(payload, activeKey, state.activeDiet || 'lid');
         state.aiAnalysis = result;
         if (state.scanAnalysis) {
           state.scanAnalysis.status = result.status;
@@ -962,7 +984,7 @@ Filtered water`;
           if (statusTextEl) statusTextEl.textContent = p.message;
           const fill = document.querySelector('.progress-bar-fill');
           if (fill) fill.style.width = Math.round(p.progress * 100) + '%';
-        }, state.settings?.geminiApiKey);
+        }, state.settings?.geminiApiKey, state.activeDiet || 'lid');
 
         state.receiptStatusMsg = 'Populating receipt items...';
         state.receiptProgress = 0.95;
@@ -1294,7 +1316,7 @@ async function processScanText(text, title = 'Food Label') {
     try {
       state.aiLoading = true;
       render();
-      aiResult = await verifyWithGeminiAI(text, settings.geminiApiKey);
+      aiResult = await verifyWithGeminiAI(text, settings.geminiApiKey, state.activeDiet || 'lid');
       state.aiAnalysis = aiResult;
       const probTokens = aiResult.problemIngredients || [];
       analysis = {
