@@ -1,6 +1,6 @@
 // App Header Component with Connectivity Status & Settings Trigger
 
-export function renderHeader(isOnline = navigator.onLine, appMode = 'diet') {
+export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', showProjectTab = true) {
   return `
     <header class="app-header">
       <div class="brand-wrapper" id="brand-logo-btn">
@@ -30,15 +30,17 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet') {
     </header>
 
     <div class="app-container" style="padding-top: 12px; padding-bottom: 0;">
-      <!-- Main Application Mode Switcher -->
-      <div class="mode-switcher-bar" role="tablist" aria-label="Application View Mode">
-        <button class="mode-tab-btn ${appMode === 'diet' ? 'active' : ''}" data-app-mode="diet" role="tab" aria-selected="${appMode === 'diet'}">
-          🛡️ LID Diet Protocol
-        </button>
-        <button class="mode-tab-btn course-mode ${appMode === 'course' ? 'active' : ''}" data-app-mode="course" role="tab" aria-selected="${appMode === 'course'}">
-          📊 6-Week Project (Oct 31)
-        </button>
-      </div>
+      <!-- Main Application Mode Switcher (Conditionally rendered when showProjectTab is true) -->
+      ${showProjectTab ? `
+        <div class="mode-switcher-bar" role="tablist" aria-label="Application View Mode">
+          <button class="mode-tab-btn ${appMode === 'diet' ? 'active' : ''}" data-app-mode="diet" role="tab" aria-selected="${appMode === 'diet'}">
+            🛡️ LID Diet Protocol
+          </button>
+          <button class="mode-tab-btn course-mode ${appMode === 'course' ? 'active' : ''}" data-app-mode="course" role="tab" aria-selected="${appMode === 'course'}">
+            📊 6-Week Project (Oct 31)
+          </button>
+        </div>
+      ` : ''}
 
       ${appMode === 'diet' ? `
         <div class="protocol-banner">

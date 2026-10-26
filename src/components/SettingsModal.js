@@ -1,17 +1,75 @@
-// Settings Modal Component (API Keys, Cloudinary, Local Cache & Disclaimer)
+// Settings Modal Component (Theme Switcher, Project Visibility, API Keys, Cloudinary, Local Cache & Disclaimer)
 
-export function renderSettingsModal(settings) {
+export function renderSettingsModal(settings = {}, currentTheme = 'dark', showProjectTab = true) {
+  const isDark = currentTheme === 'dark';
+
   return `
     <div class="modal-overlay" id="settings-modal-overlay">
-      <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-content settings-modal-box" role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div class="modal-header">
-          <h2 id="settings-title" class="modal-title">Settings & Configuration</h2>
+          <div>
+            <h2 id="settings-title" class="modal-title">Settings & Preferences</h2>
+            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">
+              Theme, project module visibility, and clinical AI configurations.
+            </div>
+          </div>
           <button class="btn-icon" id="settings-close-btn" aria-label="Close Settings">✕</button>
         </div>
 
         <form id="settings-form">
-          <!-- Gemini AI Key -->
+          <!-- 1. Interface Theme Switcher -->
           <div class="form-group">
+            <label class="form-label">
+              <span>Interface Theme</span>
+              <span class="settings-sub-badge">${isDark ? '🌙 Dark Mode Active' : '☀️ Light Mode Active'}</span>
+            </label>
+            <div class="theme-segmented-control" role="radiogroup" aria-label="Theme selection">
+              <button 
+                type="button" 
+                class="theme-segment-btn ${isDark ? 'active' : ''}" 
+                data-theme-val="dark" 
+                role="radio" 
+                aria-checked="${isDark}"
+              >
+                <span class="theme-segment-icon">🌙</span>
+                <span>Dark Mode</span>
+              </button>
+              <button 
+                type="button" 
+                class="theme-segment-btn ${!isDark ? 'active' : ''}" 
+                data-theme-val="light" 
+                role="radio" 
+                aria-checked="${!isDark}"
+              >
+                <span class="theme-segment-icon">☀️</span>
+                <span>Light Mode</span>
+              </button>
+            </div>
+            <div class="form-help">
+              Tailors colors between deep space navy and clean daylight slate with ambient aura gradients.
+            </div>
+          </div>
+
+          <!-- 2. Project Tab Visibility Switch -->
+          <div class="form-group settings-toggle-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 14px;">
+              <div style="flex: 1;">
+                <label class="form-label" for="toggle-project-tab-input" style="margin-bottom: 2px; cursor: pointer;">
+                  Show Sustaining Human Life (6-Week Project)
+                </label>
+                <div class="form-help" style="margin-top: 2px; font-size: 0.74rem;">
+                  Displays the academic research study dashboard, receipt scanner, and food waste logger.
+                </div>
+              </div>
+              <label class="toggle-switch-wrapper" title="Toggle 6-Week Project Tab">
+                <input type="checkbox" id="toggle-project-tab-input" ${showProjectTab ? 'checked' : ''} />
+                <span class="toggle-switch-track"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 3. Gemini AI Key -->
+          <div class="form-group" style="padding-top: 8px; border-top: 1px solid var(--border-color);">
             <label class="form-label" for="gemini-key-input">
               <span>Google Gemini API Key</span>
               <span style="color: var(--safe-green); font-size: 0.75rem;">(Optional - For Deep AI Label Analysis)</span>
@@ -30,7 +88,7 @@ export function renderSettingsModal(settings) {
             </div>
           </div>
 
-          <!-- Cloudinary Settings (Optional) -->
+          <!-- 4. Cloudinary Settings (Optional) -->
           <div class="form-group">
             <label class="form-label">
               <span>Cloudinary Storage</span>
@@ -55,7 +113,7 @@ export function renderSettingsModal(settings) {
             <div class="form-help">Saves scanned grocery photos to your personal Cloudinary cloud.</div>
           </div>
 
-          <!-- Daily Target -->
+          <!-- 5. Daily Target -->
           <div class="form-group">
             <label class="form-label" for="prep-date-input">
               <span>Target RAI Treatment Date</span>
@@ -68,8 +126,8 @@ export function renderSettingsModal(settings) {
             />
           </div>
 
-          <!-- Offline Storage Stats & Reset -->
-          <div class="form-group" style="padding-top: 10px; border-top: 1px solid var(--border-color);">
+          <!-- 6. Offline Storage Stats & Reset -->
+          <div class="form-group" style="padding-top: 8px; border-top: 1px solid var(--border-color);">
             <label class="form-label">Offline Data & Storage</label>
             <div style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-card-subtle); padding: 10px 14px; border-radius: var(--radius-sm); font-size: 0.82rem;">
               <span>Local Clinical Cache: <strong>Active (100+ items)</strong></span>
@@ -79,13 +137,13 @@ export function renderSettingsModal(settings) {
             </div>
           </div>
 
-          <!-- Clinical Disclaimer -->
-          <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-color); padding: 12px; border-radius: var(--radius-sm); font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 16px;">
+          <!-- 7. Clinical Disclaimer -->
+          <div class="settings-disclaimer-box">
             ⚠️ <strong>Medical Protocol Notice:</strong> KosherAI is an educational clinical companion. Always follow the specific timeline and orders of your attending nuclear medicine physician.
           </div>
 
           <!-- Action Buttons -->
-          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <div class="settings-footer-actions">
             <button type="button" class="btn-secondary" id="settings-cancel-btn">Cancel</button>
             <button type="submit" class="btn-primary">Save Settings</button>
           </div>

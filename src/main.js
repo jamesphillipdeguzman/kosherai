@@ -44,7 +44,7 @@ import {
 import { LID_DATABASE } from './data/lidDatabase.js';
 
 // Theme Initialization (Default Dark, persists in localStorage)
-const initialTheme = localStorage.getItem('theme') || 'dark';
+const initialTheme = localStorage.getItem('kosherai_theme') || localStorage.getItem('theme') || 'dark';
 if (initialTheme === 'light') {
   document.documentElement.classList.remove('dark');
   document.documentElement.classList.add('light');
@@ -53,10 +53,29 @@ if (initialTheme === 'light') {
   document.documentElement.classList.remove('light');
 }
 
+// 6-Week Project Tab Visibility Preference (Default Visible)
+const savedShowProject = localStorage.getItem('kosherai_show_project_tab');
+const initialShowProjectTab = savedShowProject !== null ? savedShowProject === 'true' : true;
+
+// Lightweight 60fps scroll listener for ambient parallax sheen
+let scrollTicking = false;
+window.addEventListener('scroll', () => {
+  if (!scrollTicking) {
+    window.requestAnimationFrame(() => {
+      document.documentElement.style.setProperty('--scroll-y', `${window.scrollY}px`);
+      scrollTicking = false;
+    });
+    scrollTicking = true;
+  }
+}, { passive: true });
+
 // Global Reactive State
 const state = {
+  theme: initialTheme,
+  showProjectTab: initialShowProjectTab,
+
   // App Mode Switcher: 'diet' (LID Clinical Protocol) | 'course' (Six-Week Sustainability Project)
-  appMode: localStorage.getItem('kosherai_app_mode') || 'course',
+  appMode: (initialShowProjectTab ? (localStorage.getItem('kosherai_app_mode') || 'course') : 'diet'),
 
   // Clinical Diet Companion Tabs
   activeTab: 'checker', // 'checker' | 'scanner' | 'cheatsheet' | 'substitutes' | 'cook'
@@ -118,6 +137,11 @@ function render() {
   const app = document.querySelector('#app');
   if (!app) return;
 
+  // Guarantee mode falls back to diet if project tab is toggled off
+  if (!state.showProjectTab && state.appMode === 'course') {
+    state.appMode = 'diet';
+  }
+
   // Filter Search Database for checker
   state.searchResults = searchDatabase(
     state.searchQuery,
@@ -153,7 +177,16 @@ function render() {
   const currentNavTab = state.appMode === 'course' ? state.courseSubTab : state.activeTab;
 
   app.innerHTML = `
-    ${renderHeader(state.isOnline, state.appMode)}
+    <!-- Parallax Ambient Aurora / Sheen Streaks -->
+    <div class="ambient-gradient-mesh fixed inset-0 pointer-events-none overflow-hidden -z-10" aria-hidden="true">
+      <div class="ambient-orb ambient-orb-1"></div>
+      <div class="ambient-orb ambient-orb-2"></div>
+      <div class="ambient-orb ambient-orb-3"></div>
+      <div class="ambient-streak ambient-streak-1"></div>
+      <div class="ambient-streak ambient-streak-2"></div>
+    </div>
+
+    ${renderHeader(state.isOnline, state.appMode, state.showProjectTab)}
     
     <main class="app-container pt-24">
       ${activeContentHtml}
@@ -162,7 +195,7 @@ function render() {
     ${renderBottomNav(currentNavTab, state.appMode)}
 
     ${state.selectedItem ? renderItemDetailModal(state.selectedItem) : ''}
-    ${state.settingsOpen ? renderSettingsModal(state.settings) : ''}
+    ${state.settingsOpen ? renderSettingsModal(state.settings, state.theme, state.showProjectTab) : ''}
   `;
 
   attachEventHandlers();
@@ -175,6 +208,7 @@ function attachEventHandlers() {
     btn.addEventListener('click', (e) => {
       const mode = e.currentTarget.getAttribute('data-app-mode');
       if (mode && mode !== state.appMode) {
+        if (mode === 'course' && !state.showProjectTab) return;
         state.appMode = mode;
         try {
           localStorage.setItem('kosherai_app_mode', mode);
@@ -225,6 +259,43 @@ function attachEventHandlers() {
   if (settingsOpenBtn) {
     settingsOpenBtn.addEventListener('click', () => {
       state.settingsOpen = true;
+      render();
+    });
+  }
+
+  // Settings Theme Segmented Control
+  document.querySelectorAll('.theme-segment-btn[data-theme-val]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const selectedTheme = e.currentTarget.getAttribute('data-theme-val');
+      if (selectedTheme && selectedTheme !== state.theme) {
+        state.theme = selectedTheme;
+        if (selectedTheme === 'dark') {
+          document.documentElement.classList.add('dark');
+          document.documentElement.classList.remove('light');
+        } else {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.classList.add('light');
+        }
+        localStorage.setItem('kosherai_theme', selectedTheme);
+        localStorage.setItem('theme', selectedTheme);
+        render();
+      }
+    });
+  });
+
+  // Settings Project Tab Visibility Switch
+  const toggleProjectTabInput = document.querySelector('#toggle-project-tab-input');
+  if (toggleProjectTabInput) {
+    toggleProjectTabInput.addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      state.showProjectTab = isChecked;
+      localStorage.setItem('kosherai_show_project_tab', String(isChecked));
+      if (!isChecked && state.appMode === 'course') {
+        state.appMode = 'diet';
+        try {
+          localStorage.setItem('kosherai_app_mode', 'diet');
+        } catch {}
+      }
       render();
     });
   }
@@ -818,15 +889,17 @@ Filtered water`;
   if (receiptThemeToggleBtn) {
     receiptThemeToggleBtn.addEventListener('click', () => {
       const isDark = document.documentElement.classList.contains('dark') || !document.documentElement.classList.contains('light');
-      if (isDark) {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.classList.add('light');
-        localStorage.setItem('theme', 'light');
-      } else {
+      const newTheme = isDark ? 'light' : 'dark';
+      state.theme = newTheme;
+      if (newTheme === 'dark') {
         document.documentElement.classList.add('dark');
         document.documentElement.classList.remove('light');
-        localStorage.setItem('theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
       }
+      localStorage.setItem('kosherai_theme', newTheme);
+      localStorage.setItem('theme', newTheme);
       render();
     });
   }
