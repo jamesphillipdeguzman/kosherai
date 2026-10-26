@@ -296,18 +296,24 @@ export default function ReceiptScannerModal({
                 >
                   {previewUrl ? (
                     <div className="w-full h-full flex flex-col justify-between items-center gap-3">
-                      <div className="relative w-full flex-1 max-h-[380px] rounded-lg overflow-hidden bg-black/90 flex items-center justify-center border border-slate-700/50">
+                      <div className={`relative w-full flex-1 max-h-[380px] rounded-lg overflow-hidden bg-black/90 flex items-center justify-center border border-slate-700/50 ${
+                        isScanning ? 'scanning-thumbnail-box' : ''
+                      }`}>
                         <img
                           src={previewUrl}
                           alt="Scanned Receipt Preview"
-                          className="max-h-full max-w-full object-contain"
+                          className={`max-h-full max-w-full object-contain transition-opacity duration-300 ${
+                            isScanning ? 'opacity-80' : 'opacity-100'
+                          }`}
                         />
+                        {isScanning && <div className="scanning-laser-beam" />}
                       </div>
-                      <label className="w-full cursor-pointer">
+                      <label className={`w-full ${isScanning ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
                         <input
                           type="file"
                           accept="image/*"
                           capture="environment"
+                          disabled={isScanning}
                           onChange={handleFileChange}
                           className="sr-only"
                         />
@@ -344,6 +350,7 @@ export default function ReceiptScannerModal({
                           type="file"
                           accept="image/*"
                           capture="environment"
+                          disabled={isScanning}
                           onChange={handleFileChange}
                           className="sr-only"
                         />
@@ -357,7 +364,28 @@ export default function ReceiptScannerModal({
               </div>
 
               {/* Right Column / Extracted Editable Form (Full width on mobile, 7 cols on desktop) */}
-              <div className="w-full md:col-span-7 flex flex-col">
+              <div className="relative w-full md:col-span-7 flex flex-col">
+                {isScanning && (
+                  <div className="active-scanning-overlay">
+                    <div className="w-12 h-12 rounded-full border-4 border-teal-500/20 border-t-teal-500 animate-spin mb-3" />
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 text-xs font-semibold mb-2">
+                      <span className="animate-pulse">✨</span> Gemini Vision Active
+                    </div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">
+                      Analyzing Supermarket Receipt...
+                    </h3>
+                    <p className="text-xs sm:text-sm text-teal-800 dark:text-teal-300 text-center max-w-xs font-medium">
+                      {scanStatusMsg || '✨ Gemini Vision is analyzing receipt details & line items...'}
+                    </p>
+                    <div className="w-48 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mt-4 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-teal-500 to-cyan-400 transition-all duration-300"
+                        style={{ width: `${Math.round(scanProgress * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <form onSubmit={handleSubmit} className="flex flex-col gap-5">
                   {/* Math Discrepancy Alert */}
                   {hasDiscrepancy && (
@@ -382,6 +410,7 @@ export default function ReceiptScannerModal({
                         id={storeNameId}
                         type="text"
                         required
+                        disabled={isScanning}
                         value={storeName}
                         onChange={e => setStoreName(e.target.value)}
                         placeholder="e.g. SM Supermarket"
@@ -406,6 +435,7 @@ export default function ReceiptScannerModal({
                         id={purchaseDateId}
                         type="date"
                         required
+                        disabled={isScanning}
                         value={purchaseDate}
                         onChange={e => setPurchaseDate(e.target.value)}
                         className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-lg text-sm transition-colors border outline-none ${
@@ -417,19 +447,11 @@ export default function ReceiptScannerModal({
                     </div>
                   </div>
 
-                  {/* 2. Whole-Grocery Scale Weight Card (Full width, p-4, non-overlapping kg unit suffix) */}
-                  <div
-                    className={`w-full p-4 rounded-xl border transition-colors ${
-                      theme === 'dark'
-                        ? 'bg-slate-900/60 border-teal-500/30'
-                        : 'bg-white border-slate-200 shadow-sm'
-                    }`}
-                  >
+                  {/* 2. Whole-Grocery Scale Weight Card */}
+                  <div className="rounded-2xl p-4 bg-teal-50/70 border border-teal-200/80 dark:bg-slate-800/80 dark:border-teal-900/50 transition-colors w-full">
                     <label
                       htmlFor={scaleWeightId}
-                      className={`block font-bold text-sm mb-1.5 ${
-                        theme === 'dark' ? 'text-cyan-400' : 'text-teal-600'
-                      }`}
+                      className="text-xs font-semibold text-teal-800 dark:text-teal-300 flex items-center gap-1.5 mb-2"
                     >
                       ⚖️ Whole-Grocery Scale Weight (kg)
                     </label>
@@ -442,30 +464,19 @@ export default function ReceiptScannerModal({
                         step="0.01"
                         min="0"
                         required
+                        disabled={isScanning}
                         placeholder="e.g. 5.85"
                         value={scaleWeight}
                         onChange={e => setScaleWeight(e.target.value)}
-                        className={`w-full min-h-[44px] pl-3.5 pr-14 py-2.5 rounded-lg text-base font-bold font-mono transition-colors border outline-none ${
-                          theme === 'dark'
-                            ? 'bg-slate-900 text-cyan-400 border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
-                            : 'bg-white text-teal-700 border-slate-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500'
-                        }`}
+                        className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-teal-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-base focus:ring-2 focus:ring-teal-500 outline-none pr-12 font-mono font-bold"
                       />
-                      <span
-                        className={`absolute right-4 font-bold text-sm select-none pointer-events-none ${
-                          theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
-                        }`}
-                      >
+                      <span className="absolute right-4 font-bold text-sm select-none pointer-events-none text-teal-700/70 dark:text-slate-400">
                         kg
                       </span>
                     </div>
 
-                    <p
-                      className={`text-xs mt-2 leading-relaxed ${
-                        theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-                      }`}
-                    >
-                      Weigh your full grocery haul on your kitchen/luggage scale before unpacking. Kept separate from
+                    <p className="text-[11px] text-teal-700/80 dark:text-slate-400 mt-2 font-normal leading-relaxed">
+                      Measured physical weight of food haul on your home scale before unpacking. Kept separate from
                       receipt item weights for accurate academic tracking.
                     </p>
                   </div>
@@ -690,7 +701,10 @@ export default function ReceiptScannerModal({
                     <button
                       type="button"
                       onClick={onClose}
+                      disabled={isScanning}
                       className={`min-h-[44px] px-5 py-2.5 rounded-lg text-sm font-semibold border transition-all ${
+                        isScanning ? 'opacity-50 cursor-not-allowed' : ''
+                      } ${
                         theme === 'dark'
                           ? 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
                           : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
@@ -700,7 +714,10 @@ export default function ReceiptScannerModal({
                     </button>
                     <button
                       type="submit"
-                      className="min-h-[44px] px-6 py-2.5 rounded-lg text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white shadow-teal-900/30"
+                      disabled={isScanning}
+                      className={`min-h-[44px] px-6 py-2.5 rounded-lg text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white shadow-teal-900/30 ${
+                        isScanning ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''
+                      }`}
                     >
                       <span>💾</span> Save Verified Shopping Trip
                     </button>

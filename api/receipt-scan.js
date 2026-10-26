@@ -81,7 +81,7 @@ export default async function handler(req, res) {
   if (!apiKey) {
     return sendJson(res, 503, {
       error: 'GEMINI_API_KEY_NOT_CONFIGURED',
-      message: 'Server-side Gemini API Key is not configured. Please provide image or text for client fallback.'
+      message: 'Server-side GEMINI_API_KEY is not configured in process.env. Falling back to client-side OCR.'
     });
   }
 
@@ -105,21 +105,25 @@ Analyze this supermarket receipt image with high precision.
 Receipt Analysis Rules:
 1. Extract the store or supermarket name (e.g. SM Supermarket, Puregold, Robinsons, Savemore, D-Grocer, etc.).
 2. Extract the purchase date in YYYY-MM-DD format if visible. If not visible or uncertain, return null (never fabricate dates).
-3. Extract each purchased food/grocery item with:
+3. Classify the tripType: "Supermarket" | "Wet Market / Palengke" | "Specialty Grocery" | "Convenience Store".
+4. Extract each purchased food/grocery item with:
    - "name": Clean human-readable product name. Expand obvious abbreviations (e.g., "CHK BRST" -> "Chicken Breast", "CARROT LOCAL" -> "Local Carrots").
    - "rawReceiptText": The exact text line from the receipt.
+   - "qty": Number of units purchased (default 1.0).
    - "quantity": Number of units purchased (default 1.0).
    - "unit": e.g., "kg", "g", "pack", "pc", "bottle", "can", "bag".
+   - "price": Numerical unit price in PHP (₱).
    - "unitPrice": Numerical unit price in PHP (₱).
+   - "total": Numerical final line total in PHP (₱).
    - "totalPrice": Numerical final line total in PHP (₱).
    - "weightGrams": If the item was weighed on a produce scale or package specifies grams/kg, record in grams (e.g., 0.850 kg = 850). If not specified, return null.
    - "discount": Any discount deducted for this specific line item (0 if none).
-4. Extract financial totals:
+5. Extract financial totals:
    - "subtotal": Subtotal amount before discounts/tax.
    - "discounts": Total discounts applied across receipt.
    - "tax": Tax or VAT indicated on receipt.
    - "totalAmountPaid": Final amount paid by customer in PHP.
-5. Verification & Confidence:
+6. Verification & Confidence:
    - "uncertainFields": Array of field names where text was faded, torn, or low confidence.
    - "mathValid": Boolean indicating whether sum of item prices minus discounts matches totalAmountPaid (within ₱1 margin of rounding error).
    - "discrepancyNote": Explanation of any mismatch or missing breakdown.
@@ -131,13 +135,18 @@ Return STRICT JSON matching this schema:
 {
   "storeName": "string",
   "purchaseDate": "YYYY-MM-DD" | null,
+  "date": "YYYY-MM-DD" | null,
+  "tripType": "Supermarket" | "Wet Market / Palengke" | "Specialty Grocery" | "Convenience Store",
   "items": [
     {
       "name": "string",
       "rawReceiptText": "string",
+      "qty": 1.0,
       "quantity": 1.0,
       "unit": "string",
+      "price": 0.0,
       "unitPrice": 0.0,
+      "total": 0.0,
       "totalPrice": 0.0,
       "weightGrams": 0.0 | null,
       "discount": 0.0
@@ -154,38 +163,55 @@ Return STRICT JSON matching this schema:
 }
 `;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+    // Cascade: Try gemini-2.5-flash first, fall back to gemini-1.5-flash
+    const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+    let response = null;
+    let lastErrMessage = '';
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
+    for (const model of models) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
               {
-                inlineData: {
-                  mimeType,
-                  data: cleanBase64
-                }
-              },
-              { text: prompt }
-            ]
-          }
-        ],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.05
-        }
-      })
-    });
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType,
+                      data: cleanBase64
+                    }
+                  },
+                  { text: prompt }
+                ]
+              }
+            ],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.05
+            }
+          })
+        });
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      console.error('[API /api/receipt-scan] Gemini error:', errData);
-      return sendJson(res, response.status, {
+        if (response.ok) {
+          break;
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          lastErrMessage = errData.error?.message || `Model ${model} returned status ${response.status}`;
+          console.warn(`[API /api/receipt-scan] Model ${model} failed (${response.status}): ${lastErrMessage}. Trying next model...`);
+        }
+      } catch (fetchErr) {
+        lastErrMessage = fetchErr.message;
+        console.warn(`[API /api/receipt-scan] Model ${model} fetch exception: ${lastErrMessage}`);
+      }
+    }
+
+    if (!response || !response.ok) {
+      return sendJson(res, 502, {
         error: 'GEMINI_API_ERROR',
-        message: errData.error?.message || `Gemini API returned status ${response.status}`
+        message: lastErrMessage || 'Failed to analyze receipt with Gemini Vision.'
       });
     }
 

@@ -3449,10 +3449,40 @@ select.form-input {
 .highlight-box {
   width: 100%;
   padding: 16px !important;
-  border-radius: 14px;
+  border-radius: 16px;
   box-sizing: border-box;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(20, 184, 166, 0.35);
+  background: rgba(204, 251, 241, 0.7);
+  border: 1px solid rgba(153, 246, 228, 0.8);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+html.light .highlight-box {
+  background: rgba(204, 251, 241, 0.7);
+  border: 1px solid rgba(153, 246, 228, 0.8);
+}
+
+html.light .highlight-box .form-label {
+  color: #115e59 !important;
+}
+
+html.light .highlight-box .form-help {
+  color: #0f766e !important;
+}
+
+html.dark .highlight-box,
+:root:not(.light) .highlight-box {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(19, 78, 74, 0.5);
+}
+
+html.dark .highlight-box .form-label,
+:root:not(.light) .highlight-box .form-label {
+  color: #5eead4 !important;
+}
+
+html.dark .highlight-box .form-help,
+:root:not(.light) .highlight-box .form-help {
+  color: #94a3b8 !important;
 }
 
 .highlight-box .scale-unit-badge {
@@ -3460,7 +3490,95 @@ select.form-input {
 }
 
 html.light .highlight-box .scale-unit-badge {
-  color: #64748b;
+  color: #0f766e;
+}
+
+/* Animated Scanning Beam & Pulse Effect for Gemini Receipt Scanner */
+@keyframes scanLaserBeam {
+  0% {
+    top: 0%;
+    opacity: 0.7;
+  }
+  50% {
+    top: 96%;
+    opacity: 1;
+  }
+  100% {
+    top: 0%;
+    opacity: 0.7;
+  }
+}
+
+@keyframes pulseGlowGlow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(20, 184, 166, 0.4);
+    border-color: rgba(20, 184, 166, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 22px rgba(45, 212, 191, 0.8);
+    border-color: rgba(45, 212, 191, 1);
+  }
+}
+
+.scanning-thumbnail-box {
+  position: relative !important;
+  overflow: hidden !important;
+  border-radius: 14px;
+  animation: pulseGlowGlow 2.4s infinite ease-in-out;
+}
+
+.scanning-laser-beam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, rgba(45, 212, 191, 0.2), rgba(45, 212, 191, 1) 50%, rgba(45, 212, 191, 0.2));
+  box-shadow: 0 0 14px 3px rgba(45, 212, 191, 0.85), 0 0 28px 6px rgba(20, 184, 166, 0.5);
+  animation: scanLaserBeam 2.2s infinite ease-in-out;
+  pointer-events: none;
+  z-index: 25;
+}
+
+.scanning-laser-beam::before {
+  content: '';
+  position: absolute;
+  top: -24px;
+  left: 0;
+  right: 0;
+  height: 24px;
+  background: linear-gradient(to top, rgba(45, 212, 191, 0.22), transparent);
+}
+
+.scanning-laser-beam::after {
+  content: '';
+  position: absolute;
+  bottom: -24px;
+  left: 0;
+  right: 0;
+  height: 24px;
+  background: linear-gradient(to bottom, rgba(45, 212, 191, 0.22), transparent);
+}
+
+.active-scanning-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  z-index: 30;
+  padding: 24px;
+  text-align: center;
+  border: 1px solid rgba(20, 184, 166, 0.3);
+}
+
+html.light .active-scanning-overlay {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(20, 184, 166, 0.4);
 }
 
 .alert-box {

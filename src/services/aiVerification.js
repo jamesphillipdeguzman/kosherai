@@ -269,56 +269,73 @@ export async function uploadToCloudinary(blob, cloudName, uploadPreset) {
 }
 
 /**
- * Supermarket Receipt Scanner
- * Tries server-side /api/receipt-scan first (keeping API key secure on server).
- * Falls back to direct client Gemini Vision or Client Tesseract OCR if server is unreachable.
+ * Supermarket Receipt Scanner Orchestration
+ * Prioritizes Server-Side Gemini 2.5/1.5 Flash Vision first.
+ * Gracefully falls back to direct client Gemini Vision or on-device Tesseract OCR.
  */
 export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, clientApiKey = '') {
-  onProgress({ status: 'uploading', progress: 0.2, message: 'Processing receipt image...' });
+  onProgress({ status: 'uploading', progress: 0.15, message: 'Uploading image...' });
 
-  // 1. Try Server-Side /api/receipt-scan
-  try {
-    const res = await fetch('/api/receipt-scan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        imageBase64: dataUrl,
-        mimeType: 'image/jpeg'
-      })
-    });
+  // 1. Primary: Server-Side Gemini Vision endpoint (/api/receipt-scan)
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
-    if (res.ok) {
-      const data = await res.json();
-      onProgress({ status: 'done', progress: 1.0, message: 'Receipt extracted successfully!' });
-      return {
-        ...data,
-        source: 'SERVER_GEMINI_AI'
-      };
-    } else {
-      console.warn(`[ReceiptScan] Server endpoint returned ${res.status}. Attempting client fallback...`);
+  if (isOnline) {
+    try {
+      onProgress({
+        status: 'ai_vision',
+        progress: 0.45,
+        message: '✨ Gemini Vision is analyzing receipt details & line items...'
+      });
+
+      const res = await fetch('/api/receipt-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: dataUrl,
+          mimeType: 'image/jpeg'
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        onProgress({ status: 'populating', progress: 0.95, message: 'Populating receipt items...' });
+        return normalizeReceiptData(data, 'SERVER_GEMINI_VISION');
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        console.warn(`[ReceiptScan] Server endpoint error (${res.status}):`, errJson);
+      }
+    } catch (netErr) {
+      console.warn('[ReceiptScan] Network/server unreachable. Falling back...', netErr);
     }
-  } catch (netErr) {
-    console.warn('[ReceiptScan] Server endpoint not reachable. Attempting client fallback...', netErr);
   }
 
-  // 2. Direct Client-side Gemini fallback if API key is present
+  // 2. Direct Client-side Gemini fallback if API key is provided
   const activeKey = (clientApiKey || import.meta.env.VITE_GEMINI_API_KEY || '').trim();
-  if (activeKey) {
+  if (isOnline && activeKey) {
     try {
-      onProgress({ status: 'ai_reasoning', progress: 0.6, message: 'Reading receipt with Gemini AI...' });
+      onProgress({
+        status: 'ai_vision',
+        progress: 0.55,
+        message: '✨ Gemini Vision is analyzing receipt details & line items...'
+      });
+
       const prompt = `
-Extract supermarket receipt data from this image:
+Extract supermarket receipt data from this image with high precision:
 Return strict JSON:
 {
-  "storeName": "Store Name",
-  "purchaseDate": "YYYY-MM-DD" or null,
+  "storeName": "string",
+  "purchaseDate": "YYYY-MM-DD" | null,
+  "date": "YYYY-MM-DD" | null,
+  "tripType": "Supermarket" | "Wet Market / Palengke" | "Specialty Grocery" | "Convenience Store",
   "items": [
     {
-      "name": "Item Description",
-      "rawReceiptText": "raw line",
+      "name": "string",
+      "qty": 1.0,
       "quantity": 1.0,
-      "unit": "pcs",
+      "unit": "string",
+      "price": 0.0,
       "unitPrice": 0.0,
+      "total": 0.0,
       "totalPrice": 0.0,
       "weightGrams": null,
       "discount": 0.0
@@ -334,58 +351,116 @@ Return strict JSON:
   "rawText": ""
 }
 `;
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(activeKey)}`;
+      const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
       const cleanBase64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
-              { text: prompt }
-            ]
-          }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.05
-          }
-        })
-      });
+      for (const model of models) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(activeKey)}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
+                { text: prompt }
+              ]
+            }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.05
+            }
+          })
+        });
 
-      if (response.ok) {
-        const jsonRes = await response.json();
-        const text = jsonRes.candidates?.[0]?.content?.parts?.[0]?.text;
-        const parsed = parseGeminiJson(text);
-        if (parsed) {
-          onProgress({ status: 'done', progress: 1.0, message: 'Receipt extracted via client AI!' });
-          return { ...parsed, source: 'CLIENT_GEMINI_AI' };
+        if (response.ok) {
+          const jsonRes = await response.json();
+          const text = jsonRes.candidates?.[0]?.content?.parts?.[0]?.text;
+          const parsed = parseGeminiJson(text);
+          if (parsed) {
+            onProgress({ status: 'populating', progress: 0.95, message: 'Populating receipt items...' });
+            return normalizeReceiptData(parsed, 'CLIENT_GEMINI_VISION');
+          }
         }
       }
     } catch (clientErr) {
-      console.warn('[ReceiptScan] Client Gemini fallback failed:', clientErr);
+      console.warn('[ReceiptScan] Direct client Gemini fallback failed:', clientErr);
     }
   }
 
-  // 3. Client OCR (Tesseract.js) fallback when fully offline
+  // 3. Graceful Client OCR (Tesseract.js) fallback when offline or when AI is unavailable
   try {
-    onProgress({ status: 'ocr_fallback', progress: 0.7, message: 'Running offline OCR engine...' });
+    onProgress({
+      status: 'ocr_fallback',
+      progress: 0.65,
+      message: 'Offline mode detected: Running on-device OCR fallback...'
+    });
+
     const rawOcrText = await runClientOCR(dataUrl, (p) => {
-      onProgress({ status: 'ocr_fallback', progress: 0.7 + (p.progress * 0.25), message: p.message });
+      onProgress({
+        status: 'ocr_fallback',
+        progress: 0.65 + (p.progress * 0.25),
+        message: 'Offline mode detected: Running on-device OCR fallback...'
+      });
     });
 
     const parsedOffline = parseOfflineReceiptText(rawOcrText);
-    onProgress({ status: 'done', progress: 1.0, message: 'Extracted using offline OCR.' });
-    return {
+    onProgress({ status: 'populating', progress: 0.95, message: 'Populating receipt items...' });
+
+    return normalizeReceiptData({
       ...parsedOffline,
-      source: 'OFFLINE_TESSERACT_OCR',
       rawText: rawOcrText
-    };
+    }, 'OFFLINE_TESSERACT_OCR');
   } catch (ocrErr) {
     console.error('[ReceiptScan] Offline OCR also failed:', ocrErr);
     throw new Error('Could not scan receipt. Please enter items manually.');
   }
+}
+
+/**
+ * Standardizes extracted receipt data into consistent schema
+ */
+function normalizeReceiptData(data, source = 'GEMINI_VISION') {
+  const purchaseDate = data.date || data.purchaseDate || new Date().toISOString().split('T')[0];
+  const items = Array.isArray(data.items) ? data.items.map((item, idx) => {
+    const qty = Number(item.qty ?? item.quantity ?? 1) || 1;
+    const price = Number(item.price ?? item.unitPrice ?? 0) || 0;
+    const total = Number(item.total ?? item.totalPrice ?? (qty * price)) || (qty * price);
+    return {
+      id: item.id || idx + 1,
+      name: item.name || item.description || `Grocery Item #${idx + 1}`,
+      rawReceiptText: item.rawReceiptText || item.name || '',
+      qty,
+      quantity: qty,
+      unit: item.unit || 'pcs',
+      price,
+      unitPrice: price,
+      total,
+      totalPrice: total,
+      weightGrams: item.weightGrams ?? null,
+      discount: Number(item.discount || 0)
+    };
+  }) : [];
+
+  const totalAmountPaid = Number(data.totalAmountPaid ?? data.total ?? data.subtotal ?? items.reduce((acc, it) => acc + it.totalPrice, 0)) || 0;
+
+  return {
+    storeName: data.storeName || 'SM Supermarket',
+    purchaseDate,
+    date: purchaseDate,
+    tripType: data.tripType || 'Supermarket',
+    items,
+    totalAmountPaid,
+    totalScaleWeightKg: Number(data.totalScaleWeightKg || 0),
+    subtotal: Number(data.subtotal || totalAmountPaid),
+    discounts: Number(data.discounts || 0),
+    tax: Number(data.tax || 0),
+    uncertainFields: data.uncertainFields || [],
+    mathValid: data.mathValid ?? true,
+    discrepancyNote: data.discrepancyNote || '',
+    rawText: data.rawText || '',
+    source
+  };
 }
 
 /**

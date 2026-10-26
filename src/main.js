@@ -936,20 +936,29 @@ Filtered water`;
 
       try {
         state.receiptScanning = true;
-        state.receiptProgress = 0.2;
-        state.receiptStatusMsg = 'Compressing receipt image...';
+        state.receiptProgress = 0.15;
+        state.receiptStatusMsg = 'Uploading image...';
         render();
 
         const { dataUrl } = await compressImage(file, 1400);
         state.receiptPreviewUrl = dataUrl;
+        state.receiptProgress = 0.35;
+        state.receiptStatusMsg = '✨ Gemini Vision is analyzing receipt details & line items...';
         render();
 
         const result = await scanSupermarketReceipt(dataUrl, (p) => {
           state.receiptProgress = p.progress;
           state.receiptStatusMsg = p.message;
+          const statusTextEl = document.querySelector('#scan-status-text');
+          if (statusTextEl) statusTextEl.textContent = p.message;
           const fill = document.querySelector('.progress-bar-fill');
           if (fill) fill.style.width = Math.round(p.progress * 100) + '%';
         }, state.settings?.geminiApiKey);
+
+        state.receiptStatusMsg = 'Populating receipt items...';
+        state.receiptProgress = 0.95;
+        const statusTextEl = document.querySelector('#scan-status-text');
+        if (statusTextEl) statusTextEl.textContent = state.receiptStatusMsg;
 
         state.scannedReceiptData = result;
         state.receiptScanning = false;
@@ -961,6 +970,7 @@ Filtered water`;
         state.scannedReceiptData = {
           storeName: 'Supermarket',
           purchaseDate: new Date().toISOString().split('T')[0],
+          tripType: 'Supermarket',
           items: [],
           totalAmountPaid: 0,
           totalScaleWeightKg: 0

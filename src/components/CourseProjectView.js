@@ -841,22 +841,13 @@ function renderReceiptScanModal(state) {
           </div>
         </div>
 
-        ${isScanning ? `
-          <div class="scanning-loader-container">
-            <div class="scanner-spinner"></div>
-            <h3 style="margin-top: 16px;">Scanning Supermarket Receipt...</h3>
-            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 4px;">${scanStatusMsg}</p>
-            <div class="progress-bar-bg" style="max-width: 300px; margin: 16px auto 0;">
-              <div class="progress-bar-fill" style="width: ${Math.round(scanProgress * 100)}%;"></div>
-            </div>
-          </div>
-        ` : `
-          <div class="receipt-scanner-split flex flex-col md:grid md:grid-cols-12 gap-6">
+          <div class="receipt-scanner-split flex flex-col md:grid md:grid-cols-12 gap-6 relative">
             <!-- Left Pane / Upload Card (Mobile: full width on top, Desktop: 5 cols) -->
             <div class="split-left-pane w-full md:col-span-5">
               ${state.receiptPreviewUrl ? `
-                <div class="receipt-image-zoom-box">
-                  <img src="${state.receiptPreviewUrl}" alt="Scanned Receipt Preview" id="receipt-zoom-img" />
+                <div class="receipt-image-zoom-box relative ${isScanning ? 'scanning-thumbnail-box' : ''}">
+                  <img src="${state.receiptPreviewUrl}" alt="Scanned Receipt Preview" id="receipt-zoom-img" class="${isScanning ? 'opacity-80 transition-opacity' : ''}" />
+                  ${isScanning ? '<div class="scanning-laser-beam"></div>' : ''}
                 </div>
               ` : `
                 <div class="receipt-dropzone" id="receipt-dropzone">
@@ -870,13 +861,29 @@ function renderReceiptScanModal(state) {
 
               ${state.receiptPreviewUrl ? `
                 <div style="margin-top: 12px; display: flex; gap: 8px;">
-                  <button type="button" class="btn-secondary" id="reupload-receipt-btn" style="flex: 1; min-height: 44px; font-size: 0.85rem;">🔄 Retake or Change Photo</button>
+                  <button type="button" class="btn-secondary" id="reupload-receipt-btn" ${isScanning ? 'disabled' : ''} style="flex: 1; min-height: 44px; font-size: 0.85rem;">🔄 Retake or Change Photo</button>
                 </div>
               ` : ''}
             </div>
 
             <!-- Right Pane: Extracted Editable Fields (Mobile: stacked below, Desktop: 7 cols) -->
-            <div class="split-right-pane w-full md:col-span-7">
+            <div class="split-right-pane w-full md:col-span-7 relative">
+              ${isScanning ? `
+                <div class="active-scanning-overlay">
+                  <div class="w-12 h-12 rounded-full border-4 border-teal-500/20 border-t-teal-500 animate-spin mb-3"></div>
+                  <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 text-xs font-semibold mb-2">
+                    <span class="animate-pulse">✨</span> Gemini Vision Active
+                  </div>
+                  <h3 class="text-base font-bold text-slate-900 dark:text-white mb-1">Analyzing Supermarket Receipt...</h3>
+                  <p id="scan-status-text" class="text-xs sm:text-sm text-teal-800 dark:text-teal-300 text-center max-w-xs font-medium">
+                    ${scanStatusMsg || '✨ Gemini Vision is analyzing receipt details & line items...'}
+                  </p>
+                  <div class="progress-bar-bg" style="max-width: 240px; width: 100%; margin: 16px auto 0; height: 6px; border-radius: 9999px; overflow: hidden; background: rgba(148, 163, 184, 0.2);">
+                    <div class="progress-bar-fill" style="width: ${Math.round(scanProgress * 100)}%; height: 100%; background: linear-gradient(90deg, #0d9488, #06b6d4); transition: width 0.3s ease;"></div>
+                  </div>
+                </div>
+              ` : ''}
+
               ${mathAlertHtml}
               ${duplicateAlertHtml}
 
@@ -885,25 +892,25 @@ function renderReceiptScanModal(state) {
                 <div class="form-row-grid grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div class="form-group">
                     <label class="form-label" for="edit-store-name">Store Name</label>
-                    <input type="text" id="edit-store-name" class="form-input w-full min-h-[44px]" value="${escapeHtml(scanData?.storeName || 'SM Supermarket')}" required />
+                    <input type="text" id="edit-store-name" class="form-input w-full min-h-[44px]" value="${escapeHtml(scanData?.storeName || 'SM Supermarket')}" ${isScanning ? 'disabled' : ''} required />
                   </div>
                   <div class="form-group">
                     <label class="form-label" for="edit-purchase-date">Purchase Date</label>
-                    <input type="date" id="edit-purchase-date" class="form-input w-full min-h-[44px]" value="${scanData?.purchaseDate || new Date().toISOString().split('T')[0]}" required />
+                    <input type="date" id="edit-purchase-date" class="form-input w-full min-h-[44px]" value="${scanData?.purchaseDate || new Date().toISOString().split('T')[0]}" ${isScanning ? 'disabled' : ''} required />
                   </div>
                 </div>
 
                 <!-- 2. CRITICAL FIELD: Whole-Grocery Scale Weight Card (Full width, p-4, clean unit suffix) -->
-                <div class="form-group highlight-box w-full p-4 rounded-xl">
-                  <label class="form-label" for="edit-scale-weight" style="font-weight: 800; display: block; margin-bottom: 6px;">
+                <div class="rounded-2xl p-4 bg-teal-50/70 border border-teal-200/80 dark:bg-slate-800/80 dark:border-teal-900/50 transition-colors w-full">
+                  <label class="text-xs font-semibold text-teal-800 dark:text-teal-300 flex items-center gap-1.5 mb-2" for="edit-scale-weight">
                     ⚖️ Whole-Grocery Scale Weight (kg)
                   </label>
-                  <div class="relative w-full flex items-center" style="position: relative;">
-                    <input type="number" step="0.01" min="0" id="edit-scale-weight" class="form-input w-full min-h-[44px]" style="font-size: 1.15rem; font-weight: 800; font-family: var(--font-mono); padding-right: 48px;" placeholder="e.g. 5.85" value="${scanData?.totalScaleWeightKg || ''}" required />
-                    <span class="scale-unit-badge" style="position: absolute; right: 14px; font-weight: 800; font-size: 0.9rem; pointer-events: none; opacity: 0.7;">kg</span>
+                  <div class="relative w-full flex items-center">
+                    <input type="number" step="0.01" min="0" id="edit-scale-weight" class="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-teal-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-base focus:ring-2 focus:ring-teal-500 outline-none pr-12 font-mono font-bold" placeholder="e.g. 5.85" value="${scanData?.totalScaleWeightKg || ''}" ${isScanning ? 'disabled' : ''} required />
+                    <span class="scale-unit-badge absolute right-4 font-bold text-sm select-none pointer-events-none text-teal-700/70 dark:text-slate-400">kg</span>
                   </div>
-                  <div class="form-help" style="margin-top: 6px; font-size: 0.75rem; line-height: 1.4;">
-                    Weigh your full grocery haul on your kitchen/luggage scale before unpacking. Kept separate from receipt item weights for academic rigor.
+                  <div class="text-[11px] text-teal-700/80 dark:text-slate-400 mt-2 font-normal leading-relaxed">
+                    Measured physical weight of food haul on your home scale before unpacking. Kept separate from receipt item weights for academic rigor.
                   </div>
                 </div>
 
@@ -985,13 +992,12 @@ function renderReceiptScanModal(state) {
                 </div>
 
                 <div class="modal-footer-actions">
-                  <button type="button" class="btn-secondary" id="cancel-receipt-modal-btn" style="min-height: 44px; padding: 0 18px;">Cancel</button>
-                  <button type="submit" class="btn-primary" id="save-receipt-trip-btn" style="min-height: 44px; padding: 0 22px;">💾 Save Verified Shopping Trip</button>
+                  <button type="button" class="btn-secondary" id="cancel-receipt-modal-btn" ${isScanning ? 'disabled' : ''} style="min-height: 44px; padding: 0 18px;">Cancel</button>
+                  <button type="submit" class="btn-primary" id="save-receipt-trip-btn" ${isScanning ? 'disabled' : ''} style="min-height: 44px; padding: 0 22px;">💾 Save Verified Shopping Trip</button>
                 </div>
               </form>
             </div>
           </div>
-        `}
       </div>
     </div>
   `;
@@ -1030,12 +1036,15 @@ function renderManualTripModal(state) {
             </div>
           </div>
 
-          <div class="form-group highlight-box">
-            <label class="form-label" for="manual-scale-weight" style="color: var(--accent-cyan); font-weight: 800;">
+          <!-- 2. CRITICAL FIELD: Whole-Grocery Scale Weight Card -->
+          <div class="rounded-2xl p-4 bg-teal-50/70 border border-teal-200/80 dark:bg-slate-800/80 dark:border-teal-900/50 transition-colors w-full">
+            <label class="text-xs font-semibold text-teal-800 dark:text-teal-300 flex items-center gap-1.5 mb-2" for="manual-scale-weight">
               ⚖️ Whole-Grocery Scale Weight (kg)
             </label>
-            <input type="number" step="0.01" min="0" id="manual-scale-weight" class="form-input" placeholder="e.g. 4.25" required />
-            <div class="form-help">Measured physical weight of food haul on your home scale.</div>
+            <input type="number" step="0.01" min="0" id="manual-scale-weight" class="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-teal-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-base focus:ring-2 focus:ring-teal-500 outline-none" placeholder="e.g. 4.25" required />
+            <div class="text-[11px] text-teal-700/80 dark:text-slate-400 mt-2 font-normal leading-relaxed">
+              Measured physical weight of food haul on your home scale before unpacking.
+            </div>
           </div>
 
           <div class="form-group">
