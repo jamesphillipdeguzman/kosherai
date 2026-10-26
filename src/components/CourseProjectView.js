@@ -39,7 +39,7 @@ export function renderCourseProjectView(state) {
   return `
     <div class="course-project-container">
       <!-- Course Project Header Banner -->
-      <div class="course-header-card bg-white dark:bg-slate-900/90 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800/80 shadow-sm">
+      <div class="course-header-card bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm">
         <div class="course-header-top">
           <div>
             <div class="course-pill">Course Research Project</div>

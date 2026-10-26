@@ -96,18 +96,24 @@ export async function getScanHistory() {
       });
       clearTimeout(timeoutId);
 
-      if (res.ok) {
-        const remoteScans = await res.json();
-        if (Array.isArray(remoteScans)) {
-          // Cache remote scans back into localStorage for offline availability
-          saveLocalHistory(remoteScans);
-          return remoteScans;
+      if (res && res.ok) {
+        const payload = await res.json().catch(() => null);
+        if (payload) {
+          if (payload.offline) {
+            return getLocalScanHistory();
+          }
+          const remoteScans = Array.isArray(payload) 
+            ? payload 
+            : (Array.isArray(payload.data) ? payload.data : null);
+
+          if (remoteScans && remoteScans.length > 0) {
+            saveLocalHistory(remoteScans);
+            return remoteScans;
+          }
         }
-      } else {
-        console.warn(`[Storage] Remote GET /api/scans returned ${res.status}. Falling back to localStorage.`);
       }
-    } catch (e) {
-      console.warn('[Storage] Remote GET /api/scans failed or timed out. Falling back to localStorage:', e);
+    } catch {
+      // Offline fallback without unhandled promise rejections
     }
   }
 

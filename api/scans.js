@@ -104,9 +104,10 @@ export default async function handler(req, res) {
   const databaseUrl = process.env.DATABASE_URL;
 
   if (!databaseUrl || !databaseUrl.trim()) {
-    return sendJson(res, 503, {
-      error: 'DATABASE_URL_NOT_CONFIGURED',
-      message: 'Neon PostgreSQL DATABASE_URL is not set. Scans will operate in offline-first localStorage mode.'
+    return sendJson(res, 200, {
+      data: [],
+      offline: true,
+      message: 'Database not configured or offline'
     });
   }
 
@@ -115,10 +116,11 @@ export default async function handler(req, res) {
     sql = neon(databaseUrl.trim());
     await ensureTable(sql);
   } catch (err) {
-    console.error('[API /api/scans] Neon Connection Error:', err);
-    return sendJson(res, 500, {
-      error: 'DATABASE_CONNECTION_ERROR',
-      message: err.message || 'Failed to connect to Neon PostgreSQL database.'
+    console.warn('[API /api/scans] Neon Connection Error:', err);
+    return sendJson(res, 200, {
+      data: [],
+      offline: true,
+      message: err.message || 'Database not configured or offline'
     });
   }
 
@@ -248,7 +250,14 @@ export default async function handler(req, res) {
 
     return sendJson(res, 405, { error: 'METHOD_NOT_ALLOWED', message: `Method ${method} is not supported.` });
   } catch (err) {
-    console.error('[API /api/scans] Query Execution Error:', err);
+    console.warn('[API /api/scans] Query Execution Error:', err);
+    if (method === 'GET') {
+      return sendJson(res, 200, {
+        data: [],
+        offline: true,
+        message: err.message || 'Database not configured or offline'
+      });
+    }
     return sendJson(res, 500, {
       error: 'INTERNAL_SERVER_ERROR',
       message: err.message || 'An error occurred while executing the database query.'

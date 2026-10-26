@@ -1,9 +1,9 @@
 // KosherAI Service Worker - Offline-First Caching for RAI Low-Iodine Diet Companion
-const CACHE_NAME = 'kosherai-v2-course';
+const CACHE_NAME = 'kosherai-v3-course';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/public/favicon.svg',
+  '/favicon.svg',
   '/manifest.webmanifest'
 ];
 
