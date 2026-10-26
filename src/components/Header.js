@@ -23,9 +23,9 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
           <label for="header-diet-selector" class="sr-only">Select Diet Protocol</label>
           <div class="diet-select-badge">
             <span class="diet-select-icon">${currentProfile.icon}</span>
-            <select id="header-diet-selector" class="header-diet-dropdown" aria-label="Select Dietary Protocol">
+            <select id="header-diet-selector" class="header-diet-dropdown bg-teal-950/40 dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-teal-500/30 rounded-xl px-3 py-1.5 focus:outline-none" aria-label="Select Dietary Protocol">
               ${Object.values(DIET_PROFILES).map(profile => `
-                <option value="${profile.id}" ${profile.id === activeDiet ? 'selected' : ''}>
+                <option value="${profile.id}" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 py-1.5" ${profile.id === activeDiet ? 'selected' : ''}>
                   ${profile.icon} ${profile.name}
                 </option>
               `).join('')}

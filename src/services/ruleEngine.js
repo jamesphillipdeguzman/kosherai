@@ -140,9 +140,9 @@ function cleanToken(text) {
 }
 
 /**
- * Evaluates an ingredients string or scanned label text
+ * Evaluates an ingredients string or scanned label text reactively against the active diet protocol
  */
-export function analyzeIngredients(rawText) {
+export function analyzeIngredients(rawText, activeDiet = 'lid') {
   if (!rawText || !rawText.trim()) {
     return {
       isSafe: true,
@@ -168,34 +168,131 @@ export function analyzeIngredients(rawText) {
   const detectedCaution = [];
   const parsedTokens = [];
 
-  // 1. Scan across the entire text against forbidden rules
-  for (const rule of FORBIDDEN_RULES) {
-    if (rule.regex.test(normalized)) {
-      if (rule.exclude && rule.exclude.test(normalized)) {
-        continue;
-      }
-      const match = normalized.match(rule.regex);
-      detectedForbidden.push({
-        name: rule.name,
-        matchedWord: match ? match[0] : rule.name,
-        reason: rule.reason
-      });
-    }
-  }
+  // Diet-specific rulesets
+  if (activeDiet === 'low_purine') {
+    const PURINE_FORBIDDEN = [
+      { regex: /\b(isaw|atay|liver|kidney|brain|organ\s*meat|bopis|dinuguan)\b/i, exclude: /\b(?:without|no|zero|free of|avoiding)\b/i, name: 'Organ Meat / Offal', reason: 'Extremely high in purines; primary trigger for acute gout arthritis.' },
+      { regex: /\b(bagoong|alamang|anchov|tuyo|daing|sardine|mackerel)\b/i, exclude: /\b(?:without|no|zero|free of|avoiding)\b/i, name: 'Preserved / Oily Seafood', reason: 'High purine density (>150mg/100g); triggers uric acid crystallization.' },
+      { regex: /\b(shrimp|hipon|prawn|tahong|mussel|talaba|oyster|crab|alimango|alimasag|squid|pusit)\b/i, exclude: /\b(?:without|no|zero|free of|avoiding)\b/i, name: 'Shellfish', reason: 'High purine seafood contraindicated during uric acid management.' },
+      { regex: /\b(beer|brewer'?s\s*yeast|yeast\s*extract|bouillon(?:s|\s*cube|\s*cubes)?)\b/i, exclude: /\b(?:without|no|zero|free of|avoiding)\b/i, name: 'Yeast / Bouillon Extract', reason: 'Concentrated purine nucleotides that rapidly elevate serum urate.' }
+    ];
+    const PURINE_CAUTION = [
+      { regex: /\b(munggo|mung\s*bean|lentil)\b/i, exclude: /\b(?:without|no|zero|free of|avoiding)\b/i, name: 'Legumes (Munggo)', reason: 'Moderate purine content; limit portion sizes to 1/2 cup.' }
+    ];
 
-  // 2. Scan across the entire text against caution rules
-  for (const rule of CAUTION_RULES) {
-    if (rule.regex.test(normalized)) {
-      if (rule.exclude && rule.exclude.test(normalized)) {
-        // Excluded (e.g. explicitly said kosher salt)
-        continue;
+    for (const rule of PURINE_FORBIDDEN) {
+      if (rule.regex.test(normalized)) {
+        if (rule.exclude && rule.exclude.test(normalized)) continue;
+        const match = normalized.match(rule.regex);
+        detectedForbidden.push({ name: rule.name, matchedWord: match ? match[0] : rule.name, reason: rule.reason });
       }
-      const match = normalized.match(rule.regex);
-      detectedCaution.push({
-        name: rule.name,
-        matchedWord: match ? match[0] : rule.name,
-        reason: rule.reason
-      });
+    }
+    for (const rule of PURINE_CAUTION) {
+      if (rule.regex.test(normalized)) {
+        if (rule.exclude && rule.exclude.test(normalized)) continue;
+        const match = normalized.match(rule.regex);
+        detectedCaution.push({ name: rule.name, matchedWord: match ? match[0] : rule.name, reason: rule.reason });
+      }
+    }
+  } else if (activeDiet === 'low_sodium') {
+    const SODIUM_FORBIDDEN = [
+      { regex: /\b(patis|fish\s*sauce|toyomansi|bagoong)\b/i, exclude: /\b(?:instead of|without|no|zero|free of)\b/i, name: 'High-Sodium Condiment', reason: 'Concentrated liquid sodium (>1,200mg/tbsp); elevates arterial blood pressure.' },
+      { regex: /\b(iodized\s*salt|table\s*salt|refined\s*salt|rock\s*salt|sea\s*salt)\b/i, exclude: /non-iodized|kosher|without|no|zero|free of/i, name: 'Added Sodium Chloride', reason: 'Strictly avoid under low-sodium / DASH protocol; use calamansi and herbs.' },
+      { regex: /\b(bouillon|broth\s*cube|knorr|maggi\s*magic|ajinomoto|msg|monosodium\s*glutamate)\b/i, exclude: /\b(?:without|no|zero|free of|avoiding)\b/i, name: 'Commercial Bouillon / MSG', reason: 'Extreme sodium density per serving; harmful for renal and heart health.' },
+      { regex: /\b(tuyo|daing|tinapa|salted\s*egg|itlog\s*na\s*maalat)\b/i, exclude: /\b(?:without|no|zero|free of|avoiding)\b/i, name: 'Sodium-Cured Product', reason: 'Heavily salted preserved foods exceed daily DASH sodium limits.' },
+      { regex: /\b(soy\s*sauce|toyo)\b/i, exclude: /low-carb coconut aminos|soy-free|without|no|zero|free of/i, name: 'Commercial Soy Sauce (Toyo)', reason: 'Contains ~1,000mg sodium per tablespoon; strictly restricted.' }
+    ];
+    const SODIUM_CAUTION = [
+      { regex: /\b(kosher\s*salt)\b/i, exclude: /\b(?:without|no|zero|free of)\b/i, name: 'Kosher Salt', reason: 'Pure sodium chloride (~590mg Na/g). Use very sparingly under DASH restrictions.' }
+    ];
+
+    for (const rule of SODIUM_FORBIDDEN) {
+      if (rule.regex.test(normalized)) {
+        if (rule.exclude && rule.exclude.test(normalized)) continue;
+        const match = normalized.match(rule.regex);
+        detectedForbidden.push({ name: rule.name, matchedWord: match ? match[0] : rule.name, reason: rule.reason });
+      }
+    }
+    for (const rule of SODIUM_CAUTION) {
+      if (rule.regex.test(normalized)) {
+        if (rule.exclude && rule.exclude.test(normalized)) continue;
+        const match = normalized.match(rule.regex);
+        detectedCaution.push({ name: rule.name, matchedWord: match ? match[0] : rule.name, reason: rule.reason });
+      }
+    }
+  } else if (activeDiet === 'diabetic') {
+    const DIABETIC_FORBIDDEN = [
+      { regex: /\b(white\s*sugar|brown\s*sugar|refined\s*sugar|corn\s*syrup|high\s*fructose|sweetened|banana\s*ketchup|sweet\s*and\s*sour)\b/i, exclude: /\b(?:without|sugar-free|no sugar|zero added sugar|zero sugar|free of|unsweetened)\b/i, name: 'Refined Added Sugar', reason: 'Triggers rapid blood glucose spikes and demands acute insulin secretion.' },
+      { regex: /\b(condensed\s*milk|sweetened\s*condensed)\b/i, exclude: /\b(?:without|no|zero|free of|unsweetened)\b/i, name: 'Sweetened Condensed Milk', reason: 'Extremely dense in sucrose and lactose; contraindication for diabetes.' },
+      { regex: /\b(soft\s*drink|soda|cola|packaged\s*juice)\b/i, exclude: /\b(?:without|no|zero|free of)\b/i, name: 'Liquid Sugar Beverage', reason: 'Zero fiber with rapid glycemic absorption.' }
+    ];
+    const DIABETIC_CAUTION = [
+      { regex: /\b(white\s*rice|jasmine\s*rice|glutinous\s*rice|malagkit)\b/i, exclude: /\b(?:without|no|zero|free of)\b/i, name: 'Refined White Rice', reason: 'High glycemic index carbohydrate; substitute with brown rice or cauliflower rice.' },
+      { regex: /\b(table\s*salt|iodized\s*salt)\b/i, exclude: /\b(?:without|no|zero|free of)\b/i, name: 'Excess Salt', reason: 'Zero carbs, but monitor sodium intake to protect cardiovascular health.' }
+    ];
+
+    for (const rule of DIABETIC_FORBIDDEN) {
+      if (rule.regex.test(normalized)) {
+        if (rule.exclude && rule.exclude.test(normalized)) continue;
+        const match = normalized.match(rule.regex);
+        detectedForbidden.push({ name: rule.name, matchedWord: match ? match[0] : rule.name, reason: rule.reason });
+      }
+    }
+    for (const rule of DIABETIC_CAUTION) {
+      if (rule.regex.test(normalized)) {
+        if (rule.exclude && rule.exclude.test(normalized)) continue;
+        const match = normalized.match(rule.regex);
+        detectedCaution.push({ name: rule.name, matchedWord: match ? match[0] : rule.name, reason: rule.reason });
+      }
+    }
+  } else if (activeDiet === 'pinoy_keto') {
+    const KETO_FORBIDDEN = [
+      { regex: /\b(white\s*sugar|brown\s*sugar|cane\s*sugar|honey|molasses|corn\s*syrup)\b/i, exclude: /\b(?:without|sugar-free|no sugar|zero sugar|no brown sugar|free of)\b/i, name: 'Simple Sugars', reason: 'Elevates glucose and immediately stops hepatic ketone generation.' },
+      { regex: /\b(white\s*rice|brown\s*rice|glutinous\s*rice|malagkit|cornstarch|flour)\b/i, exclude: /\b(?:without|no|zero|free of|no brown sugar or cornstarch)\b/i, name: 'Starchy Grains & Flour', reason: 'High carbohydrate density breaks nutritional ketosis.' },
+      { regex: /\b(cassava|kamoteng\s*kahoy|potato|ube|taro|gabi)\b/i, exclude: /\b(?:without|no|zero|free of)\b/i, name: 'Starchy Tubers', reason: 'Dense root starches exceed daily net carbohydrate thresholds (<20g/day).' }
+    ];
+    const KETO_CAUTION = [
+      { regex: /\b(squash|kalabasa|kamote)\b/i, exclude: /\b(?:without|no|zero|free of)\b/i, name: 'Moderate-Carb Vegetables', reason: 'Healthy whole food; portion carefully to stay within daily keto carb limits.' }
+    ];
+
+    for (const rule of KETO_FORBIDDEN) {
+      if (rule.regex.test(normalized)) {
+        if (rule.exclude && rule.exclude.test(normalized)) continue;
+        const match = normalized.match(rule.regex);
+        detectedForbidden.push({ name: rule.name, matchedWord: match ? match[0] : rule.name, reason: rule.reason });
+      }
+    }
+    for (const rule of KETO_CAUTION) {
+      if (rule.regex.test(normalized)) {
+        if (rule.exclude && rule.exclude.test(normalized)) continue;
+        const match = normalized.match(rule.regex);
+        detectedCaution.push({ name: rule.name, matchedWord: match ? match[0] : rule.name, reason: rule.reason });
+      }
+    }
+  } else {
+    // Default: LID (Low-Iodine Diet Protocol)
+    for (const rule of FORBIDDEN_RULES) {
+      if (rule.regex.test(normalized)) {
+        if (rule.exclude && rule.exclude.test(normalized)) continue;
+        const match = normalized.match(rule.regex);
+        detectedForbidden.push({
+          name: rule.name,
+          matchedWord: match ? match[0] : rule.name,
+          reason: rule.reason
+        });
+      }
+    }
+
+    for (const rule of CAUTION_RULES) {
+      if (rule.regex.test(normalized)) {
+        if (rule.exclude && rule.exclude.test(normalized)) continue;
+        const match = normalized.match(rule.regex);
+        detectedCaution.push({
+          name: rule.name,
+          matchedWord: match ? match[0] : rule.name,
+          reason: rule.reason
+        });
+      }
     }
   }
 
@@ -205,26 +302,16 @@ export function analyzeIngredients(rawText) {
     let matchedReason = null;
     let matchedName = null;
 
-    for (const rule of FORBIDDEN_RULES) {
-      if (rule.regex.test(seg)) {
-        if (rule.exclude && rule.exclude.test(seg)) continue;
-        segmentStatus = STATUS.AVOID;
-        matchedReason = rule.reason;
-        matchedName = rule.name;
-        break;
-      }
-    }
-
-    if (segmentStatus === STATUS.SAFE) {
-      for (const rule of CAUTION_RULES) {
-        if (rule.regex.test(seg)) {
-          if (rule.exclude && rule.exclude.test(seg)) continue;
-          segmentStatus = STATUS.CAUTION;
-          matchedReason = rule.reason;
-          matchedName = rule.name;
-          break;
-        }
-      }
+    if (detectedForbidden.some(f => seg.toLowerCase().includes(f.matchedWord.toLowerCase()))) {
+      const match = detectedForbidden.find(f => seg.toLowerCase().includes(f.matchedWord.toLowerCase()));
+      segmentStatus = STATUS.AVOID;
+      matchedReason = match?.reason;
+      matchedName = match?.name;
+    } else if (detectedCaution.some(c => seg.toLowerCase().includes(c.matchedWord.toLowerCase()))) {
+      const match = detectedCaution.find(c => seg.toLowerCase().includes(c.matchedWord.toLowerCase()));
+      segmentStatus = STATUS.CAUTION;
+      matchedReason = match?.reason;
+      matchedName = match?.name;
     }
 
     parsedTokens.push({
@@ -257,7 +344,7 @@ export function analyzeIngredients(rawText) {
       reasons.push(`${c.name} ("${c.matchedWord}"): ${c.reason}`);
     });
   } else {
-    reasons.push('No forbidden iodine sources, dairy, goitrogens, or questionable additives detected. Appears safe for Low-Iodine Diet!');
+    reasons.push(`No protocol violations or questionable additives detected. Compliant with active dietary protocol!`);
   }
 
   return {
@@ -313,16 +400,16 @@ export function searchDatabase(query, filterStatus = 'ALL', filterCategory = 'AL
 
 
 /**
- * Evaluates an entire recipe with ingredient lines
+ * Evaluates an entire recipe with ingredient lines reactively against active dietary protocol
  */
-export function analyzeRecipe(recipeTitle, ingredientLinesText) {
+export function analyzeRecipe(recipeTitle, ingredientLinesText, activeDiet = 'lid') {
   const lines = ingredientLinesText
     .split('\n')
     .map(l => l.trim())
     .filter(l => l.length > 0 && !l.startsWith('#'));
 
   const analyzedLines = lines.map(line => {
-    const res = analyzeIngredients(line);
+    const res = analyzeIngredients(line, activeDiet);
     return {
       line,
       status: res.status,

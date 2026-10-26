@@ -8,7 +8,7 @@ import { renderCheckerTab } from './components/CheckerTab.js';
 import { renderScannerTab, executeScanWorkflow, SAMPLE_LABELS } from './components/ScannerTab.js';
 import { renderCheatSheetTab } from './components/CheatSheetTab.js';
 import { renderSubstitutesTab } from './components/SubstitutesTab.js';
-import { renderCookModeTab, lidRecipes } from './components/CookModeTab.js';
+import { renderCookModeTab, lidRecipes, DIET_RECIPES } from './components/CookModeTab.js';
 import { renderSettingsModal } from './components/SettingsModal.js';
 import { renderItemDetailModal } from './components/ItemDetailModal.js';
 import { renderCourseProjectView } from './components/CourseProjectView.js';
@@ -767,33 +767,48 @@ function attachEventHandlers() {
 
   if (loadSafeRecipeBtn) {
     loadSafeRecipeBtn.addEventListener('click', () => {
-      state.recipeText = 
+      const activeDiet = state.activeDiet || 'lid';
+      const currentDietData = DIET_RECIPES[activeDiet] || DIET_RECIPES.lid;
+      const targetSampleName = currentDietData.sampleAudit?.name || 'Safe Meal';
+      
+      // Match sample meal or default to first meal in current diet
+      const matchedMeal = currentDietData.meals?.find(m => 
+        (m.name || m.title || '').toLowerCase().includes(targetSampleName.toLowerCase()) ||
+        targetSampleName.toLowerCase().includes((m.name || m.title || '').toLowerCase())
+      ) || currentDietData.meals?.[0];
+
+      if (matchedMeal && matchedMeal.ingredients) {
+        state.recipeText = matchedMeal.ingredients.join('\n');
+      } else {
+        state.recipeText = 
 `Fresh chicken cutlets, cut into pieces
 1 medium sayote (chayote), peeled and sliced
 Fresh ginger slices (luya)
 1 fresh onion, chopped
 3 cloves fresh garlic, minced
-1 tbsp 100% pure canola oil
+1 tbsp 100% pure coconut oil
 1 tsp pure non-iodized kosher salt
-Cracked black pepper
-Filtered water`;
-      state.recipeAnalysis = analyzeRecipe('Safe Family Chicken Tinola', state.recipeText);
+Cracked black pepper`;
+      }
+      state.recipeAnalysis = analyzeRecipe(targetSampleName, state.recipeText, activeDiet);
       render();
     });
   }
 
   if (loadRiskyRecipeBtn) {
     loadRiskyRecipeBtn.addEventListener('click', () => {
+      const activeDiet = state.activeDiet || 'lid';
       state.recipeText = 
 `1 lb beef chuck roast cubes
 2 large russet potatoes, cubed
 2 whole eggs (for breading)
 2 tbsp commercial butter
+2 tbsp brown sugar
 1 cube commercial beef bouillon
 2 tbsp soy sauce (toyo)
 1 tsp iodized table salt
 1 can commercial green beans`;
-      state.recipeAnalysis = analyzeRecipe('Careless Beef Stew with Violations', state.recipeText);
+      state.recipeAnalysis = analyzeRecipe('Careless Beef Stew with Violations', state.recipeText, activeDiet);
       render();
     });
   }
@@ -804,7 +819,7 @@ Filtered water`;
       const textarea = document.querySelector('#recipe-textarea');
       state.recipeText = textarea?.value || '';
       if (state.recipeText.trim()) {
-        state.recipeAnalysis = analyzeRecipe('Custom Family Dish', state.recipeText);
+        state.recipeAnalysis = analyzeRecipe('Custom Family Dish', state.recipeText, state.activeDiet || 'lid');
         render();
       }
     });
@@ -832,10 +847,23 @@ Filtered water`;
   document.querySelectorAll('.load-recipe-btn[data-recipe-id]').forEach(btn => {
     btn.addEventListener('click', () => {
       const rid = btn.getAttribute('data-recipe-id');
-      const recipe = lidRecipes.find(r => r.id === rid);
-      if (recipe) {
+      const activeDiet = state.activeDiet || 'lid';
+      const currentDietData = DIET_RECIPES[activeDiet] || DIET_RECIPES.lid;
+
+      let recipe = currentDietData.meals?.find(r => r.id === rid);
+      if (!recipe) {
+        for (const d of Object.values(DIET_RECIPES)) {
+          recipe = d.meals?.find(r => r.id === rid);
+          if (recipe) break;
+        }
+      }
+      if (!recipe && Array.isArray(lidRecipes)) {
+        recipe = lidRecipes.find(r => r.id === rid);
+      }
+
+      if (recipe && recipe.ingredients) {
         state.recipeText = recipe.ingredients.join('\n');
-        state.recipeAnalysis = analyzeRecipe(recipe.title, state.recipeText);
+        state.recipeAnalysis = analyzeRecipe(recipe.name || recipe.title, state.recipeText, activeDiet);
         render();
         const textarea = document.querySelector('#recipe-textarea');
         if (textarea) {

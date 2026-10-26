@@ -24,9 +24,9 @@ export function renderSettingsModal(settings = {}, currentTheme = 'dark', showPr
               <span>Active Dietary Protocol</span>
               <span class="settings-sub-badge" style="color: var(--safe-green);">Default: LID</span>
             </label>
-            <select id="settings-diet-select" class="form-input" style="cursor: pointer; font-weight: 600; font-size: 0.88rem; padding: 10px 14px;">
+            <select id="settings-diet-select" class="form-input bg-teal-950/40 dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-teal-500/30 rounded-xl px-3 py-1.5 focus:outline-none" style="cursor: pointer; font-weight: 600; font-size: 0.88rem; padding: 10px 14px;">
               ${Object.values(DIET_PROFILES).map(profile => `
-                <option value="${profile.id}" ${profile.id === activeDiet ? 'selected' : ''}>
+                <option value="${profile.id}" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 py-1.5" ${profile.id === activeDiet ? 'selected' : ''}>
                   ${profile.icon} ${profile.name} — ${profile.target}
                 </option>
               `).join('')}

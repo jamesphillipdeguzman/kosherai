@@ -87,11 +87,12 @@ export const LID_DATABASE = [
     status: STATUS.SAFE,
     aliases: ['pure kosher salt', 'diamond crystal kosher salt', 'morton coarse kosher salt', 'non-iodized salt', 'pickling salt', 'canning salt', 'pure sodium chloride'],
     iodineContent: '< 1 mcg per serving (Negligible)',
+    generalDescription: '100% pure coarse salt without potassium iodide or chemical iodine additives.',
     description: '100% pure coarse salt without potassium iodide. The cornerstone salt for home cooking on LID.',
     substitutes: [],
     clinicalNotes: 'Check label: ensure it states "This salt does not supply iodide". Diamond Crystal and Morton Coarse are gold standards.',
     dietaryStatus: {
-      lid: { status: STATUS.SAFE, note: '< 1 mcg iodine. Gold standard salt for RAI therapy preparation.', substitutes: [] },
+      lid: { status: STATUS.SAFE, note: 'The cornerstone salt for home cooking on LID (<1 mcg iodine).', substitutes: [] },
       low_purine: { status: STATUS.SAFE, note: 'Purine-free. Safe for seasoning low-purine dishes.', substitutes: [] },
       low_sodium: { status: STATUS.CAUTION, note: 'Pure sodium chloride (~590mg Na/g). Use very sparingly under DASH restrictions.', substitutes: ['Fresh calamansi juice', 'Garlic powder', 'Siling labuyo'] },
       diabetic: { status: STATUS.SAFE, note: 'Zero carbohydrates and zero glycemic impact.', substitutes: [] },
@@ -105,14 +106,15 @@ export const LID_DATABASE = [
     status: STATUS.AVOID,
     aliases: ['table salt', 'iodized table salt', 'iodated salt', 'refined salt', 'iodized rock salt'],
     iodineContent: '~71 mcg per 1/4 tsp (Exceeds daily max in one pinch)',
+    generalDescription: 'Commercial table salt fortified with potassium iodide or potassium iodate.',
     description: 'Commercial table salt fortified with potassium iodide or potassium iodate. Strictly forbidden on LID.',
     substitutes: ['Non-iodized pure kosher salt', 'Pickling salt', 'Canning salt'],
     clinicalNotes: 'Mandatory iodization laws in the Philippines mean nearly all commercial table salt contains excessive iodine.',
     dietaryStatus: {
       lid: { status: STATUS.AVOID, note: '~71 mcg per 1/4 tsp. Saturated with inorganic iodide. Severe contraindication for RAI.', substitutes: ['Non-iodized kosher salt', 'Pickling salt'] },
       low_purine: { status: STATUS.SAFE, note: 'Contains no purines; safe for gout prevention.', substitutes: [] },
-      low_sodium: { status: STATUS.AVOID, note: 'Dense sodium source (~2,300mg Na per tsp). Limit strictly to lower arterial pressure.', substitutes: ['Calamansi + siling labuyo', 'Potassium salt substitute (if cleared by doctor)'] },
-      diabetic: { status: STATUS.SAFE, note: 'Zero carbs, but high sodium increases diabetic cardiovascular risk.', substitutes: [] },
+      low_sodium: { status: STATUS.AVOID, note: 'Strictly avoid — use fresh herbs, calamansi, and garlic instead.', substitutes: ['Calamansi + siling labuyo', 'Fresh ginger and roasted garlic'] },
+      diabetic: { status: STATUS.SAFE, note: 'Zero carbs, but monitor sodium intake to protect cardiovascular health.', substitutes: [] },
       pinoy_keto: { status: STATUS.SAFE, note: 'Replenishes sodium on keto, but prioritize unrefined salts.', substitutes: [] }
     }
   },

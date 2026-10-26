@@ -140,7 +140,7 @@ function renderIngredientCard(item, activeDiet = 'lid') {
         <span style="font-size: 0.78rem;">${escapeHtml(info.metricValue || info.note || '')}</span>
       </div>
 
-      <p class="card-desc">${escapeHtml(item.description)}</p>
+      <p class="card-desc">${escapeHtml(item.dietaryStatus?.[activeDiet]?.note || item.generalDescription || item.description || info.note || '')}</p>
 
       ${swaps && swaps.length > 0 ? `
         <div class="card-substitutes-preview">

@@ -1,9 +1,10 @@
 // Meal & Family Cook Mode Component (Pre-Cooking Checklist, Recipe Analyzer & Practical Dishes)
 import { PRE_COOKING_CHECKLIST } from '../data/protocolRules.js';
 import { analyzeRecipe } from '../services/ruleEngine.js';
+import { DIET_RECIPES } from '../data/dietRecipes.js';
 import lidRecipes from '../data/lidRecipes.json';
 
-export { lidRecipes };
+export { DIET_RECIPES, lidRecipes };
 
 const CATEGORIES = ['All', 'Breakfast', 'Mains', 'Soups & Stews', 'Snacks & Sides'];
 
@@ -12,17 +13,25 @@ export function renderCookModeTab(state) {
     checklistState = {}, 
     recipeAnalysis = null, 
     recipeText = '',
-    recipeCategoryFilter = 'ALL'
+    recipeCategoryFilter = 'ALL',
+    activeDiet = 'lid'
   } = state;
+
+  const currentDietData = DIET_RECIPES[activeDiet] || DIET_RECIPES.lid;
 
   const totalChecks = PRE_COOKING_CHECKLIST.length;
   const checkedCount = PRE_COOKING_CHECKLIST.filter(item => checklistState[item.id]).length;
   const isAllClear = checkedCount === totalChecks;
 
   const activeCategory = recipeCategoryFilter || 'ALL';
+  const allMeals = currentDietData.meals || [];
   const filteredRecipes = (activeCategory === 'ALL' || activeCategory === 'All')
-    ? lidRecipes
-    : lidRecipes.filter(r => r.category.toLowerCase() === activeCategory.toLowerCase());
+    ? allMeals
+    : allMeals.filter(r => {
+        const mealType = (r.type || r.category || '').toLowerCase();
+        const cat = activeCategory.toLowerCase();
+        return mealType === cat || mealType.includes(cat) || cat.includes(mealType);
+      });
 
   return `
     <div class="cook-container">
@@ -65,7 +74,7 @@ export function renderCookModeTab(state) {
                 ${isAllClear ? 'ALL CLEAR: SAFE TO COOK' : `${checkedCount} of ${totalChecks} Rules Verified`}
               </div>
               <div style="font-size: 0.78rem; opacity: 0.9;">
-                ${isAllClear ? 'Your kitchen setup fully protects against accidental iodine contamination.' : 'Review any unchecked items before proceeding.'}
+                ${isAllClear ? 'Your kitchen setup fully protects against accidental contamination.' : 'Review any unchecked items before proceeding.'}
               </div>
             </div>
           </div>
@@ -88,10 +97,10 @@ export function renderCookModeTab(state) {
         <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
           <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); align-self: center;">Try Sample:</span>
           <button id="load-safe-recipe-btn" class="quick-tag-chip" style="color: #34d399; border-color: var(--safe-border);">
-            🟢 Safe Family Tinola
+            🟢 ${escapeHtml(currentDietData.sampleAudit.name)}
           </button>
           <button id="load-risky-recipe-btn" class="quick-tag-chip" style="color: #f87171; border-color: var(--avoid-border);">
-            🔴 Careless Beef Stew (5 Violations)
+            🔴 Careless Beef Stew (Violations Detected)
           </button>
         </div>
 
@@ -113,15 +122,15 @@ export function renderCookModeTab(state) {
         ${recipeAnalysis ? renderRecipeResults(recipeAnalysis) : ''}
       </div>
 
-      <!-- Practical LID / RAI Compliant Dishes Section -->
+      <!-- Dynamic Curated Pinoy Meals Section -->
       <section class="practical-recipes-section">
         <div class="practical-recipes-header">
           <div>
             <h2 class="practical-recipes-title">
-              <span>🍳</span> Practical LID / RAI Compliant Dishes
+              <span>🍳</span> ${escapeHtml(currentDietData.title)}
             </h2>
             <p class="practical-recipes-subtitle">
-              Curated home-cooked meals strictly &lt;5 mcg iodine per serving. Free of commercial dairy, sea salt, egg yolks, and bouillons.
+              ${escapeHtml(currentDietData.description)}
             </p>
           </div>
           <span class="recipe-count-badge">${filteredRecipes.length} Dishes</span>
@@ -155,11 +164,21 @@ export function renderCookModeTab(state) {
 }
 
 function renderRecipeCard(recipe) {
+  const title = recipe.name || recipe.title || 'Curated Meal';
+  const category = recipe.type || recipe.category || 'Mains';
+  const tag = recipe.tag || recipe.clinicalBadge || 'Protocol Compliant';
+  const instructions = recipe.instructions || [
+    'Prepare fresh ingredients according to dietary guidelines.',
+    'Cook gently over medium heat until tender.',
+    'Serve immediately with protocol-compliant sides.'
+  ];
+  const clinicalNote = recipe.clinicalNote || 'Specifically formulated to comply with the active dietary guidelines.';
+
   return `
     <article class="recipe-card" id="recipe-${recipe.id}">
       <div class="recipe-card-header">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px;">
-          <span class="recipe-category-pill">${escapeHtml(recipe.category)}</span>
+          <span class="recipe-category-pill">${escapeHtml(category)}</span>
           <div class="recipe-time-tag">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.8;">
               <circle cx="12" cy="12" r="10"></circle>
@@ -168,12 +187,12 @@ function renderRecipeCard(recipe) {
             <span>Prep: ${escapeHtml(recipe.prepTime)} • Cook: ${escapeHtml(recipe.cookTime)}</span>
           </div>
         </div>
-        <h3 class="recipe-card-title">${escapeHtml(recipe.title)}</h3>
+        <h3 class="recipe-card-title">${escapeHtml(title)}</h3>
         <div class="recipe-clinical-badge">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
           </svg>
-          <span>${escapeHtml(recipe.clinicalBadge)}</span>
+          <span>${escapeHtml(tag)}</span>
         </div>
       </div>
 
@@ -201,7 +220,7 @@ function renderRecipeCard(recipe) {
             <span>Preparation Directions</span>
           </div>
           <ol class="recipe-directions-list">
-            ${recipe.instructions.map(step => `<li>${escapeHtml(step)}</li>`).join('')}
+            ${instructions.map(step => `<li>${escapeHtml(step)}</li>`).join('')}
           </ol>
         </div>
 
@@ -215,7 +234,7 @@ function renderRecipeCard(recipe) {
             </svg>
             <span class="callout-title">Clinical Protocol Rationale</span>
           </div>
-          <p class="callout-text">${escapeHtml(recipe.clinicalNote)}</p>
+          <p class="callout-text">${escapeHtml(clinicalNote)}</p>
         </div>
       </div>
 

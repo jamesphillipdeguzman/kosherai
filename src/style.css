@@ -470,6 +470,21 @@ html.dark .brand-subtitle,
   pointer-events: none;
 }
 
+/* Explicit Select Option Contrast Fix for Native Dropdowns & Popovers */
+select, .header-diet-dropdown, .form-input {
+  color-scheme: light dark;
+}
+
+select option, .header-diet-dropdown option, .form-input option {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
+html.light select option, html.light .header-diet-dropdown option, html.light .form-input option {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;

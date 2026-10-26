@@ -49,7 +49,7 @@ export function renderItemDetailModal(item, activeDiet = 'lid') {
             Overview
           </h4>
           <p style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.5;">
-            ${escapeHtml(item.description)}
+            ${escapeHtml(item.dietaryStatus?.[activeDiet]?.note || item.generalDescription || item.description || info.note || '')}
           </p>
         </div>
 

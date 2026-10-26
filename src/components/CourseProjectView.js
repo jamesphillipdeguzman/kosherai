@@ -29,6 +29,7 @@ import {
 import { compressImage, scanSupermarketReceipt } from '../services/aiVerification.js';
 import { LID_DATABASE, STATUS } from '../data/lidDatabase.js';
 import { getDietProfile } from '../data/dietProfiles.js';
+import { DIET_RECIPES } from '../data/dietRecipes.js';
 import lidRecipes from '../data/lidRecipes.json';
 
 export function renderCourseProjectView(state) {
@@ -1198,6 +1199,9 @@ function renderFoodWasteModal(state) {
  */
 function renderMealPlanModal(state) {
   const onHand = getGroceryItems();
+  const activeDiet = state.activeDiet || 'lid';
+  const dietProfile = getDietProfile(activeDiet);
+  const activeMeals = DIET_RECIPES[activeDiet]?.meals || lidRecipes;
 
   return `
     <div class="modal-overlay" id="mealplan-modal-overlay">
@@ -1249,13 +1253,13 @@ function renderMealPlanModal(state) {
             </div>
           </div>
 
-          <!-- Suggested LID Recipes quick tags -->
+          <!-- Suggested Diet Recipes quick tags -->
           <div style="margin-bottom: 12px;">
-            <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px;">Quick LID Recipes:</div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px;">Quick ${escapeHtml(dietProfile.shortName)} Meals:</div>
             <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-              ${lidRecipes.slice(0, 4).map(r => `
-                <button type="button" class="quick-dish-chip" data-recipe-title="${escapeHtml(r.title)}">
-                  🟢 ${escapeHtml(r.title)}
+              ${activeMeals.slice(0, 4).map(r => `
+                <button type="button" class="quick-dish-chip" data-recipe-title="${escapeHtml(r.name || r.title)}">
+                  🟢 ${escapeHtml(r.name || r.title)}
                 </button>
               `).join('')}
             </div>
