@@ -824,13 +824,18 @@ function renderReceiptScanModal(state) {
     <div class="modal-overlay" id="receipt-modal-overlay">
       <div class="modal-content receipt-modal-large" role="dialog" aria-modal="true">
         <div class="modal-header">
-          <div>
+          <div style="flex: 1; padding-right: 12px; min-width: 0;">
             <h2 class="modal-title">Intelligent Supermarket Receipt Scanner</h2>
-            <div style="font-size: 0.78rem; color: var(--text-secondary);">
+            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">
               AI document OCR extracts store details, itemized purchases, and final amount paid for side-by-side verification.
             </div>
           </div>
-          <button class="btn-icon" id="close-receipt-modal-btn">✕</button>
+          <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+            <button type="button" class="btn-icon theme-toggle-btn" id="receipt-theme-toggle-btn" title="Toggle Light / Dark Theme" aria-label="Toggle Light / Dark Theme">
+              <span id="receipt-theme-icon">☀️</span>
+            </button>
+            <button type="button" class="btn-icon" id="close-receipt-modal-btn" title="Close modal" aria-label="Close modal">✕</button>
+          </div>
         </div>
 
         ${isScanning ? `
@@ -843,9 +848,9 @@ function renderReceiptScanModal(state) {
             </div>
           </div>
         ` : `
-          <div class="receipt-scanner-split">
-            <!-- Left Pane: Image & Capture Controls -->
-            <div class="split-left-pane">
+          <div class="receipt-scanner-split flex flex-col md:grid md:grid-cols-12 gap-6">
+            <!-- Left Pane / Upload Card (Mobile: full width on top, Desktop: 5 cols) -->
+            <div class="split-left-pane w-full md:col-span-5">
               ${state.receiptPreviewUrl ? `
                 <div class="receipt-image-zoom-box">
                   <img src="${state.receiptPreviewUrl}" alt="Scanned Receipt Preview" id="receipt-zoom-img" />
@@ -853,74 +858,76 @@ function renderReceiptScanModal(state) {
               ` : `
                 <div class="receipt-dropzone" id="receipt-dropzone">
                   <div class="drop-icon">📷</div>
-                  <div style="font-weight: 700; margin-bottom: 4px;">Take Photo or Upload Receipt</div>
-                  <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 12px;">Supports JPG, PNG from mobile camera</div>
+                  <div style="font-weight: 700; margin-bottom: 4px; font-size: 1rem;">Take Photo or Upload Receipt</div>
+                  <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 16px;">Supports JPG, PNG from mobile camera</div>
                   <input type="file" id="receipt-file-input" accept="image/*" capture="environment" style="display: none;" />
-                  <button class="btn-primary" id="trigger-receipt-file-btn">Choose File or Camera</button>
+                  <button type="button" class="btn-primary" id="trigger-receipt-file-btn" style="min-height: 44px; padding: 0 20px;">Choose File or Camera</button>
                 </div>
               `}
 
               ${state.receiptPreviewUrl ? `
-                <div style="margin-top: 10px; display: flex; gap: 8px;">
-                  <button class="btn-secondary" id="reupload-receipt-btn" style="flex: 1; font-size: 0.8rem;">Change Photo</button>
+                <div style="margin-top: 12px; display: flex; gap: 8px;">
+                  <button type="button" class="btn-secondary" id="reupload-receipt-btn" style="flex: 1; min-height: 44px; font-size: 0.85rem;">🔄 Retake or Change Photo</button>
                 </div>
               ` : ''}
             </div>
 
-            <!-- Right Pane: Extracted Editable Fields -->
-            <div class="split-right-pane">
+            <!-- Right Pane: Extracted Editable Fields (Mobile: stacked below, Desktop: 7 cols) -->
+            <div class="split-right-pane w-full md:col-span-7">
               ${mathAlertHtml}
               ${duplicateAlertHtml}
 
-              <form id="receipt-verification-form">
-                <div class="form-row-grid">
+              <form id="receipt-verification-form" class="flex flex-col gap-4">
+                <!-- 1. Store Name & Purchase Date (2-column responsive subgrid) -->
+                <div class="form-row-grid grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div class="form-group">
                     <label class="form-label" for="edit-store-name">Store Name</label>
-                    <input type="text" id="edit-store-name" class="form-input" value="${escapeHtml(scanData?.storeName || 'SM Supermarket')}" required />
+                    <input type="text" id="edit-store-name" class="form-input w-full min-h-[44px]" value="${escapeHtml(scanData?.storeName || 'SM Supermarket')}" required />
                   </div>
                   <div class="form-group">
                     <label class="form-label" for="edit-purchase-date">Purchase Date</label>
-                    <input type="date" id="edit-purchase-date" class="form-input" value="${scanData?.purchaseDate || new Date().toISOString().split('T')[0]}" required />
+                    <input type="date" id="edit-purchase-date" class="form-input w-full min-h-[44px]" value="${scanData?.purchaseDate || new Date().toISOString().split('T')[0]}" required />
                   </div>
                 </div>
 
-                <!-- CRITICAL FIELD: Whole-Grocery Scale Weight -->
-                <div class="form-group highlight-box">
-                  <label class="form-label" for="edit-scale-weight" style="color: var(--accent-cyan); font-weight: 800;">
+                <!-- 2. CRITICAL FIELD: Whole-Grocery Scale Weight Card (Full width, p-4, clean unit suffix) -->
+                <div class="form-group highlight-box w-full p-4 rounded-xl">
+                  <label class="form-label" for="edit-scale-weight" style="font-weight: 800; display: block; margin-bottom: 6px;">
                     ⚖️ Whole-Grocery Scale Weight (kg)
                   </label>
-                  <div style="display: flex; gap: 8px; align-items: center;">
-                    <input type="number" step="0.01" min="0" id="edit-scale-weight" class="form-input" style="font-size: 1.1rem; font-weight: 800; font-family: var(--font-mono); color: var(--accent-cyan);" placeholder="e.g. 5.85" value="${scanData?.totalScaleWeightKg || ''}" required />
-                    <span style="font-weight: 700; color: var(--text-muted);">kg</span>
+                  <div class="relative w-full flex items-center" style="position: relative;">
+                    <input type="number" step="0.01" min="0" id="edit-scale-weight" class="form-input w-full min-h-[44px]" style="font-size: 1.15rem; font-weight: 800; font-family: var(--font-mono); padding-right: 48px;" placeholder="e.g. 5.85" value="${scanData?.totalScaleWeightKg || ''}" required />
+                    <span class="scale-unit-badge" style="position: absolute; right: 14px; font-weight: 800; font-size: 0.9rem; pointer-events: none; opacity: 0.7;">kg</span>
                   </div>
-                  <div class="form-help">
-                    Weigh your full grocery haul on your kitchen/luggage scale before unpacking. Kept separate from receipt item weights.
+                  <div class="form-help" style="margin-top: 6px; font-size: 0.75rem; line-height: 1.4;">
+                    Weigh your full grocery haul on your kitchen/luggage scale before unpacking. Kept separate from receipt item weights for academic rigor.
                   </div>
                 </div>
 
-                <!-- Final Amount Paid -->
-                <div class="form-row-grid">
+                <!-- 3. Final Amount Paid & Trip Type (2-column responsive subgrid) -->
+                <div class="form-row-grid grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div class="form-group">
                     <label class="form-label" for="edit-total-amount">Final Amount Paid (₱ PHP)</label>
-                    <input type="number" step="0.01" min="0" id="edit-total-amount" class="form-input" style="font-size: 1.1rem; font-weight: 800; font-family: var(--font-mono);" value="${scanData?.totalAmountPaid || 0}" required />
-                    <div class="form-help">Recorded ONCE as a household food expense.</div>
+                    <input type="number" step="0.01" min="0" id="edit-total-amount" class="form-input w-full min-h-[44px]" style="font-size: 1.1rem; font-weight: 800; font-family: var(--font-mono);" value="${scanData?.totalAmountPaid || 0}" required />
+                    <div class="form-help" style="margin-top: 4px; font-size: 0.72rem;">Recorded ONCE as a household food expense.</div>
                   </div>
                   <div class="form-group">
                     <label class="form-label" for="edit-trip-type">Trip Type</label>
-                    <select id="edit-trip-type" class="form-input">
+                    <select id="edit-trip-type" class="form-input w-full min-h-[44px]">
                       <option value="Supermarket">Supermarket</option>
                       <option value="Wet Market / Palengke">Wet Market / Palengke</option>
                       <option value="Specialty Grocery">Specialty Grocery</option>
                       <option value="Convenience Store">Convenience Store</option>
                     </select>
+                    <div class="form-help" style="margin-top: 4px; font-size: 0.72rem;">Classification for shopping venue comparison.</div>
                   </div>
                 </div>
 
-                <!-- Extracted Items Table -->
+                <!-- 4. Extracted Items Table -->
                 <div class="extracted-items-box">
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <span style="font-weight: 700; font-size: 0.85rem;">Extracted Items (${(scanData?.items || []).length}):</span>
-                    <button type="button" class="btn-text" id="add-receipt-item-row" style="color: var(--safe-green); font-size: 0.78rem;">
+                    <button type="button" class="btn-text" id="add-receipt-item-row" style="color: var(--safe-green); font-size: 0.8rem; font-weight: 600;">
                       ➕ Add Item Row
                     </button>
                   </div>
@@ -930,11 +937,11 @@ function renderReceiptScanModal(state) {
                       <thead>
                         <tr>
                           <th>Item Name</th>
-                          <th>Qty</th>
-                          <th>Unit</th>
-                          <th>Price (₱)</th>
-                          <th>Line Total</th>
-                          <th></th>
+                          <th style="width: 60px;">Qty</th>
+                          <th style="width: 60px;">Unit</th>
+                          <th style="width: 80px;">Price (₱)</th>
+                          <th style="width: 85px;">Line Total</th>
+                          <th style="width: 36px;"></th>
                         </tr>
                       </thead>
                       <tbody id="receipt-items-tbody">
@@ -944,29 +951,29 @@ function renderReceiptScanModal(state) {
                               <input type="text" class="table-input item-name-val" value="${escapeHtml(item.name)}" required />
                             </td>
                             <td>
-                              <input type="number" step="0.1" min="0.1" class="table-input item-qty-val" value="${item.quantity || 1}" style="width: 50px;" />
+                              <input type="number" step="0.1" min="0.1" class="table-input item-qty-val" value="${item.quantity || 1}" style="width: 100%; text-align: center;" />
                             </td>
                             <td>
-                              <input type="text" class="table-input item-unit-val" value="${escapeHtml(item.unit || 'pcs')}" style="width: 50px;" />
+                              <input type="text" class="table-input item-unit-val" value="${escapeHtml(item.unit || 'pcs')}" style="width: 100%; text-align: center;" />
                             </td>
                             <td>
-                              <input type="number" step="0.01" class="table-input item-price-val" value="${item.unitPrice || item.totalPrice || 0}" style="width: 70px;" />
+                              <input type="number" step="0.01" class="table-input item-price-val" value="${item.unitPrice || item.totalPrice || 0}" style="width: 100%; text-align: right;" />
                             </td>
                             <td>
-                              <input type="number" step="0.01" class="table-input item-total-val" value="${item.totalPrice || item.unitPrice || 0}" style="width: 80px;" />
+                              <input type="number" step="0.01" class="table-input item-total-val" value="${item.totalPrice || item.unitPrice || 0}" style="width: 100%; text-align: right;" />
                             </td>
-                            <td>
+                            <td style="text-align: center;">
                               <button type="button" class="btn-icon remove-item-row-btn" title="Remove row">✕</button>
                             </td>
                           </tr>
                         `).join('') : `
                           <tr data-row-idx="0">
                             <td><input type="text" class="table-input item-name-val" placeholder="Chicken Breast" required /></td>
-                            <td><input type="number" step="0.1" class="table-input item-qty-val" value="1" style="width: 50px;" /></td>
-                            <td><input type="text" class="table-input item-unit-val" value="kg" style="width: 50px;" /></td>
-                            <td><input type="number" step="0.01" class="table-input item-price-val" placeholder="0.00" style="width: 70px;" /></td>
-                            <td><input type="number" step="0.01" class="table-input item-total-val" placeholder="0.00" style="width: 80px;" /></td>
-                            <td><button type="button" class="btn-icon remove-item-row-btn">✕</button></td>
+                            <td><input type="number" step="0.1" class="table-input item-qty-val" value="1" style="width: 100%; text-align: center;" /></td>
+                            <td><input type="text" class="table-input item-unit-val" value="kg" style="width: 100%; text-align: center;" /></td>
+                            <td><input type="number" step="0.01" class="table-input item-price-val" placeholder="0.00" style="width: 100%; text-align: right;" /></td>
+                            <td><input type="number" step="0.01" class="table-input item-total-val" placeholder="0.00" style="width: 100%; text-align: right;" /></td>
+                            <td style="text-align: center;"><button type="button" class="btn-icon remove-item-row-btn">✕</button></td>
                           </tr>
                         `}
                       </tbody>
@@ -975,8 +982,8 @@ function renderReceiptScanModal(state) {
                 </div>
 
                 <div class="modal-footer-actions">
-                  <button type="button" class="btn-secondary" id="cancel-receipt-modal-btn">Cancel</button>
-                  <button type="submit" class="btn-primary" id="save-receipt-trip-btn">💾 Save Verified Shopping Trip</button>
+                  <button type="button" class="btn-secondary" id="cancel-receipt-modal-btn" style="min-height: 44px; padding: 0 18px;">Cancel</button>
+                  <button type="submit" class="btn-primary" id="save-receipt-trip-btn" style="min-height: 44px; padding: 0 22px;">💾 Save Verified Shopping Trip</button>
                 </div>
               </form>
             </div>

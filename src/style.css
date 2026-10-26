@@ -2579,40 +2579,170 @@ main.app-container {
   border-top: 1px solid var(--border-color);
 }
 
-/* Side-by-Side Receipt Scanner Modal */
+/* Side-by-Side & Mobile Responsive Receipt Scanner Modal */
 .receipt-modal-large {
-  max-width: 960px !important;
-  width: 94vw;
+  max-width: 1024px !important;
+  width: 95vw;
   max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  overflow: hidden;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
+/* Light & Dark Theme Variations for Receipt Modal */
+html.dark .receipt-modal-large,
+:root:not(.light) .receipt-modal-large {
+  background: #0b1329;
+  border: 1px solid rgba(20, 184, 166, 0.3);
+  color: #ffffff;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+}
+
+html.light .receipt-modal-large {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+html.light .receipt-modal-large .modal-header {
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+html.light .receipt-modal-large .modal-title {
+  color: #0f172a;
+}
+
+html.light .receipt-modal-large .form-label {
+  color: #334155;
+}
+
+html.light .receipt-modal-large .form-input,
+html.light .receipt-modal-large select.form-input {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+}
+
+html.light .receipt-modal-large .form-input:focus,
+html.light .receipt-modal-large select.form-input:focus {
+  border-color: #0d9488;
+  box-shadow: 0 0 0 1px #0d9488;
+}
+
+html.light .receipt-modal-large .highlight-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+html.light .receipt-modal-large .highlight-box .form-label {
+  color: #0d9488;
+}
+
+html.light .receipt-modal-large .receipt-dropzone {
+  background: #ffffff;
+  border: 2px dashed rgba(13, 148, 136, 0.4);
+  color: #0f172a;
+}
+
+html.light .receipt-modal-large .receipt-dropzone .drop-icon {
+  filter: none;
+}
+
+html.light .receipt-modal-large .receipt-items-table-wrapper {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+
+html.light .receipt-modal-large .receipt-items-table th {
+  background: #f1f5f9;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+html.light .receipt-modal-large .receipt-items-table td {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+html.light .receipt-modal-large .table-input {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+}
+
+html.light .receipt-modal-large .table-input:focus {
+  border-color: #0d9488;
+}
+
+html.light .receipt-modal-large .modal-footer-actions {
+  border-top: 1px solid #e2e8f0;
+}
+
+html.light .receipt-modal-large .btn-secondary {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+html.light .receipt-modal-large .btn-secondary:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+html.light .receipt-modal-large .theme-toggle-btn {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+/* 1. Layout & Mobile Responsiveness: Single-column on mobile (<md), 12-col grid on desktop (>=md) */
 .receipt-scanner-split {
-  display: grid;
-  grid-template-columns: 1fr 1.3fr;
-  gap: 20px;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 16px;
+  overflow-y: auto;
   max-height: calc(88vh - 70px);
 }
 
-@media (max-width: 768px) {
+@media (min-width: 768px) {
   .receipt-scanner-split {
-    grid-template-columns: 1fr;
-    max-height: 80vh;
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 24px;
+    padding: 24px;
+    overflow: hidden;
+  }
+
+  .split-left-pane {
+    grid-column: span 5 / span 5;
+    height: 100%;
+  }
+
+  .split-right-pane {
+    grid-column: span 7 / span 7;
     overflow-y: auto;
+    max-height: calc(88vh - 120px);
+    padding-right: 4px;
   }
 }
 
 .split-left-pane {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  width: 100%;
 }
 
 .receipt-image-zoom-box {
   background: #000;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
-  height: 480px;
+  min-height: 280px;
+  max-height: 440px;
   overflow: auto;
   display: flex;
   align-items: center;
@@ -2621,20 +2751,28 @@ main.app-container {
 
 .receipt-image-zoom-box img {
   max-width: 100%;
+  max-height: 100%;
   display: block;
+  object-fit: contain;
 }
 
 .receipt-dropzone {
   border: 2px dashed rgba(6, 182, 212, 0.4);
   background: rgba(15, 23, 42, 0.5);
   border-radius: var(--radius-md);
-  padding: 40px 20px;
+  padding: 36px 20px;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 380px;
+  min-height: 280px;
+}
+
+@media (min-width: 768px) {
+  .receipt-dropzone {
+    min-height: 380px;
+  }
 }
 
 .drop-icon {
@@ -2643,32 +2781,68 @@ main.app-container {
 }
 
 .split-right-pane {
-  overflow-y: auto;
-  padding-right: 6px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  width: 100%;
 }
 
+/* 2. Responsive 2-column subgrid for paired inputs */
 .form-row-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: 1fr;
+  gap: 16px;
 }
 
+@media (min-width: 640px) {
+  .form-row-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Touch-friendly full-width inputs & selects */
+.form-input,
+select.form-input {
+  width: 100% !important;
+  min-height: 44px !important;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  border-radius: var(--radius-sm);
+  box-sizing: border-box;
+}
+
+/* Ensure select dropdowns never truncate options like "Supermarket" */
+select.form-input {
+  appearance: auto;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+/* 2. Whole-Grocery Scale Weight Card Polish */
 .highlight-box {
-  background: rgba(6, 182, 212, 0.08);
-  border: 1px solid rgba(6, 182, 212, 0.35);
-  padding: 12px;
-  border-radius: var(--radius-md);
+  width: 100%;
+  padding: 16px !important;
+  border-radius: 14px;
+  box-sizing: border-box;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(20, 184, 166, 0.35);
+}
+
+.highlight-box .scale-unit-badge {
+  color: var(--text-muted);
+}
+
+html.light .highlight-box .scale-unit-badge {
+  color: #64748b;
 }
 
 .alert-box {
-  padding: 10px 14px;
+  padding: 12px 14px;
   border-radius: var(--radius-sm);
-  font-size: 0.8rem;
-  line-height: 1.4;
-  margin-bottom: 10px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin-bottom: 8px;
 }
 
 .alert-box.warning {
@@ -2683,8 +2857,9 @@ main.app-container {
   color: #f87171;
 }
 
+/* Extracted items table */
 .receipt-items-table-wrapper {
-  max-height: 200px;
+  max-height: 220px;
   overflow-y: auto;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
@@ -2693,31 +2868,32 @@ main.app-container {
 .receipt-items-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
 }
 
 .receipt-items-table th {
   background: var(--bg-card-subtle);
-  padding: 6px 8px;
+  padding: 8px 10px;
   color: var(--text-secondary);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   text-align: left;
   border-bottom: 1px solid var(--border-color);
 }
 
 .receipt-items-table td {
-  padding: 4px 6px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .table-input {
   width: 100%;
+  min-height: 36px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 4px 6px;
+  padding: 6px 8px;
   border-radius: 4px;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
 }
 
 .table-input:focus {
@@ -2728,10 +2904,15 @@ main.app-container {
 .modal-footer-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 14px;
-  padding-top: 12px;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
   border-top: 1px solid var(--border-color);
+}
+
+.modal-footer-actions button {
+  min-height: 44px;
 }
 
 /* Food Waste & Meal Planner */

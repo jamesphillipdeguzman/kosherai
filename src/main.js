@@ -41,7 +41,15 @@ import {
   PROJECT_CONFIG
 } from './services/courseProjectStorage.js';
 
-import { LID_DATABASE } from './data/lidDatabase.js';
+// Theme Initialization (Default Dark, persists in localStorage)
+const initialTheme = localStorage.getItem('theme') || 'dark';
+if (initialTheme === 'light') {
+  document.documentElement.classList.remove('dark');
+  document.documentElement.classList.add('light');
+} else {
+  document.documentElement.classList.add('dark');
+  document.documentElement.classList.remove('light');
+}
 
 // Global Reactive State
 const state = {
@@ -797,6 +805,29 @@ Filtered water`;
   };
   if (openReceiptScannerBtn) openReceiptScannerBtn.addEventListener('click', handleOpenReceiptScanner);
   if (emptyScanBtn) emptyScanBtn.addEventListener('click', handleOpenReceiptScanner);
+
+  // Receipt Scanner Theme Toggle (Sun/Moon)
+  const receiptThemeToggleBtn = document.querySelector('#receipt-theme-toggle-btn');
+  const receiptThemeIcon = document.querySelector('#receipt-theme-icon');
+  const isDarkCurrent = document.documentElement.classList.contains('dark') || !document.documentElement.classList.contains('light');
+  if (receiptThemeIcon) {
+    receiptThemeIcon.textContent = isDarkCurrent ? '☀️' : '🌙';
+  }
+  if (receiptThemeToggleBtn) {
+    receiptThemeToggleBtn.addEventListener('click', () => {
+      const isDark = document.documentElement.classList.contains('dark') || !document.documentElement.classList.contains('light');
+      if (isDark) {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+        localStorage.setItem('theme', 'light');
+      } else {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+        localStorage.setItem('theme', 'dark');
+      }
+      render();
+    });
+  }
 
   // Close Receipt Scanner Modal
   const closeReceiptModalBtn = document.querySelector('#close-receipt-modal-btn');
