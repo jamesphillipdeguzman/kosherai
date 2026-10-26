@@ -109,7 +109,7 @@ export async function executeScanWorkflow(file, context = {}) {
     }
 
     // 4. Extract text via OCR (or pass the compressed image base64 directly to Gemini Vision multimodal API)
-    state.ocrStatus = { message: 'Running OCR engine on label...' };
+    state.ocrStatus = { message: 'Running PaddleOCR engine on label...' };
     state.ocrProgress = 0.45;
     render();
 

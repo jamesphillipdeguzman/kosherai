@@ -34,5 +34,5 @@ Preparing for RAI therapy requires a strict low-iodine regimen (<50 mcg iodine/d
 - **Framework:** Vanilla JavaScript (ES Modules) + Vite
 - **Styling:** Vanilla CSS design system with medical aesthetic & responsive touch targets
 - **Offline Storage:** Service Worker (`sw.js`) + LocalStorage + Local JSON Database
-- **Vision & AI:** Tesseract.js client OCR + Google Gemini 1.5 Flash API endpoint
+- **Vision & AI:** PaddleOCR (PP-OCRv4 ONNX Runtime Web) + Google Gemini 2.5 Flash Vision API endpoint
 - **PWA:** Web App Manifest (`manifest.webmanifest`)

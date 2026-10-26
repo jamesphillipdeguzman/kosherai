@@ -1,4 +1,5 @@
-// AI Verification & Image Processing Service (Gemini API + Tesseract OCR + Cloudinary)
+// AI Verification & Image Processing Service (Gemini API + PaddleOCR PP-OCRv4 + Cloudinary)
+import { runPaddleOCR, parseReceiptAmount, parseStructuredReceiptText } from './paddleOcrService.js';
 
 /**
  * Compresses an image file client-side before OCR or upload
@@ -41,49 +42,19 @@ export async function compressImage(file, maxWidth = 1200, quality = 0.82) {
 }
 
 /**
- * Client-Side OCR using Tesseract.js (cached by Service Worker)
+ * Client-Side OCR using PaddleOCR v4 (PP-OCRv4 ONNX)
  */
 export async function runClientOCR(imageSource, onProgress = () => { }) {
   try {
-    onProgress({ status: 'loading_tesseract', progress: 0.1, message: 'Initializing OCR engine...' });
-
-    // Check if Tesseract is already on window or load dynamically
-    if (!window.Tesseract) {
-      await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
-    }
-
-    if (!window.Tesseract) {
-      throw new Error('Tesseract OCR library could not be loaded.');
-    }
-
-    onProgress({ status: 'recognizing', progress: 0.3, message: 'Reading ingredient text...' });
-
-    const worker = await window.Tesseract.createWorker('eng');
-
-    // Set logger if available
-    const result = await worker.recognize(imageSource);
-    await worker.terminate();
-
-    onProgress({ status: 'done', progress: 1.0, message: 'OCR extraction complete!' });
-    return result.data.text;
+    const res = await runPaddleOCR(imageSource, onProgress);
+    return typeof res === 'object' && res !== null ? res.rawText : String(res || '');
   } catch (err) {
-    console.warn('OCR error or offline:', err);
+    console.warn('[PaddleOCR] Client OCR error:', err);
     throw err;
   }
 }
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) {
-      return resolve();
-    }
-    const script = document.createElement('script');
-    script.src = src;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`Failed to load ${src}`));
-    document.head.appendChild(script);
-  });
-}
+export { runPaddleOCR, parseReceiptAmount, parseStructuredReceiptText };
 
 /**
  * Safe parser that handles markdown backtick wraps (e.g. ```json ... ```)
@@ -343,9 +314,9 @@ export async function uploadToCloudinary(blob, cloudName, uploadPreset) {
 /**
  * Supermarket Receipt Scanner Orchestration
  * Prioritizes Server-Side Gemini Vision endpoint (/api/receipt-scan) with a 30s timeout window.
- * Prevents premature fallback to local Tesseract OCR.
+ * High-accuracy on-device fallback via PaddleOCR (PP-OCRv4).
  *
- * Fallback to local OCR triggers ONLY if:
+ * Fallback to on-device PaddleOCR triggers ONLY if:
  *  1. The fetch explicitly rejects after the full 30s timeout (err.name === 'AbortError')
  *  2. The device is detected as strictly offline (!navigator.onLine)
  *  3. The API responds with a definitive server error (500/503/400)
@@ -355,8 +326,8 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, cli
 
   // Condition 2: Strict offline check upfront
   if (!isOnline) {
-    console.warn('[ReceiptScan] Device strictly offline. Running on-device OCR fallback...');
-    return await executeLocalOcrFallback(dataUrl, onProgress, 'Offline mode detected: Running on-device OCR fallback...');
+    console.warn('[ReceiptScan] Device strictly offline. Running on-device PaddleOCR fallback...');
+    return await executeLocalOcrFallback(dataUrl, onProgress, 'Switching to on-device PaddleOCR engine...', activeDiet);
   }
 
   // Phased Status Feedback During Processing:
@@ -367,12 +338,12 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, cli
     message: 'Uploading receipt image...'
   });
 
-  // 3s–15s: "✨ Gemini Vision is extracting store items and totals..."
+  // 3s–15s: "✨ Gemini Vision is analyzing receipt items..."
   const timer3s = setTimeout(() => {
     onProgress({
       status: 'ai_vision',
       progress: 0.45,
-      message: '✨ Gemini Vision is extracting store items and totals...'
+      message: '✨ Gemini Vision is analyzing receipt items...'
     });
   }, 3000);
 
@@ -398,7 +369,7 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, cli
   };
 
   let shouldTriggerOcrFallback = false;
-  let ocrFallbackMessage = 'Cloud vision timed out. Falling back to on-device OCR...';
+  let ocrFallbackMessage = 'Switching to on-device PaddleOCR engine...';
 
   // 1. Primary: Server-Side Gemini Vision endpoint (/api/receipt-scan)
   try {
@@ -538,43 +509,43 @@ Return strict JSON:
     }
   }
 
-  // Graceful Client OCR (Tesseract.js) fallback when fallback criteria are met
+  // Graceful Client PaddleOCR (PP-OCRv4) fallback when fallback criteria are met
   if (shouldTriggerOcrFallback) {
-    return await executeLocalOcrFallback(dataUrl, onProgress, ocrFallbackMessage);
+    return await executeLocalOcrFallback(dataUrl, onProgress, ocrFallbackMessage, activeDiet);
   }
 
   throw new Error('Could not scan receipt. Please enter items manually.');
 }
 
 /**
- * Executes local on-device Tesseract OCR fallback
+ * Executes local on-device PaddleOCR fallback
  */
-async function executeLocalOcrFallback(dataUrl, onProgress, statusMessage) {
+async function executeLocalOcrFallback(dataUrl, onProgress, statusMessage, activeDiet = 'lid') {
   try {
     // If and only if it truly fails or times out after 30s, display status message before initializing OCR
     onProgress({
       status: 'ocr_fallback',
       progress: 0.65,
-      message: statusMessage || 'Cloud vision timed out. Falling back to on-device OCR...'
+      message: statusMessage || 'Switching to on-device PaddleOCR engine...'
     });
 
-    const rawOcrText = await runClientOCR(dataUrl, (p) => {
+    const ocrResult = await runPaddleOCR(dataUrl, (p) => {
       onProgress({
         status: 'ocr_fallback',
-        progress: 0.65 + (p.progress * 0.25),
-        message: statusMessage || 'Cloud vision timed out. Falling back to on-device OCR...'
+        progress: 0.65 + ((p.progress || 0.5) * 0.25),
+        message: p.message || statusMessage || 'Switching to on-device PaddleOCR engine...'
       });
     });
 
-    const parsedOffline = parseOfflineReceiptText(rawOcrText);
+    const parsedOffline = parseStructuredReceiptText(ocrResult);
     onProgress({ status: 'populating', progress: 0.95, message: 'Populating receipt items...' });
 
     return normalizeReceiptData({
       ...parsedOffline,
-      rawText: rawOcrText
-    }, 'OFFLINE_TESSERACT_OCR');
+      rawText: ocrResult.rawText
+    }, 'OFFLINE_PADDLE_OCR');
   } catch (ocrErr) {
-    console.error('[ReceiptScan] Local OCR fallback also failed:', ocrErr);
+    console.error('[ReceiptScan] Local PaddleOCR fallback failed:', ocrErr);
     throw new Error('Could not scan receipt. Please enter items manually.');
   }
 }
@@ -673,94 +644,8 @@ export function normalizeReceiptData(data, source = 'GEMINI_VISION') {
 }
 
 /**
- * Heuristic parser for offline raw OCR text with Philippine receipt conventions
+ * Heuristic parser for offline raw OCR text with Philippine receipt conventions (backed by PaddleOCR)
  */
 export function parseOfflineReceiptText(rawText) {
-  const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
-  const items = [];
-  let totalAmountPaid = 0;
-  let storeName = lines[0] ? lines[0].slice(0, 30) : 'SM Supermarket';
-  let purchaseDate = null;
-
-  // Look for date like 2026-10-31 or 10/31/2026 or 31/10/2026
-  const dateMatch = rawText.match(/\b(202[4-9][\-\/]\d{1,2}[\-\/]\d{1,2}|\d{1,2}[\-\/]\d{1,2}[\-\/]202[4-9])\b/);
-  if (dateMatch) {
-    try {
-      const d = new Date(dateMatch[1]);
-      if (!isNaN(d.getTime())) {
-        purchaseDate = d.toISOString().split('T')[0];
-      }
-    } catch {}
-  }
-
-  // Regex matching Philippine receipt line item amounts:
-  // e.g. "NIDO JR MILK POWDER  1,757.50 V" or "CHICKEN BREAST P280.00"
-  const itemPriceRegex = /^(.+?)\s+(?:[₱P]\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?:\s*[A-Za-z])?$/i;
-
-  // Regex matching rows indicating total or payment:
-  // e.g. "TOTAL P1,757.50", "AMOUNT DUE: 1,757.50", "CASH: 2,000.00", "BDO 1,757.50"
-  const totalLineRegex = /(?:TOTAL|AMOUNT\s*DUE|CASH|TENDERED|BDO|BPI|GCASH|MASTERCARD|VISA)\b.*?([₱P]?\s*(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})/i;
-
-  lines.forEach(line => {
-    const lower = line.toLowerCase();
-
-    // Check for totals first
-    if (lower.includes('total') || lower.includes('subtotal') || lower.includes('vat') || lower.includes('cash') || lower.includes('amount due') || lower.includes('tendered')) {
-      if ((lower.includes('total') && !lower.includes('sub')) || lower.includes('amount due') || lower.includes('cash')) {
-        const totalMatch = line.match(totalLineRegex);
-        if (totalMatch && totalMatch[1]) {
-          const parsed = sanitizeCurrency(totalMatch[1]);
-          if (parsed > 0 && (totalAmountPaid === 0 || lower.includes('total'))) {
-            totalAmountPaid = parsed;
-          }
-        }
-      }
-      return;
-    }
-
-    // Match line item
-    const match = line.match(itemPriceRegex);
-    if (match) {
-      const name = match[1].replace(/^[0-9\*\#\-\.]+\s*/, '').trim(); // Strip item indexes
-      const priceStr = match[2];
-      const price = sanitizeCurrency(priceStr);
-
-      if (name.length > 2 && price > 0 && price < 100000) {
-        items.push({
-          id: items.length + 1,
-          name,
-          description: name,
-          rawReceiptText: line,
-          qty: 1,
-          quantity: 1,
-          unit: 'pcs',
-          price,
-          unitPrice: price,
-          total: price,
-          totalPrice: price,
-          lineTotal: price,
-          weightGrams: null,
-          discount: 0
-        });
-      }
-    }
-  });
-
-  if (totalAmountPaid === 0 && items.length > 0) {
-    totalAmountPaid = Math.round(items.reduce((sum, i) => sum + i.totalPrice, 0) * 100) / 100;
-  }
-
-  return {
-    storeName,
-    purchaseDate,
-    items,
-    subtotal: totalAmountPaid,
-    discounts: 0,
-    tax: 0,
-    totalAmountPaid,
-    uncertainFields: ['items', 'totalAmountPaid'],
-    mathValid: true,
-    discrepancyNote: 'Parsed via offline OCR. Please verify all fields.',
-    rawText
-  };
+  return parseStructuredReceiptText(rawText);
 }

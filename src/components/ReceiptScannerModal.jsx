@@ -420,7 +420,7 @@ export default function ReceiptScannerModal({
                   <div className="active-scanning-overlay">
                     <div className="w-12 h-12 rounded-full border-4 border-teal-500/20 border-t-teal-500 animate-spin mb-3" />
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 text-xs font-semibold mb-2">
-                      <span className="animate-pulse">✨</span> Gemini Vision Active
+                      <span className="animate-pulse">{scanStatusMsg?.includes('PaddleOCR') ? '⚡' : '✨'}</span> {scanStatusMsg?.includes('PaddleOCR') ? 'PaddleOCR Engine Active' : 'Gemini Vision Active'}
                     </div>
                     <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">
                       Analyzing Supermarket Receipt...

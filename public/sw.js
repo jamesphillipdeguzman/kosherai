@@ -67,8 +67,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for external CDN resources like Tesseract scripts/fonts
-  if (url.hostname.includes('jsdelivr.net') || url.hostname.includes('googleapis.com') || url.hostname.includes('gstatic.com')) {
+  // Cache-first for external CDN resources like ONNX runtime, PaddleOCR models, and fonts
+  if (url.hostname.includes('jsdelivr.net') || url.hostname.includes('huggingface.co') || url.hostname.includes('googleapis.com') || url.hostname.includes('gstatic.com')) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
         if (cached) return cached;
