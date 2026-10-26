@@ -553,6 +553,43 @@ async function executeLocalOcrFallback(dataUrl, onProgress, statusMessage, activ
 // Convenient alias for receipt scanning orchestration
 export const scanReceipt = scanSupermarketReceipt;
 
+/**
+ * Manually trigger direct on-device PaddleOCR processing flow without calling /api/receipt-scan.
+ * Parses raw text into structured Philippine receipt schema with proper amount and item sanitization.
+ *
+ * @param {string|Blob|File|HTMLCanvasElement} imageSource
+ * @param {Function} onProgress
+ * @returns {Promise<Object>}
+ */
+export async function scanReceiptWithPaddleOCR(imageSource, onProgress = () => {}) {
+  onProgress({
+    status: 'paddle_manual',
+    progress: 0.15,
+    message: '⚡ Running local PaddleOCR on receipt...'
+  });
+
+  try {
+    const ocrResult = await runPaddleOCR(imageSource, (p) => {
+      onProgress({
+        status: 'paddle_manual',
+        progress: 0.15 + ((p.progress || 0.5) * 0.75),
+        message: p.message || '⚡ Running local PaddleOCR on receipt...'
+      });
+    });
+
+    const parsedOffline = parseStructuredReceiptText(ocrResult);
+    onProgress({ status: 'populating', progress: 0.95, message: 'Populating receipt items...' });
+
+    return normalizeReceiptData({
+      ...parsedOffline,
+      rawText: ocrResult.rawText
+    }, 'OFFLINE_PADDLE_OCR');
+  } catch (err) {
+    console.error('[ReceiptScan] Direct PaddleOCR invocation failed:', err);
+    throw new Error('On-device OCR failed to read receipt. Please enter items manually.');
+  }
+}
+
 
 /**
  * Sanitizes currency values for Philippine receipts.

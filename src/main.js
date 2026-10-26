@@ -14,7 +14,7 @@ import { renderItemDetailModal } from './components/ItemDetailModal.js';
 import { renderCourseProjectView } from './components/CourseProjectView.js';
 
 import { searchDatabase, analyzeIngredients, analyzeRecipe } from './services/ruleEngine.js';
-import { compressImage, runClientOCR, verifyWithGeminiAI, scanSupermarketReceipt } from './services/aiVerification.js';
+import { compressImage, runClientOCR, verifyWithGeminiAI, scanSupermarketReceipt, scanReceiptWithPaddleOCR } from './services/aiVerification.js';
 import {
   getSettings,
   saveSettings,
@@ -896,6 +896,8 @@ Filtered water`;
     state.scannedReceiptData = null;
     state.receiptPreviewUrl = null;
     state.receiptScanning = false;
+    state.receiptScanningEngine = null;
+    state.ocrStatusBadge = null;
     render();
   };
   if (openReceiptScannerBtn) openReceiptScannerBtn.addEventListener('click', handleOpenReceiptScanner);
@@ -933,6 +935,8 @@ Filtered water`;
     state.receiptModalOpen = false;
     state.scannedReceiptData = null;
     state.receiptScanning = false;
+    state.receiptScanningEngine = null;
+    state.ocrStatusBadge = null;
     render();
   };
   if (closeReceiptModalBtn) closeReceiptModalBtn.addEventListener('click', handleCloseReceiptModal);
@@ -944,6 +948,9 @@ Filtered water`;
   const receiptFileInput = document.querySelector('#receipt-file-input');
 
   const handleRetakeReceiptPhoto = () => {
+    state.receiptScanning = false;
+    state.receiptScanningEngine = null;
+    state.ocrStatusBadge = null;
     if (receiptFileInput) {
       receiptFileInput.value = ''; // Reset cached file value so change event always fires
       receiptFileInput.click();    // Programmatically trigger camera/file picker
@@ -1006,6 +1013,97 @@ Filtered water`;
           totalAmountPaid: 0,
           totalScaleWeightKg: 0
         };
+        render();
+      }
+    });
+  }
+
+  // Secondary Action: Force Manual Local PaddleOCR Scan (bypasses /api/receipt-scan)
+  const triggerManualPaddleBtn = document.querySelector('#trigger-manual-paddle-btn');
+  if (triggerManualPaddleBtn) {
+    triggerManualPaddleBtn.addEventListener('click', async () => {
+      if (!state.receiptPreviewUrl || state.receiptScanning) return;
+
+      try {
+        state.receiptScanning = true;
+        state.receiptScanningEngine = 'paddle';
+        state.receiptProgress = 0.15;
+        state.receiptStatusMsg = '⚡ Running local PaddleOCR on receipt...';
+        state.ocrStatusBadge = null;
+        render();
+
+        const result = await scanReceiptWithPaddleOCR(state.receiptPreviewUrl, (p) => {
+          state.receiptProgress = p.progress;
+          state.receiptStatusMsg = p.message;
+          const statusTextEl = document.querySelector('#scan-status-text');
+          if (statusTextEl) statusTextEl.textContent = p.message;
+          const fill = document.querySelector('.progress-bar-fill');
+          if (fill) fill.style.width = Math.round(p.progress * 100) + '%';
+        });
+
+        state.scannedReceiptData = result;
+        state.receiptScanning = false;
+        state.receiptScanningEngine = null;
+        state.ocrStatusBadge = 'Scanned with on-device PaddleOCR';
+        render();
+
+        setTimeout(() => {
+          state.ocrStatusBadge = null;
+          render();
+        }, 5000);
+      } catch (err) {
+        console.error('Direct PaddleOCR scan error:', err);
+        alert('Local PaddleOCR could not extract text from receipt. You can adjust the image or enter items manually.');
+        state.receiptScanning = false;
+        state.receiptScanningEngine = null;
+        render();
+      }
+    });
+  }
+
+  // Re-scan with Gemini Vision
+  const rescanGeminiBtn = document.querySelector('#rescan-gemini-btn');
+  if (rescanGeminiBtn) {
+    rescanGeminiBtn.addEventListener('click', async () => {
+      if (!state.receiptPreviewUrl || state.receiptScanning) return;
+
+      try {
+        state.receiptScanning = true;
+        state.receiptScanningEngine = 'gemini';
+        state.receiptProgress = 0.15;
+        state.receiptStatusMsg = '✨ Gemini Vision is analyzing receipt items...';
+        state.ocrStatusBadge = null;
+        render();
+
+        const result = await scanSupermarketReceipt(
+          state.receiptPreviewUrl,
+          (p) => {
+            state.receiptProgress = p.progress;
+            state.receiptStatusMsg = p.message;
+            const statusTextEl = document.querySelector('#scan-status-text');
+            if (statusTextEl) statusTextEl.textContent = p.message;
+            const fill = document.querySelector('.progress-bar-fill');
+            if (fill) fill.style.width = Math.round(p.progress * 100) + '%';
+          },
+          state.settings?.geminiApiKey,
+          state.activeDiet || 'lid'
+        );
+
+        state.scannedReceiptData = result;
+        state.receiptScanning = false;
+        state.receiptScanningEngine = null;
+        state.ocrStatusBadge = 'Scanned with Gemini Vision';
+        render();
+
+        setTimeout(() => {
+          state.ocrStatusBadge = null;
+          render();
+        }, 5000);
+      } catch (err) {
+        console.error('Gemini re-scan error:', err);
+        alert('Could not complete Gemini scan. You can use on-device OCR instead.');
+        state.receiptScanning = false;
+        state.receiptScanningEngine = null;
         render();
       }
     });

@@ -3571,6 +3571,23 @@ html.light .highlight-box .scale-unit-badge {
   }
 }
 
+.spinner-micro {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(20, 184, 166, 0.3);
+  border-top-color: #14b8a6;
+  border-radius: 50%;
+  animation: microSpin 0.75s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes microSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .scanning-thumbnail-box {
   position: relative !important;
   overflow: hidden !important;

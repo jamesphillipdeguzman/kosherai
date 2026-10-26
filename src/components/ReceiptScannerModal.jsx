@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useId, useRef } from 'react';
 import { sanitizeCurrency } from '../services/aiVerification.js';
+import { runPaddleOCR, parseStructuredReceiptText } from '../services/paddleOcrService.js';
 
 /**
  * ReceiptScannerModal
@@ -23,11 +24,13 @@ export default function ReceiptScannerModal({
   onSave,
   onPhotoSelected,
   onRetake,
+  onScanWithPaddle,
+  onRescanGemini,
   initialData,
   initialImage = null,
-  isScanning = false,
-  scanProgress = 0,
-  scanStatusMsg = 'Processing receipt...'
+  isScanning: propIsScanning = false,
+  scanProgress: propScanProgress = 0,
+  scanStatusMsg: propScanStatusMsg = 'Processing receipt...'
 }) {
   // Theme state: defaults to dark or stored preference
   const [theme, setTheme] = useState(() => {
@@ -79,9 +82,21 @@ export default function ReceiptScannerModal({
   const [totalAmount, setTotalAmount] = useState('0.00');
   const [tripType, setTripType] = useState('Supermarket');
   const [previewUrl, setPreviewUrl] = useState(initialImage);
+  const [currentImageBlob, setCurrentImageBlob] = useState(null);
   const [items, setItems] = useState([
     { id: 1, name: 'Chicken Breast (Fresh)', quantity: 1.2, unit: 'kg', unitPrice: 280, totalPrice: 336 }
   ]);
+
+  // On-Device OCR & Scanner Execution State Coordination
+  const [internalScanning, setInternalScanning] = useState(false);
+  const [internalProgress, setInternalProgress] = useState(0);
+  const [internalStatusMsg, setInternalStatusMsg] = useState('');
+  const [activeEngine, setActiveEngine] = useState(null); // 'gemini' | 'paddle' | null
+  const [ocrStatusBadge, setOcrStatusBadge] = useState(null);
+
+  const isScanning = propIsScanning || internalScanning;
+  const scanProgress = internalScanning ? internalProgress : propScanProgress;
+  const scanStatusMsg = internalScanning ? internalStatusMsg : propScanStatusMsg;
 
   // Unique IDs for accessibility
   const storeNameId = useId();
@@ -131,6 +146,9 @@ export default function ReceiptScannerModal({
     }
     // 4. Reset Scanning and Preview State Cleanly (keep form text fields intact)
     setPreviewUrl(null);
+    setCurrentImageBlob(null);
+    setOcrStatusBadge(null);
+    setActiveEngine(null);
     if (typeof onRetake === 'function') {
       onRetake();
     }
@@ -145,6 +163,7 @@ export default function ReceiptScannerModal({
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      setCurrentImageBlob(file);
       const objectUrl = URL.createObjectURL(file);
       setPreviewUrl(objectUrl);
       if (typeof onPhotoSelected === 'function') {
@@ -154,6 +173,130 @@ export default function ReceiptScannerModal({
     // Always clear input value after reading so consecutive retakes re-trigger
     if (e.target) {
       e.target.value = '';
+    }
+  };
+
+  // Trigger Direct PaddleOCR Processing Flow (bypasses /api/receipt-scan entirely)
+  const handleManualPaddleScan = async () => {
+    const targetSource = currentImageBlob || previewUrl;
+    if (!targetSource || isScanning) return;
+
+    if (typeof onScanWithPaddle === 'function') {
+      onScanWithPaddle(targetSource);
+      return;
+    }
+
+    try {
+      setActiveEngine('paddle');
+      setInternalScanning(true);
+      setInternalProgress(0.15);
+      setInternalStatusMsg('⚡ Running local PaddleOCR on receipt...');
+
+      const ocrResult = await runPaddleOCR(targetSource, (p) => {
+        setInternalProgress(p.progress || 0.5);
+        if (p.message) setInternalStatusMsg(p.message);
+      });
+
+      const parsed = parseStructuredReceiptText(ocrResult);
+      if (parsed) {
+        if (parsed.storeName) setStoreName(parsed.storeName);
+        if (parsed.purchaseDate || parsed.date) setPurchaseDate(parsed.purchaseDate || parsed.date);
+        if (parsed.totalAmountPaid !== undefined) {
+          setTotalAmount(sanitizeCurrency(parsed.totalAmountPaid).toFixed(2));
+        }
+        if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+          setItems(
+            parsed.items.map((item, idx) => {
+              const qty = sanitizeCurrency(item.quantity ?? item.qty ?? 1) || 1;
+              const price = sanitizeCurrency(item.unitPrice ?? item.price ?? 0);
+              const total = sanitizeCurrency(item.totalPrice ?? item.lineTotal ?? item.total ?? (qty * price));
+              return {
+                id: item.id || idx + 1,
+                name: item.name || item.description || '',
+                quantity: qty,
+                unit: item.unit || 'pcs',
+                unitPrice: price,
+                totalPrice: total
+              };
+            })
+          );
+        }
+        setOcrStatusBadge('Scanned with on-device PaddleOCR');
+        setTimeout(() => setOcrStatusBadge(null), 5000);
+      }
+    } catch (err) {
+      console.error('[PaddleOCR] Manual on-device scan failed:', err);
+      alert('Local OCR failed to recognize receipt text. Please adjust photo angle or enter details manually.');
+    } finally {
+      setInternalScanning(false);
+      setActiveEngine(null);
+    }
+  };
+
+  // Trigger Re-scan with Gemini Vision
+  const handleRescanGemini = async () => {
+    const targetSource = currentImageBlob || previewUrl;
+    if (!targetSource || isScanning) return;
+
+    if (typeof onRescanGemini === 'function') {
+      onRescanGemini(targetSource);
+      return;
+    }
+
+    try {
+      setActiveEngine('gemini');
+      setInternalScanning(true);
+      setInternalProgress(0.15);
+      setInternalStatusMsg('✨ Gemini Vision is analyzing receipt items...');
+
+      let dataUrl = targetSource;
+      if (typeof targetSource !== 'string') {
+        const { compressImage } = await import('../services/aiVerification.js');
+        const compressed = await compressImage(targetSource, 1400);
+        dataUrl = compressed.dataUrl;
+      }
+
+      const { scanSupermarketReceipt } = await import('../services/aiVerification.js');
+      const result = await scanSupermarketReceipt(
+        dataUrl,
+        (p) => {
+          setInternalProgress(p.progress || 0.45);
+          if (p.message) setInternalStatusMsg(p.message);
+        }
+      );
+
+      if (result) {
+        if (result.storeName) setStoreName(result.storeName);
+        if (result.purchaseDate || result.date) setPurchaseDate(result.purchaseDate || result.date);
+        if (result.totalAmountPaid !== undefined) {
+          setTotalAmount(sanitizeCurrency(result.totalAmountPaid).toFixed(2));
+        }
+        if (Array.isArray(result.items) && result.items.length > 0) {
+          setItems(
+            result.items.map((item, idx) => {
+              const qty = sanitizeCurrency(item.quantity ?? item.qty ?? 1) || 1;
+              const price = sanitizeCurrency(item.unitPrice ?? item.price ?? 0);
+              const total = sanitizeCurrency(item.totalPrice ?? item.lineTotal ?? item.total ?? (qty * price));
+              return {
+                id: item.id || idx + 1,
+                name: item.name || item.description || '',
+                quantity: qty,
+                unit: item.unit || 'pcs',
+                unitPrice: price,
+                totalPrice: total
+              };
+            })
+          );
+        }
+        setOcrStatusBadge('Scanned with Gemini Vision');
+        setTimeout(() => setOcrStatusBadge(null), 5000);
+      }
+    } catch (err) {
+      console.error('[Gemini] Re-scan failed:', err);
+      alert('Cloud vision scan failed. You can use on-device OCR instead.');
+    } finally {
+      setInternalScanning(false);
+      setActiveEngine(null);
     }
   };
 
@@ -369,20 +512,70 @@ export default function ReceiptScannerModal({
                         />
                         {isScanning && <div className="scanning-laser-beam" />}
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleRetake}
-                        disabled={isScanning}
-                        className={`w-full min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-sm font-semibold border transition-all ${
-                          isScanning ? 'opacity-50 pointer-events-none' : 'cursor-pointer'
-                        } ${
-                          theme === 'dark'
-                            ? 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
-                            : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-                        }`}
-                      >
-                        🔄 Retake or Change Photo
-                      </button>
+
+                      {/* Toast / Status Badge for OCR Engine */}
+                      {ocrStatusBadge && (
+                        <div className="w-full py-1.5 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5 animate-fadeIn">
+                          <span>✓</span>
+                          <span>{ocrStatusBadge}</span>
+                        </div>
+                      )}
+
+                      {/* Receipt Action Toolbar */}
+                      <div className="w-full flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleRetake}
+                          disabled={isScanning}
+                          className={`flex-1 min-w-[110px] min-h-[38px] flex items-center justify-center gap-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                            isScanning ? 'opacity-50 pointer-events-none' : 'cursor-pointer'
+                          } ${
+                            theme === 'dark'
+                              ? 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                              : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                          }`}
+                        >
+                          🔄 Retake Photo
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleRescanGemini}
+                          disabled={isScanning || !previewUrl}
+                          title="Re-scan receipt using Gemini Flash Vision"
+                          className={`min-h-[38px] px-3 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 ${
+                            isScanning || !previewUrl
+                              ? 'opacity-50 pointer-events-none'
+                              : 'cursor-pointer hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-700 bg-teal-50/50 dark:bg-teal-950/20'
+                          }`}
+                        >
+                          {activeEngine === 'gemini' ? (
+                            <span className="spinner-micro"></span>
+                          ) : (
+                            <span>✨</span>
+                          )}
+                          <span>Re-scan with Gemini</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleManualPaddleScan}
+                          disabled={isScanning || !previewUrl}
+                          title="Force local on-device PaddleOCR extraction without Gemini"
+                          className={`border border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors min-h-[38px] ${
+                            isScanning || !previewUrl
+                              ? 'opacity-50 pointer-events-none'
+                              : 'cursor-pointer'
+                          }`}
+                        >
+                          {activeEngine === 'paddle' ? (
+                            <span className="spinner-micro"></span>
+                          ) : (
+                            <span>⚡</span>
+                          )}
+                          <span>On-Device OCR</span>
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="w-full h-full border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center border-cyan-500/40 bg-teal-500/5">

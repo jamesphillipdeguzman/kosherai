@@ -894,8 +894,19 @@ function renderReceiptScanModal(state) {
                   <img src="${state.receiptPreviewUrl}" alt="Scanned Receipt Preview" id="receipt-zoom-img" class="${isScanning ? 'opacity-80 transition-opacity' : ''}" />
                   ${isScanning ? '<div class="scanning-laser-beam"></div>' : ''}
                 </div>
-                <div style="margin-top: 12px; display: flex; gap: 8px;">
-                  <button type="button" class="btn-secondary" id="reupload-receipt-btn" ${isScanning ? 'disabled' : ''} style="flex: 1; min-height: 44px; font-size: 0.85rem;">🔄 Retake or Change Photo</button>
+                ${state.ocrStatusBadge ? `
+                  <div class="w-full mt-2 py-1.5 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5">
+                    <span>✓</span> <span>${escapeHtml(state.ocrStatusBadge)}</span>
+                  </div>
+                ` : ''}
+                <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px;" class="items-center">
+                  <button type="button" class="btn-secondary" id="reupload-receipt-btn" ${isScanning ? 'disabled' : ''} style="flex: 1; min-width: 110px; min-height: 38px; font-size: 0.8rem;">🔄 Retake Photo</button>
+                  <button type="button" class="btn-secondary" id="rescan-gemini-btn" ${isScanning ? 'disabled' : ''} style="min-height: 38px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;" title="Re-scan receipt using Gemini Vision">
+                    ${state.receiptScanningEngine === 'gemini' ? '<span class="spinner-micro"></span>' : '✨'} Re-scan with Gemini
+                  </button>
+                  <button type="button" class="border border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer" id="trigger-manual-paddle-btn" ${isScanning ? 'disabled' : ''} title="Force local on-device PaddleOCR extraction without Gemini">
+                    ${state.receiptScanningEngine === 'paddle' ? '<span class="spinner-micro"></span>' : '⚡'} On-Device OCR
+                  </button>
                 </div>
               ` : `
                 <div class="receipt-dropzone" id="receipt-dropzone">
