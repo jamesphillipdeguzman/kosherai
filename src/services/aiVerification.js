@@ -320,7 +320,16 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, cli
       });
 
       const prompt = `
+You are an expert document understanding and supermarket receipt OCR specialist for a household food cost and waste research project in the Philippines.
 Extract supermarket receipt data from this image with high precision:
+
+CRITICAL PHILIPPINE RECEIPT CONVENTIONS & RULES:
+1. Currency: Philippine Peso ('P', '₱', 'PHP'). Never confuse leading 'P' with a digit (e.g. "P1,757.50" -> 1757.50).
+2. Thousands Commas: Amounts frequently use commas (e.g. "1,757.50"). Normalize all amounts into clean numbers/floats in JSON (e.g. 1757.50, never strings with commas).
+3. VAT & Tax Suffixes: Disregard trailing tax letters (e.g. "1,757.50 V" -> 1757.50).
+4. Line Items: For items like "NIDO JR MILK POWDER", map name/description: "NIDO JR MILK POWDER", qty: 1.0, unitPrice: 1757.50, lineTotal: 1757.50.
+5. Total Amount Paid: Look for rows labeled TOTAL, CASH, or card/e-wallet names (e.g. BDO, GCash, MASTERCARD) to confirm final amount paid as a clean float.
+
 Return strict JSON:
 {
   "storeName": "string",
@@ -330,6 +339,8 @@ Return strict JSON:
   "items": [
     {
       "name": "string",
+      "description": "string",
+      "rawReceiptText": "string",
       "qty": 1.0,
       "quantity": 1.0,
       "unit": "string",
@@ -337,6 +348,7 @@ Return strict JSON:
       "unitPrice": 0.0,
       "total": 0.0,
       "totalPrice": 0.0,
+      "lineTotal": 0.0,
       "weightGrams": null,
       "discount": 0.0
     }
@@ -418,31 +430,69 @@ Return strict JSON:
 }
 
 /**
- * Standardizes extracted receipt data into consistent schema
+ * Sanitizes currency values for Philippine receipts.
+ * Handles:
+ *  - Thousands commas ("1,757.50")
+ *  - Currency prefixes ('P', '₱', 'PHP', 'Php')
+ *  - Trailing VAT/tax classification letters ('1,757.50 V', 'T', 'E', 'Z', 'VAT')
+ *  - Never allows parseFloat("1,757.50") to run without first removing the comma
  */
-function normalizeReceiptData(data, source = 'GEMINI_VISION') {
+export function sanitizeCurrency(val) {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : Math.round(val * 100) / 100;
+  if (typeof val !== 'string') return 0;
+
+  // 1. Remove commas
+  let clean = val.replace(/,/g, '').trim();
+
+  // 2. Remove currency indicators ('₱', 'PHP', and leading 'P'/'p' preceding digits)
+  clean = clean.replace(/[₱\s]/gi, '');
+  clean = clean.replace(/\bPHP\b/gi, '');
+  clean = clean.replace(/^[Pp](?=\d)/, '');
+
+  // 3. Remove trailing VAT / tax letter suffixes (e.g., "1,757.50 V" -> 1757.50)
+  clean = clean.replace(/\s*[A-Za-z]+$/, '').trim();
+
+  // Extract clean numerical float match
+  const match = clean.match(/-?\d+(?:\.\d+)?/);
+  if (match) {
+    clean = match[0];
+  }
+
+  const parsed = parseFloat(clean);
+  return isNaN(parsed) ? 0 : Math.round(parsed * 100) / 100;
+}
+
+/**
+ * Standardizes extracted receipt data into consistent schema with full number sanitization
+ */
+export function normalizeReceiptData(data, source = 'GEMINI_VISION') {
   const purchaseDate = data.date || data.purchaseDate || new Date().toISOString().split('T')[0];
   const items = Array.isArray(data.items) ? data.items.map((item, idx) => {
-    const qty = Number(item.qty ?? item.quantity ?? 1) || 1;
-    const price = Number(item.price ?? item.unitPrice ?? 0) || 0;
-    const total = Number(item.total ?? item.totalPrice ?? (qty * price)) || (qty * price);
+    const qty = sanitizeCurrency(item.qty ?? item.quantity ?? 1) || 1;
+    const unitPrice = sanitizeCurrency(item.unitPrice ?? item.price ?? 0);
+    const lineTotal = sanitizeCurrency(item.lineTotal ?? item.totalPrice ?? item.total ?? (qty * unitPrice));
+    const name = item.name || item.description || `Grocery Item #${idx + 1}`;
+
     return {
       id: item.id || idx + 1,
-      name: item.name || item.description || `Grocery Item #${idx + 1}`,
-      rawReceiptText: item.rawReceiptText || item.name || '',
+      name,
+      description: name,
+      rawReceiptText: item.rawReceiptText || name,
       qty,
       quantity: qty,
       unit: item.unit || 'pcs',
-      price,
-      unitPrice: price,
-      total,
-      totalPrice: total,
-      weightGrams: item.weightGrams ?? null,
-      discount: Number(item.discount || 0)
+      price: unitPrice,
+      unitPrice,
+      total: lineTotal,
+      totalPrice: lineTotal,
+      lineTotal,
+      weightGrams: item.weightGrams !== undefined && item.weightGrams !== null ? sanitizeCurrency(item.weightGrams) : null,
+      discount: sanitizeCurrency(item.discount || 0)
     };
   }) : [];
 
-  const totalAmountPaid = Number(data.totalAmountPaid ?? data.total ?? data.subtotal ?? items.reduce((acc, it) => acc + it.totalPrice, 0)) || 0;
+  const totalAmountPaid = sanitizeCurrency(data.totalAmountPaid ?? data.total ?? data.subtotal ?? items.reduce((acc, it) => acc + it.totalPrice, 0));
 
   return {
     storeName: data.storeName || 'SM Supermarket',
@@ -451,10 +501,15 @@ function normalizeReceiptData(data, source = 'GEMINI_VISION') {
     tripType: data.tripType || 'Supermarket',
     items,
     totalAmountPaid,
-    totalScaleWeightKg: Number(data.totalScaleWeightKg || 0),
-    subtotal: Number(data.subtotal || totalAmountPaid),
-    discounts: Number(data.discounts || 0),
-    tax: Number(data.tax || 0),
+    totalScaleWeightKg: sanitizeCurrency(data.totalScaleWeightKg || 0),
+    subtotal: sanitizeCurrency(data.subtotal || totalAmountPaid),
+    discounts: sanitizeCurrency(data.discounts || data.discountTotal || 0),
+    discountTotal: sanitizeCurrency(data.discountTotal || data.discounts || 0),
+    tax: sanitizeCurrency(data.tax || 0),
+    invoiceNumber: data.invoiceNumber || data.siNumber || data.orNumber || null,
+    paymentMethod: data.paymentMethod || 'CASH',
+    cashTendered: data.cashTendered !== undefined && data.cashTendered !== null ? sanitizeCurrency(data.cashTendered) : null,
+    change: data.change !== undefined && data.change !== null ? sanitizeCurrency(data.change) : null,
     uncertainFields: data.uncertainFields || [],
     mathValid: data.mathValid ?? true,
     discrepancyNote: data.discrepancyNote || '',
@@ -464,13 +519,13 @@ function normalizeReceiptData(data, source = 'GEMINI_VISION') {
 }
 
 /**
- * Heuristic parser for offline raw OCR text
+ * Heuristic parser for offline raw OCR text with Philippine receipt conventions
  */
-function parseOfflineReceiptText(rawText) {
+export function parseOfflineReceiptText(rawText) {
   const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
   const items = [];
   let totalAmountPaid = 0;
-  let storeName = lines[0] ? lines[0].slice(0, 30) : 'Supermarket';
+  let storeName = lines[0] ? lines[0].slice(0, 30) : 'SM Supermarket';
   let purchaseDate = null;
 
   // Look for date like 2026-10-31 or 10/31/2026 or 31/10/2026
@@ -484,30 +539,52 @@ function parseOfflineReceiptText(rawText) {
     } catch {}
   }
 
-  // Look for items with prices (numbers with decimal)
-  const priceRegex = /([A-Za-z0-9\s\.\-]{3,35})\s+([₱P]?\s*(\d+[\.,]\d{2}))$/;
+  // Regex matching Philippine receipt line item amounts:
+  // e.g. "NIDO JR MILK POWDER  1,757.50 V" or "CHICKEN BREAST P280.00"
+  const itemPriceRegex = /^(.+?)\s+(?:[₱P]\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?:\s*[A-Za-z])?$/i;
+
+  // Regex matching rows indicating total or payment:
+  // e.g. "TOTAL P1,757.50", "AMOUNT DUE: 1,757.50", "CASH: 2,000.00", "BDO 1,757.50"
+  const totalLineRegex = /(?:TOTAL|AMOUNT\s*DUE|CASH|TENDERED|BDO|BPI|GCASH|MASTERCARD|VISA)\b.*?([₱P]?\s*(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})/i;
+
   lines.forEach(line => {
     const lower = line.toLowerCase();
-    if (lower.includes('total') || lower.includes('subtotal') || lower.includes('vat') || lower.includes('cash') || lower.includes('change')) {
-      const match = line.match(/(\d+[\.,]\d{2})/);
-      if (match && lower.includes('total') && !lower.includes('sub')) {
-        totalAmountPaid = parseFloat(match[1].replace(',', '.'));
+
+    // Check for totals first
+    if (lower.includes('total') || lower.includes('subtotal') || lower.includes('vat') || lower.includes('cash') || lower.includes('amount due') || lower.includes('tendered')) {
+      if ((lower.includes('total') && !lower.includes('sub')) || lower.includes('amount due') || lower.includes('cash')) {
+        const totalMatch = line.match(totalLineRegex);
+        if (totalMatch && totalMatch[1]) {
+          const parsed = sanitizeCurrency(totalMatch[1]);
+          if (parsed > 0 && (totalAmountPaid === 0 || lower.includes('total'))) {
+            totalAmountPaid = parsed;
+          }
+        }
       }
       return;
     }
 
-    const match = line.match(priceRegex);
+    // Match line item
+    const match = line.match(itemPriceRegex);
     if (match) {
-      const name = match[1].trim();
-      const price = parseFloat(match[3].replace(',', '.'));
+      const name = match[1].replace(/^[0-9\*\#\-\.]+\s*/, '').trim(); // Strip item indexes
+      const priceStr = match[2];
+      const price = sanitizeCurrency(priceStr);
+
       if (name.length > 2 && price > 0 && price < 100000) {
         items.push({
+          id: items.length + 1,
           name,
+          description: name,
           rawReceiptText: line,
+          qty: 1,
           quantity: 1,
           unit: 'pcs',
+          price,
           unitPrice: price,
+          total: price,
           totalPrice: price,
+          lineTotal: price,
           weightGrams: null,
           discount: 0
         });
@@ -516,7 +593,7 @@ function parseOfflineReceiptText(rawText) {
   });
 
   if (totalAmountPaid === 0 && items.length > 0) {
-    totalAmountPaid = items.reduce((sum, i) => sum + i.totalPrice, 0);
+    totalAmountPaid = Math.round(items.reduce((sum, i) => sum + i.totalPrice, 0) * 100) / 100;
   }
 
   return {

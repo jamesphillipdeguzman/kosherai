@@ -921,17 +921,26 @@ Filtered water`;
   const reuploadReceiptBtn = document.querySelector('#reupload-receipt-btn');
   const receiptFileInput = document.querySelector('#receipt-file-input');
 
-  if (triggerReceiptFileBtn && receiptFileInput) {
-    triggerReceiptFileBtn.addEventListener('click', () => receiptFileInput.click());
+  const handleRetakeReceiptPhoto = () => {
+    if (receiptFileInput) {
+      receiptFileInput.value = ''; // Reset cached file value so change event always fires
+      receiptFileInput.click();    // Programmatically trigger camera/file picker
+    }
+  };
+
+  if (triggerReceiptFileBtn) {
+    triggerReceiptFileBtn.addEventListener('click', handleRetakeReceiptPhoto);
   }
-  if (reuploadReceiptBtn && receiptFileInput) {
-    reuploadReceiptBtn.addEventListener('click', () => receiptFileInput.click());
+  if (reuploadReceiptBtn) {
+    reuploadReceiptBtn.addEventListener('click', handleRetakeReceiptPhoto);
   }
 
   // Handle Receipt File Selection & AI Scan
   if (receiptFileInput) {
     receiptFileInput.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
+      // Reset input value immediately after reading so consecutive retakes always re-trigger
+      e.target.value = '';
       if (!file) return;
 
       try {

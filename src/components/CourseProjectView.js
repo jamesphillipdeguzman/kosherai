@@ -844,26 +844,25 @@ function renderReceiptScanModal(state) {
           <div class="receipt-scanner-split flex flex-col md:grid md:grid-cols-12 gap-6 relative">
             <!-- Left Pane / Upload Card (Mobile: full width on top, Desktop: 5 cols) -->
             <div class="split-left-pane w-full md:col-span-5">
+              <!-- Persistent file input so camera/file picker can always be triggered -->
+              <input type="file" id="receipt-file-input" accept="image/*" capture="environment" style="display: none;" />
+
               ${state.receiptPreviewUrl ? `
                 <div class="receipt-image-zoom-box relative ${isScanning ? 'scanning-thumbnail-box' : ''}">
                   <img src="${state.receiptPreviewUrl}" alt="Scanned Receipt Preview" id="receipt-zoom-img" class="${isScanning ? 'opacity-80 transition-opacity' : ''}" />
                   ${isScanning ? '<div class="scanning-laser-beam"></div>' : ''}
+                </div>
+                <div style="margin-top: 12px; display: flex; gap: 8px;">
+                  <button type="button" class="btn-secondary" id="reupload-receipt-btn" ${isScanning ? 'disabled' : ''} style="flex: 1; min-height: 44px; font-size: 0.85rem;">🔄 Retake or Change Photo</button>
                 </div>
               ` : `
                 <div class="receipt-dropzone" id="receipt-dropzone">
                   <div class="drop-icon">📷</div>
                   <div style="font-weight: 700; margin-bottom: 4px; font-size: 1rem;">Take Photo or Upload Receipt</div>
                   <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 16px;">Supports JPG, PNG from mobile camera</div>
-                  <input type="file" id="receipt-file-input" accept="image/*" capture="environment" style="display: none;" />
                   <button type="button" class="btn-primary" id="trigger-receipt-file-btn" style="min-height: 44px; padding: 0 20px;">Choose File or Camera</button>
                 </div>
               `}
-
-              ${state.receiptPreviewUrl ? `
-                <div style="margin-top: 12px; display: flex; gap: 8px;">
-                  <button type="button" class="btn-secondary" id="reupload-receipt-btn" ${isScanning ? 'disabled' : ''} style="flex: 1; min-height: 44px; font-size: 0.85rem;">🔄 Retake or Change Photo</button>
-                </div>
-              ` : ''}
             </div>
 
             <!-- Right Pane: Extracted Editable Fields (Mobile: stacked below, Desktop: 7 cols) -->

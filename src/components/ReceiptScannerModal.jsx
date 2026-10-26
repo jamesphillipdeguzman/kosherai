@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
+import { sanitizeCurrency } from '../services/aiVerification.js';
 
 /**
  * ReceiptScannerModal
@@ -20,6 +21,8 @@ export default function ReceiptScannerModal({
   isOpen = true,
   onClose,
   onSave,
+  onPhotoSelected,
+  onRetake,
   initialData,
   initialImage = null,
   isScanning = false,
@@ -36,6 +39,10 @@ export default function ReceiptScannerModal({
     return 'dark';
   });
 
+  // Persistent refs for file input and media streams
+  const fileInputRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+
   // Sync theme class to document element and persist in localStorage
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -50,6 +57,16 @@ export default function ReceiptScannerModal({
       localStorage.setItem('theme', theme);
     }
   }, [theme]);
+
+  // Clean up any active media stream tracks on unmount
+  useEffect(() => {
+    return () => {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+      }
+    };
+  }, []);
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
@@ -78,19 +95,24 @@ export default function ReceiptScannerModal({
     if (initialData) {
       if (initialData.storeName) setStoreName(initialData.storeName);
       if (initialData.purchaseDate) setPurchaseDate(initialData.purchaseDate);
-      if (initialData.totalScaleWeightKg !== undefined) setScaleWeight(initialData.totalScaleWeightKg);
-      if (initialData.totalAmountPaid !== undefined) setTotalAmount(initialData.totalAmountPaid);
+      if (initialData.totalScaleWeightKg !== undefined) setScaleWeight(sanitizeCurrency(initialData.totalScaleWeightKg));
+      if (initialData.totalAmountPaid !== undefined) setTotalAmount(sanitizeCurrency(initialData.totalAmountPaid));
       if (initialData.tripType) setTripType(initialData.tripType);
       if (Array.isArray(initialData.items) && initialData.items.length > 0) {
         setItems(
-          initialData.items.map((item, idx) => ({
-            id: item.id || idx + 1,
-            name: item.name || '',
-            quantity: Number(item.quantity) || 1,
-            unit: item.unit || 'pcs',
-            unitPrice: Number(item.unitPrice) || 0,
-            totalPrice: Number(item.totalPrice) || (Number(item.quantity) || 1) * (Number(item.unitPrice) || 0)
-          }))
+          initialData.items.map((item, idx) => {
+            const qty = sanitizeCurrency(item.quantity ?? item.qty ?? 1) || 1;
+            const price = sanitizeCurrency(item.unitPrice ?? item.price ?? 0);
+            const total = sanitizeCurrency(item.totalPrice ?? item.lineTotal ?? item.total ?? (qty * price));
+            return {
+              id: item.id || idx + 1,
+              name: item.name || item.description || '',
+              quantity: qty,
+              unit: item.unit || 'pcs',
+              unitPrice: price,
+              totalPrice: total
+            };
+          })
         );
       }
     }
@@ -100,12 +122,38 @@ export default function ReceiptScannerModal({
     if (initialImage) setPreviewUrl(initialImage);
   }, [initialImage]);
 
+  // Retake photo: cleans up any streams, resets preview, and triggers camera/file input
+  const handleRetake = () => {
+    // 3. Camera Stream Cleanup (if active)
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+    // 4. Reset Scanning and Preview State Cleanly (keep form text fields intact)
+    setPreviewUrl(null);
+    if (typeof onRetake === 'function') {
+      onRetake();
+    }
+    // 1. Clear input value & programmatically click ref
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''; // Reset cached file value
+      fileInputRef.current.click();   // Programmatically trigger camera/file picker
+    }
+  };
+
   // Handle Photo / File Selection
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
       const objectUrl = URL.createObjectURL(file);
       setPreviewUrl(objectUrl);
+      if (typeof onPhotoSelected === 'function') {
+        onPhotoSelected(file, objectUrl);
+      }
+    }
+    // Always clear input value after reading so consecutive retakes re-trigger
+    if (e.target) {
+      e.target.value = '';
     }
   };
 
@@ -287,6 +335,19 @@ export default function ReceiptScannerModal({
             <div className="flex flex-col md:grid md:grid-cols-12 gap-6">
               {/* Left Column / Upload Card (Full width on mobile, 5 cols on desktop) */}
               <div className="w-full md:col-span-5 flex flex-col">
+                {/* Persistently mounted file input - never unmounted, ref-triggered */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  capture="environment"
+                  disabled={isScanning}
+                  onChange={handleFileChange}
+                  className="sr-only hidden"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+
                 <div
                   className={`w-full h-full min-h-[280px] sm:min-h-[340px] md:min-h-[440px] rounded-xl border flex flex-col items-center justify-center p-4 transition-colors ${
                     theme === 'dark'
@@ -308,25 +369,20 @@ export default function ReceiptScannerModal({
                         />
                         {isScanning && <div className="scanning-laser-beam" />}
                       </div>
-                      <label className={`w-full ${isScanning ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          disabled={isScanning}
-                          onChange={handleFileChange}
-                          className="sr-only"
-                        />
-                        <span
-                          className={`w-full min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-sm font-semibold border transition-all ${
-                            theme === 'dark'
-                              ? 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
-                              : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-                          }`}
-                        >
-                          🔄 Retake or Change Photo
-                        </span>
-                      </label>
+                      <button
+                        type="button"
+                        onClick={handleRetake}
+                        disabled={isScanning}
+                        className={`w-full min-h-[44px] flex items-center justify-center gap-2 rounded-lg text-sm font-semibold border transition-all ${
+                          isScanning ? 'opacity-50 pointer-events-none' : 'cursor-pointer'
+                        } ${
+                          theme === 'dark'
+                            ? 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                            : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                        }`}
+                      >
+                        🔄 Retake or Change Photo
+                      </button>
                     </div>
                   ) : (
                     <div className="w-full h-full border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center border-cyan-500/40 bg-teal-500/5">
@@ -345,19 +401,14 @@ export default function ReceiptScannerModal({
                       >
                         Supports high-resolution JPG or PNG directly from your mobile camera
                       </p>
-                      <label className="cursor-pointer">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          disabled={isScanning}
-                          onChange={handleFileChange}
-                          className="sr-only"
-                        />
-                        <span className="min-h-[44px] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm transition-all flex items-center justify-center bg-teal-600 hover:bg-teal-500 text-white">
-                          Choose File or Camera
-                        </span>
-                      </label>
+                      <button
+                        type="button"
+                        onClick={handleRetake}
+                        disabled={isScanning}
+                        className="min-h-[44px] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm transition-all flex items-center justify-center bg-teal-600 hover:bg-teal-500 text-white cursor-pointer"
+                      >
+                        Choose File or Camera
+                      </button>
                     </div>
                   )}
                 </div>
