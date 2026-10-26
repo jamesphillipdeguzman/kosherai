@@ -946,13 +946,13 @@ Filtered water`;
       try {
         state.receiptScanning = true;
         state.receiptProgress = 0.15;
-        state.receiptStatusMsg = 'Uploading image...';
+        state.receiptStatusMsg = 'Uploading receipt image...';
         render();
 
         const { dataUrl } = await compressImage(file, 1400);
         state.receiptPreviewUrl = dataUrl;
-        state.receiptProgress = 0.35;
-        state.receiptStatusMsg = '✨ Gemini Vision is analyzing receipt details & line items...';
+        state.receiptProgress = 0.15;
+        state.receiptStatusMsg = 'Uploading receipt image...';
         render();
 
         const result = await scanSupermarketReceipt(dataUrl, (p) => {

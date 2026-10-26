@@ -270,55 +270,120 @@ export async function uploadToCloudinary(blob, cloudName, uploadPreset) {
 
 /**
  * Supermarket Receipt Scanner Orchestration
- * Prioritizes Server-Side Gemini 2.5/1.5 Flash Vision first.
- * Gracefully falls back to direct client Gemini Vision or on-device Tesseract OCR.
+ * Prioritizes Server-Side Gemini Vision endpoint (/api/receipt-scan) with a 30s timeout window.
+ * Prevents premature fallback to local Tesseract OCR.
+ *
+ * Fallback to local OCR triggers ONLY if:
+ *  1. The fetch explicitly rejects after the full 30s timeout (err.name === 'AbortError')
+ *  2. The device is detected as strictly offline (!navigator.onLine)
+ *  3. The API responds with a definitive server error (500/503/400)
  */
 export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, clientApiKey = '') {
-  onProgress({ status: 'uploading', progress: 0.15, message: 'Uploading image...' });
-
-  // 1. Primary: Server-Side Gemini Vision endpoint (/api/receipt-scan)
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
-  if (isOnline) {
-    try {
-      onProgress({
-        status: 'ai_vision',
-        progress: 0.45,
-        message: '✨ Gemini Vision is analyzing receipt details & line items...'
-      });
+  // Condition 2: Strict offline check upfront
+  if (!isOnline) {
+    console.warn('[ReceiptScan] Device strictly offline. Running on-device OCR fallback...');
+    return await executeLocalOcrFallback(dataUrl, onProgress, 'Offline mode detected: Running on-device OCR fallback...');
+  }
 
-      const res = await fetch('/api/receipt-scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: dataUrl,
-          mimeType: 'image/jpeg'
-        })
-      });
+  // Phased Status Feedback During Processing:
+  // 0s–3s: "Uploading receipt image..."
+  onProgress({
+    status: 'uploading',
+    progress: 0.15,
+    message: 'Uploading receipt image...'
+  });
 
-      if (res.ok) {
-        const data = await res.json();
-        onProgress({ status: 'populating', progress: 0.95, message: 'Populating receipt items...' });
-        return normalizeReceiptData(data, 'SERVER_GEMINI_VISION');
-      } else {
-        const errJson = await res.json().catch(() => ({}));
-        console.warn(`[ReceiptScan] Server endpoint error (${res.status}):`, errJson);
-      }
-    } catch (netErr) {
-      console.warn('[ReceiptScan] Network/server unreachable. Falling back...', netErr);
+  // 3s–15s: "✨ Gemini Vision is extracting store items and totals..."
+  const timer3s = setTimeout(() => {
+    onProgress({
+      status: 'ai_vision',
+      progress: 0.45,
+      message: '✨ Gemini Vision is extracting store items and totals...'
+    });
+  }, 3000);
+
+  // 15s–30s: "Still analyzing complex receipt details..."
+  const timer15s = setTimeout(() => {
+    onProgress({
+      status: 'ai_vision',
+      progress: 0.70,
+      message: 'Still analyzing complex receipt details...'
+    });
+  }, 15000);
+
+  // Condition 1: 30-second timeout threshold via AbortController
+  const controller = new AbortController();
+  const timeout30s = setTimeout(() => {
+    controller.abort();
+  }, 30000);
+
+  const clearScanningTimers = () => {
+    clearTimeout(timeout30s);
+    clearTimeout(timer3s);
+    clearTimeout(timer15s);
+  };
+
+  let shouldTriggerOcrFallback = false;
+  let ocrFallbackMessage = 'Cloud vision timed out. Falling back to on-device OCR...';
+
+  // 1. Primary: Server-Side Gemini Vision endpoint (/api/receipt-scan)
+  try {
+    const res = await fetch('/api/receipt-scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64: dataUrl,
+        mimeType: 'image/jpeg'
+      }),
+      signal: controller.signal
+    });
+
+    clearScanningTimers();
+
+    if (res.ok) {
+      const data = await res.json();
+      onProgress({ status: 'populating', progress: 0.95, message: 'Populating receipt items...' });
+      return normalizeReceiptData(data, 'SERVER_GEMINI_VISION');
+    }
+
+    // Condition 3: API responds with a definitive server error (500/503/400)
+    const isDefinitiveServerError = [400, 500, 502, 503].includes(res.status) || res.status >= 400;
+    if (isDefinitiveServerError) {
+      const errJson = await res.json().catch(() => ({}));
+      console.warn(`[ReceiptScan] Server definitive error (${res.status}):`, errJson);
+      shouldTriggerOcrFallback = true;
+      ocrFallbackMessage = 'Cloud vision timed out. Falling back to on-device OCR...';
+    } else {
+      throw new Error(`Receipt scan API responded with unexpected status ${res.status}`);
+    }
+  } catch (err) {
+    clearScanningTimers();
+
+    if (err.name === 'AbortError') {
+      // Condition 1: Fetch explicitly rejected after the full 30s timeout
+      console.warn('[ReceiptScan] Gemini Vision fetch rejected after 30s timeout (AbortError).');
+      shouldTriggerOcrFallback = true;
+      ocrFallbackMessage = 'Cloud vision timed out. Falling back to on-device OCR...';
+    } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      // Condition 2: Device went offline during fetch
+      console.warn('[ReceiptScan] Device went offline during scan request.');
+      shouldTriggerOcrFallback = true;
+      ocrFallbackMessage = 'Offline mode detected: Running on-device OCR fallback...';
+    } else if (shouldTriggerOcrFallback) {
+      // Already flagged from definitive server error
+    } else {
+      // Non-abort, non-offline, non-server-error exception: rethrow to avoid premature OCR fallback
+      console.error('[ReceiptScan] Unexpected error without meeting fallback criteria:', err);
+      throw err;
     }
   }
 
-  // 2. Direct Client-side Gemini fallback if API key is provided
-  const activeKey = (clientApiKey || import.meta.env.VITE_GEMINI_API_KEY || '').trim();
-  if (isOnline && activeKey) {
+  // Direct Client-side Gemini fallback if API key is provided and failure was not 30s timeout
+  const activeKey = (clientApiKey || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || '').trim();
+  if (shouldTriggerOcrFallback && !controller.signal.aborted && activeKey && isOnline) {
     try {
-      onProgress({
-        status: 'ai_vision',
-        progress: 0.55,
-        message: '✨ Gemini Vision is analyzing receipt details & line items...'
-      });
-
       const prompt = `
 You are an expert document understanding and supermarket receipt OCR specialist for a household food cost and waste research project in the Philippines.
 Extract supermarket receipt data from this image with high precision:
@@ -400,19 +465,31 @@ Return strict JSON:
     }
   }
 
-  // 3. Graceful Client OCR (Tesseract.js) fallback when offline or when AI is unavailable
+  // Graceful Client OCR (Tesseract.js) fallback when fallback criteria are met
+  if (shouldTriggerOcrFallback) {
+    return await executeLocalOcrFallback(dataUrl, onProgress, ocrFallbackMessage);
+  }
+
+  throw new Error('Could not scan receipt. Please enter items manually.');
+}
+
+/**
+ * Executes local on-device Tesseract OCR fallback
+ */
+async function executeLocalOcrFallback(dataUrl, onProgress, statusMessage) {
   try {
+    // If and only if it truly fails or times out after 30s, display status message before initializing OCR
     onProgress({
       status: 'ocr_fallback',
       progress: 0.65,
-      message: 'Offline mode detected: Running on-device OCR fallback...'
+      message: statusMessage || 'Cloud vision timed out. Falling back to on-device OCR...'
     });
 
     const rawOcrText = await runClientOCR(dataUrl, (p) => {
       onProgress({
         status: 'ocr_fallback',
         progress: 0.65 + (p.progress * 0.25),
-        message: 'Offline mode detected: Running on-device OCR fallback...'
+        message: statusMessage || 'Cloud vision timed out. Falling back to on-device OCR...'
       });
     });
 
@@ -424,10 +501,14 @@ Return strict JSON:
       rawText: rawOcrText
     }, 'OFFLINE_TESSERACT_OCR');
   } catch (ocrErr) {
-    console.error('[ReceiptScan] Offline OCR also failed:', ocrErr);
+    console.error('[ReceiptScan] Local OCR fallback also failed:', ocrErr);
     throw new Error('Could not scan receipt. Please enter items manually.');
   }
 }
+
+// Convenient alias for receipt scanning orchestration
+export const scanReceipt = scanSupermarketReceipt;
+
 
 /**
  * Sanitizes currency values for Philippine receipts.

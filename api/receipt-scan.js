@@ -2,6 +2,10 @@
 // Connects to Google Gemini Vision with server-side API key protection
 import 'dotenv/config';
 
+export const config = {
+  maxDuration: 30, // Extends max execution time up to 30s
+};
+
 /**
  * Standardizes sending JSON responses across Vercel Serverless and Node/Connect HTTP
  */

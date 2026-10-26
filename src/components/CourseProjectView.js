@@ -875,7 +875,7 @@ function renderReceiptScanModal(state) {
                   </div>
                   <h3 class="text-base font-bold text-slate-900 dark:text-white mb-1">Analyzing Supermarket Receipt...</h3>
                   <p id="scan-status-text" class="text-xs sm:text-sm text-teal-800 dark:text-teal-300 text-center max-w-xs font-medium">
-                    ${scanStatusMsg || '✨ Gemini Vision is analyzing receipt details & line items...'}
+                    ${scanStatusMsg || 'Uploading receipt image...'}
                   </p>
                   <div class="progress-bar-bg" style="max-width: 240px; width: 100%; margin: 16px auto 0; height: 6px; border-radius: 9999px; overflow: hidden; background: rgba(148, 163, 184, 0.2);">
                     <div class="progress-bar-fill" style="width: ${Math.round(scanProgress * 100)}%; height: 100%; background: linear-gradient(90deg, #0d9488, #06b6d4); transition: width 0.3s ease;"></div>
