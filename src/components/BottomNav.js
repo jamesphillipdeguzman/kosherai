@@ -59,16 +59,21 @@ export function renderBottomNav(activeTab = 'checker', appMode = 'diet') {
 
   const tabs = appMode === 'course' ? courseTabs : dietTabs;
 
-  return `
-    <nav class="bottom-nav" aria-label="Main Navigation">
-      ${tabs.map(tab => `
-        <button class="nav-tab-btn ${activeTab === tab.id ? 'active' : ''}" data-tab="${tab.id}" data-mode="${appMode}" aria-label="${tab.label}">
-          <div class="nav-icon-wrapper">
-            ${tab.icon}
-          </div>
-          <span class="nav-label">${tab.label}</span>
-        </button>
-      `).join('')}
+    <nav class="bottom-nav bg-white/85 dark:bg-slate-950/85 backdrop-blur-md border-t border-slate-200 dark:border-slate-800" aria-label="Main Navigation">
+      ${tabs.map(tab => {
+        const isActive = activeTab === tab.id;
+        const stateClasses = isActive
+          ? 'active text-teal-600 dark:text-teal-400'
+          : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200';
+        return `
+          <button class="nav-tab-btn ${stateClasses}" data-tab="${tab.id}" data-mode="${appMode}" aria-label="${tab.label}">
+            <div class="nav-icon-wrapper">
+              ${tab.icon}
+            </div>
+            <span class="nav-label">${tab.label}</span>
+          </button>
+        `;
+      }).join('')}
     </nav>
   `;
 }

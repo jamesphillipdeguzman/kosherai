@@ -3,14 +3,14 @@
 export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', showProjectTab = true) {
   return `
     <header class="app-header">
-      <div class="brand-wrapper" id="brand-logo-btn">
+      <div class="brand-wrapper bg-slate-200/60 dark:bg-slate-800/60 backdrop-blur-sm px-2.5 py-1 rounded-xl border border-slate-300/40 dark:border-slate-700/50" id="brand-logo-btn">
         <img src="/favicon.svg" alt="KosherAI Logo" class="brand-icon" />
         <div>
-          <div class="brand-title">
+          <div class="brand-title text-slate-900 dark:text-white font-extrabold tracking-tight">
             KosherAI
             <span class="brand-badge">${appMode === 'course' ? 'SUSTAIN' : 'LID RAI'}</span>
           </div>
-          <div class="brand-subtitle">${appMode === 'course' ? 'Six-Week Food Cost & Waste Study' : 'Low-Iodine Diet Clinical Companion'}</div>
+          <div class="brand-subtitle text-slate-600 dark:text-slate-400">${appMode === 'course' ? 'Six-Week Food Cost & Waste Study' : 'Low-Iodine Diet Clinical Companion'}</div>
         </div>
       </div>
 

@@ -39,12 +39,12 @@ export function renderCourseProjectView(state) {
   return `
     <div class="course-project-container">
       <!-- Course Project Header Banner -->
-      <div class="course-header-card">
+      <div class="course-header-card bg-white dark:bg-slate-900/90 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800/80 shadow-sm">
         <div class="course-header-top">
           <div>
             <div class="course-pill">Course Research Project</div>
-            <h1 class="course-title">Sustaining Human Life: Food Cost & Waste Tracker</h1>
-            <p class="course-subtitle">
+            <h1 class="course-title text-slate-900 dark:text-slate-100 font-bold">Sustaining Human Life: Food Cost & Waste Tracker</h1>
+            <p class="course-subtitle text-slate-600 dark:text-slate-300">
               Six-week household study evaluating meal planning, food expenditure, whole-grocery weight, and waste reduction under Low-Iodine Diet (LID) requirements.
             </p>
           </div>
@@ -64,8 +64,11 @@ export function renderCourseProjectView(state) {
             const isCurrent = (state.selectedWeekView || 1) === w.weekNumber;
             const weekStats = comparison.weeklyData.find(d => d.weekNumber === w.weekNumber);
             const hasData = weekStats && weekStats.hasRecords;
+            const pillClasses = isCurrent 
+              ? 'active bg-teal-600 text-white dark:bg-teal-500' 
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
             return `
-              <button class="week-step-pill ${isCurrent ? 'active' : ''} ${hasData ? 'has-data' : ''}" data-week-select="${w.weekNumber}">
+              <button class="week-step-pill ${pillClasses} ${hasData ? 'has-data' : ''}" data-week-select="${w.weekNumber}">
                 <div class="week-pill-num">W${w.weekNumber}</div>
                 <div class="week-pill-type">${w.isBaseline ? 'Baseline' : (w.weekNumber === 2 ? 'Intervene' : 'Evaluate')}</div>
                 <div class="week-pill-dates">${w.startDate.slice(5)}</div>
