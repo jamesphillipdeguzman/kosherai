@@ -1,6 +1,6 @@
 // App Header Component with Connectivity Status & Settings Trigger
 
-export function renderHeader(isOnline = navigator.onLine) {
+export function renderHeader(isOnline = navigator.onLine, appMode = 'diet') {
   return `
     <header class="app-header">
       <div class="brand-wrapper" id="brand-logo-btn">
@@ -8,9 +8,9 @@ export function renderHeader(isOnline = navigator.onLine) {
         <div>
           <div class="brand-title">
             KosherAI
-            <span class="brand-badge">LID RAI</span>
+            <span class="brand-badge">${appMode === 'course' ? 'SUSTAIN' : 'LID RAI'}</span>
           </div>
-          <div class="brand-subtitle">Low-Iodine Diet Clinical Companion</div>
+          <div class="brand-subtitle">${appMode === 'course' ? 'Six-Week Food Cost & Waste Study' : 'Low-Iodine Diet Clinical Companion'}</div>
         </div>
       </div>
 
@@ -30,16 +30,28 @@ export function renderHeader(isOnline = navigator.onLine) {
     </header>
 
     <div class="app-container" style="padding-top: 12px; padding-bottom: 0;">
-      <div class="protocol-banner">
-        <div class="banner-content">
-          <span class="banner-icon">🛡️</span>
-          <div>
-            <div class="banner-title">Clinical Target: &lt;50 mcg Iodine/Day</div>
-            <div class="banner-desc">Deplete thyroid iodine reserves prior to Radioactive Iodine ablation.</div>
-          </div>
-        </div>
-        <div class="banner-target">Strict LID</div>
+      <!-- Main Application Mode Switcher -->
+      <div class="mode-switcher-bar" role="tablist" aria-label="Application View Mode">
+        <button class="mode-tab-btn ${appMode === 'diet' ? 'active' : ''}" data-app-mode="diet" role="tab" aria-selected="${appMode === 'diet'}">
+          🛡️ LID Diet Protocol
+        </button>
+        <button class="mode-tab-btn course-mode ${appMode === 'course' ? 'active' : ''}" data-app-mode="course" role="tab" aria-selected="${appMode === 'course'}">
+          📊 6-Week Project (Oct 31)
+        </button>
       </div>
+
+      ${appMode === 'diet' ? `
+        <div class="protocol-banner">
+          <div class="banner-content">
+            <span class="banner-icon">🛡️</span>
+            <div>
+              <div class="banner-title">Clinical Target: &lt;50 mcg Iodine/Day</div>
+              <div class="banner-desc">Deplete thyroid iodine reserves prior to Radioactive Iodine ablation.</div>
+            </div>
+          </div>
+          <div class="banner-target">Strict LID</div>
+        </div>
+      ` : ''}
     </div>
   `;
 }

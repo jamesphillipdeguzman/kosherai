@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import scansApiHandler from './api/scans.js';
+import receiptScanHandler from './api/receipt-scan.js';
 
 export default defineConfig({
   server: {
@@ -11,8 +12,27 @@ export default defineConfig({
       name: 'neon-scans-api-dev-server',
       configureServer(server) {
         server.middlewares.use(async (req, res, next) => {
-          // Intercept /api/scans and /api/history routes
           const url = new URL(req.url, 'http://localhost');
+
+          // Intercept /api/receipt-scan route
+          if (url.pathname === '/api/receipt-scan') {
+            try {
+              await receiptScanHandler(req, res);
+            } catch (err) {
+              console.error('[Vite Receipt Scan API Error]:', err);
+              if (!res.headersSent) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  error: 'INTERNAL_SERVER_ERROR',
+                  message: err.message
+                }));
+              }
+            }
+            return;
+          }
+
+          // Intercept /api/scans and /api/history routes
           if (url.pathname === '/api/scans' || url.pathname === '/api/history') {
             try {
               await scansApiHandler(req, res);

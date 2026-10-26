@@ -267,3 +267,194 @@ export async function uploadToCloudinary(blob, cloudName, uploadPreset) {
     return null;
   }
 }
+
+/**
+ * Supermarket Receipt Scanner
+ * Tries server-side /api/receipt-scan first (keeping API key secure on server).
+ * Falls back to direct client Gemini Vision or Client Tesseract OCR if server is unreachable.
+ */
+export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, clientApiKey = '') {
+  onProgress({ status: 'uploading', progress: 0.2, message: 'Processing receipt image...' });
+
+  // 1. Try Server-Side /api/receipt-scan
+  try {
+    const res = await fetch('/api/receipt-scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64: dataUrl,
+        mimeType: 'image/jpeg'
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      onProgress({ status: 'done', progress: 1.0, message: 'Receipt extracted successfully!' });
+      return {
+        ...data,
+        source: 'SERVER_GEMINI_AI'
+      };
+    } else {
+      console.warn(`[ReceiptScan] Server endpoint returned ${res.status}. Attempting client fallback...`);
+    }
+  } catch (netErr) {
+    console.warn('[ReceiptScan] Server endpoint not reachable. Attempting client fallback...', netErr);
+  }
+
+  // 2. Direct Client-side Gemini fallback if API key is present
+  const activeKey = (clientApiKey || import.meta.env.VITE_GEMINI_API_KEY || '').trim();
+  if (activeKey) {
+    try {
+      onProgress({ status: 'ai_reasoning', progress: 0.6, message: 'Reading receipt with Gemini AI...' });
+      const prompt = `
+Extract supermarket receipt data from this image:
+Return strict JSON:
+{
+  "storeName": "Store Name",
+  "purchaseDate": "YYYY-MM-DD" or null,
+  "items": [
+    {
+      "name": "Item Description",
+      "rawReceiptText": "raw line",
+      "quantity": 1.0,
+      "unit": "pcs",
+      "unitPrice": 0.0,
+      "totalPrice": 0.0,
+      "weightGrams": null,
+      "discount": 0.0
+    }
+  ],
+  "subtotal": 0.0,
+  "discounts": 0.0,
+  "tax": 0.0,
+  "totalAmountPaid": 0.0,
+  "uncertainFields": [],
+  "mathValid": true,
+  "discrepancyNote": "",
+  "rawText": ""
+}
+`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(activeKey)}`;
+      const cleanBase64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
+              { text: prompt }
+            ]
+          }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.05
+          }
+        })
+      });
+
+      if (response.ok) {
+        const jsonRes = await response.json();
+        const text = jsonRes.candidates?.[0]?.content?.parts?.[0]?.text;
+        const parsed = parseGeminiJson(text);
+        if (parsed) {
+          onProgress({ status: 'done', progress: 1.0, message: 'Receipt extracted via client AI!' });
+          return { ...parsed, source: 'CLIENT_GEMINI_AI' };
+        }
+      }
+    } catch (clientErr) {
+      console.warn('[ReceiptScan] Client Gemini fallback failed:', clientErr);
+    }
+  }
+
+  // 3. Client OCR (Tesseract.js) fallback when fully offline
+  try {
+    onProgress({ status: 'ocr_fallback', progress: 0.7, message: 'Running offline OCR engine...' });
+    const rawOcrText = await runClientOCR(dataUrl, (p) => {
+      onProgress({ status: 'ocr_fallback', progress: 0.7 + (p.progress * 0.25), message: p.message });
+    });
+
+    const parsedOffline = parseOfflineReceiptText(rawOcrText);
+    onProgress({ status: 'done', progress: 1.0, message: 'Extracted using offline OCR.' });
+    return {
+      ...parsedOffline,
+      source: 'OFFLINE_TESSERACT_OCR',
+      rawText: rawOcrText
+    };
+  } catch (ocrErr) {
+    console.error('[ReceiptScan] Offline OCR also failed:', ocrErr);
+    throw new Error('Could not scan receipt. Please enter items manually.');
+  }
+}
+
+/**
+ * Heuristic parser for offline raw OCR text
+ */
+function parseOfflineReceiptText(rawText) {
+  const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+  const items = [];
+  let totalAmountPaid = 0;
+  let storeName = lines[0] ? lines[0].slice(0, 30) : 'Supermarket';
+  let purchaseDate = null;
+
+  // Look for date like 2026-10-31 or 10/31/2026 or 31/10/2026
+  const dateMatch = rawText.match(/\b(202[4-9][\-\/]\d{1,2}[\-\/]\d{1,2}|\d{1,2}[\-\/]\d{1,2}[\-\/]202[4-9])\b/);
+  if (dateMatch) {
+    try {
+      const d = new Date(dateMatch[1]);
+      if (!isNaN(d.getTime())) {
+        purchaseDate = d.toISOString().split('T')[0];
+      }
+    } catch {}
+  }
+
+  // Look for items with prices (numbers with decimal)
+  const priceRegex = /([A-Za-z0-9\s\.\-]{3,35})\s+([₱P]?\s*(\d+[\.,]\d{2}))$/;
+  lines.forEach(line => {
+    const lower = line.toLowerCase();
+    if (lower.includes('total') || lower.includes('subtotal') || lower.includes('vat') || lower.includes('cash') || lower.includes('change')) {
+      const match = line.match(/(\d+[\.,]\d{2})/);
+      if (match && lower.includes('total') && !lower.includes('sub')) {
+        totalAmountPaid = parseFloat(match[1].replace(',', '.'));
+      }
+      return;
+    }
+
+    const match = line.match(priceRegex);
+    if (match) {
+      const name = match[1].trim();
+      const price = parseFloat(match[3].replace(',', '.'));
+      if (name.length > 2 && price > 0 && price < 100000) {
+        items.push({
+          name,
+          rawReceiptText: line,
+          quantity: 1,
+          unit: 'pcs',
+          unitPrice: price,
+          totalPrice: price,
+          weightGrams: null,
+          discount: 0
+        });
+      }
+    }
+  });
+
+  if (totalAmountPaid === 0 && items.length > 0) {
+    totalAmountPaid = items.reduce((sum, i) => sum + i.totalPrice, 0);
+  }
+
+  return {
+    storeName,
+    purchaseDate,
+    items,
+    subtotal: totalAmountPaid,
+    discounts: 0,
+    tax: 0,
+    totalAmountPaid,
+    uncertainFields: ['items', 'totalAmountPaid'],
+    mathValid: true,
+    discrepancyNote: 'Parsed via offline OCR. Please verify all fields.',
+    rawText
+  };
+}

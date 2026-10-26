@@ -11,9 +11,10 @@ import { renderSubstitutesTab } from './components/SubstitutesTab.js';
 import { renderCookModeTab, lidRecipes } from './components/CookModeTab.js';
 import { renderSettingsModal } from './components/SettingsModal.js';
 import { renderItemDetailModal } from './components/ItemDetailModal.js';
+import { renderCourseProjectView } from './components/CourseProjectView.js';
 
 import { searchDatabase, analyzeIngredients, analyzeRecipe } from './services/ruleEngine.js';
-import { compressImage, runClientOCR, verifyWithGeminiAI } from './services/aiVerification.js';
+import { compressImage, runClientOCR, verifyWithGeminiAI, scanSupermarketReceipt } from './services/aiVerification.js';
 import {
   getSettings,
   saveSettings,
@@ -25,10 +26,29 @@ import {
   getChecklistState,
   saveChecklistState
 } from './services/storage.js';
+
+import {
+  getCourseConfig,
+  saveCourseConfig,
+  saveShoppingTrip,
+  deleteShoppingTrip,
+  saveFoodWasteRecord,
+  deleteFoodWasteRecord,
+  saveMealPlan,
+  deleteMealPlan,
+  exportAllCourseCsvs,
+  downloadCsvFile,
+  PROJECT_CONFIG
+} from './services/courseProjectStorage.js';
+
 import { LID_DATABASE } from './data/lidDatabase.js';
 
 // Global Reactive State
 const state = {
+  // App Mode Switcher: 'diet' (LID Clinical Protocol) | 'course' (Six-Week Sustainability Project)
+  appMode: localStorage.getItem('kosherai_app_mode') || 'course',
+
+  // Clinical Diet Companion Tabs
   activeTab: 'checker', // 'checker' | 'scanner' | 'cheatsheet' | 'substitutes' | 'cook'
   isOnline: navigator.onLine,
   
@@ -65,7 +85,22 @@ const state = {
 
   // Settings
   settings: getSettings(),
-  settingsOpen: false
+  settingsOpen: false,
+
+  // Six-Week Course Project State
+  courseSubTab: 'dashboard', // 'dashboard' | 'trips' | 'groceries' | 'waste' | 'mealplan' | 'export'
+  selectedWeekView: 1,
+  mealPlanWeek: 2,
+  receiptModalOpen: false,
+  manualTripModalOpen: false,
+  wasteModalOpen: false,
+  mealPlanModalOpen: false,
+  configModalOpen: false,
+  receiptPreviewUrl: null,
+  scannedReceiptData: null,
+  receiptScanning: false,
+  receiptProgress: 0,
+  receiptStatusMsg: ''
 };
 
 // Main DOM Render Function
@@ -73,42 +108,48 @@ function render() {
   const app = document.querySelector('#app');
   if (!app) return;
 
-  // Filter Search Database
+  // Filter Search Database for checker
   state.searchResults = searchDatabase(
     state.searchQuery,
     state.statusFilter,
     state.categoryFilter
   );
 
-  let activeTabHtml = '';
-  switch (state.activeTab) {
-    case 'checker':
-      activeTabHtml = renderCheckerTab(state);
-      break;
-    case 'scanner':
-      activeTabHtml = renderScannerTab(state);
-      break;
-    case 'cheatsheet':
-      activeTabHtml = renderCheatSheetTab(state);
-      break;
-    case 'substitutes':
-      activeTabHtml = renderSubstitutesTab(state);
-      break;
-    case 'cook':
-      activeTabHtml = renderCookModeTab(state);
-      break;
-    default:
-      activeTabHtml = renderCheckerTab(state);
+  let activeContentHtml = '';
+  if (state.appMode === 'course') {
+    activeContentHtml = renderCourseProjectView(state);
+  } else {
+    switch (state.activeTab) {
+      case 'checker':
+        activeContentHtml = renderCheckerTab(state);
+        break;
+      case 'scanner':
+        activeContentHtml = renderScannerTab(state);
+        break;
+      case 'cheatsheet':
+        activeContentHtml = renderCheatSheetTab(state);
+        break;
+      case 'substitutes':
+        activeContentHtml = renderSubstitutesTab(state);
+        break;
+      case 'cook':
+        activeContentHtml = renderCookModeTab(state);
+        break;
+      default:
+        activeContentHtml = renderCheckerTab(state);
+    }
   }
 
+  const currentNavTab = state.appMode === 'course' ? state.courseSubTab : state.activeTab;
+
   app.innerHTML = `
-    ${renderHeader(state.isOnline)}
+    ${renderHeader(state.isOnline, state.appMode)}
     
     <main class="app-container pt-24">
-      ${activeTabHtml}
+      ${activeContentHtml}
     </main>
 
-    ${renderBottomNav(state.activeTab)}
+    ${renderBottomNav(currentNavTab, state.appMode)}
 
     ${state.selectedItem ? renderItemDetailModal(state.selectedItem) : ''}
     ${state.settingsOpen ? renderSettingsModal(state.settings) : ''}
@@ -119,11 +160,32 @@ function render() {
 
 // Event Delegation & Handler Attachments
 function attachEventHandlers() {
-  // Navigation Tabs
+  // App Mode Switcher (Diet Protocol vs. 6-Week Project)
+  document.querySelectorAll('.mode-tab-btn[data-app-mode]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const mode = e.currentTarget.getAttribute('data-app-mode');
+      if (mode && mode !== state.appMode) {
+        state.appMode = mode;
+        try {
+          localStorage.setItem('kosherai_app_mode', mode);
+        } catch {}
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        render();
+      }
+    });
+  });
+
+  // Navigation Tabs (bottom nav)
   document.querySelectorAll('.nav-tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const tab = e.currentTarget.getAttribute('data-tab');
-      if (tab) {
+      const mode = e.currentTarget.getAttribute('data-mode') || state.appMode;
+
+      if (mode === 'course') {
+        state.courseSubTab = tab;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        render();
+      } else if (tab) {
         state.activeTab = tab;
         window.scrollTo({ top: 0, behavior: 'smooth' });
         render();
@@ -138,8 +200,12 @@ function attachEventHandlers() {
   const brandBtn = document.querySelector('#brand-logo-btn');
   if (brandBtn) {
     brandBtn.addEventListener('click', () => {
-      state.activeTab = 'checker';
-      state.searchQuery = '';
+      if (state.appMode === 'course') {
+        state.courseSubTab = 'dashboard';
+      } else {
+        state.activeTab = 'checker';
+        state.searchQuery = '';
+      }
       render();
     });
   }
@@ -676,6 +742,417 @@ Filtered water`;
       }
     });
   });
+
+  // ==================== SIX-WEEK COURSE PROJECT EVENTS ====================
+
+  // Course Subnavigation
+  document.querySelectorAll('.subnav-btn[data-subtab]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const sub = e.currentTarget.getAttribute('data-subtab');
+      if (sub) {
+        state.courseSubTab = sub;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        render();
+      }
+    });
+  });
+
+  // Weekly Progress Strip Selection
+  document.querySelectorAll('.week-step-pill[data-week-select]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const w = parseInt(e.currentTarget.getAttribute('data-week-select'), 10);
+      state.selectedWeekView = w;
+      render();
+    });
+  });
+
+  // Meal Plan Week Selector
+  document.querySelectorAll('.btn-chip[data-mealplan-week]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const w = parseInt(e.currentTarget.getAttribute('data-mealplan-week'), 10);
+      state.mealPlanWeek = w;
+      render();
+    });
+  });
+
+  // Quick Dish Chip for Meal Plan
+  document.querySelectorAll('.quick-dish-chip[data-recipe-title]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const dishInput = document.querySelector('#plan-dish-name');
+      if (dishInput) {
+        dishInput.value = chip.getAttribute('data-recipe-title');
+      }
+    });
+  });
+
+  // Open Receipt Scanner Modal
+  const openReceiptScannerBtn = document.querySelector('#open-receipt-scanner-btn');
+  const emptyScanBtn = document.querySelector('#empty-scan-btn');
+  const handleOpenReceiptScanner = () => {
+    state.receiptModalOpen = true;
+    state.scannedReceiptData = null;
+    state.receiptPreviewUrl = null;
+    state.receiptScanning = false;
+    render();
+  };
+  if (openReceiptScannerBtn) openReceiptScannerBtn.addEventListener('click', handleOpenReceiptScanner);
+  if (emptyScanBtn) emptyScanBtn.addEventListener('click', handleOpenReceiptScanner);
+
+  // Close Receipt Scanner Modal
+  const closeReceiptModalBtn = document.querySelector('#close-receipt-modal-btn');
+  const cancelReceiptModalBtn = document.querySelector('#cancel-receipt-modal-btn');
+  const handleCloseReceiptModal = () => {
+    state.receiptModalOpen = false;
+    state.scannedReceiptData = null;
+    state.receiptScanning = false;
+    render();
+  };
+  if (closeReceiptModalBtn) closeReceiptModalBtn.addEventListener('click', handleCloseReceiptModal);
+  if (cancelReceiptModalBtn) cancelReceiptModalBtn.addEventListener('click', handleCloseReceiptModal);
+
+  // Trigger File Input / Camera
+  const triggerReceiptFileBtn = document.querySelector('#trigger-receipt-file-btn');
+  const reuploadReceiptBtn = document.querySelector('#reupload-receipt-btn');
+  const receiptFileInput = document.querySelector('#receipt-file-input');
+
+  if (triggerReceiptFileBtn && receiptFileInput) {
+    triggerReceiptFileBtn.addEventListener('click', () => receiptFileInput.click());
+  }
+  if (reuploadReceiptBtn && receiptFileInput) {
+    reuploadReceiptBtn.addEventListener('click', () => receiptFileInput.click());
+  }
+
+  // Handle Receipt File Selection & AI Scan
+  if (receiptFileInput) {
+    receiptFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      try {
+        state.receiptScanning = true;
+        state.receiptProgress = 0.2;
+        state.receiptStatusMsg = 'Compressing receipt image...';
+        render();
+
+        const { dataUrl } = await compressImage(file, 1400);
+        state.receiptPreviewUrl = dataUrl;
+        render();
+
+        const result = await scanSupermarketReceipt(dataUrl, (p) => {
+          state.receiptProgress = p.progress;
+          state.receiptStatusMsg = p.message;
+          const fill = document.querySelector('.progress-bar-fill');
+          if (fill) fill.style.width = Math.round(p.progress * 100) + '%';
+        }, state.settings?.geminiApiKey);
+
+        state.scannedReceiptData = result;
+        state.receiptScanning = false;
+        render();
+      } catch (err) {
+        console.error('Receipt scan error:', err);
+        alert('Could not complete receipt scan. You can enter details manually.');
+        state.receiptScanning = false;
+        state.scannedReceiptData = {
+          storeName: 'Supermarket',
+          purchaseDate: new Date().toISOString().split('T')[0],
+          items: [],
+          totalAmountPaid: 0,
+          totalScaleWeightKg: 0
+        };
+        render();
+      }
+    });
+  }
+
+  // Add Item Row in Receipt Verification Table
+  const addReceiptItemRowBtn = document.querySelector('#add-receipt-item-row');
+  if (addReceiptItemRowBtn) {
+    addReceiptItemRowBtn.addEventListener('click', () => {
+      const tbody = document.querySelector('#receipt-items-tbody');
+      if (tbody) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="text" class="table-input item-name-val" placeholder="Item Name" required /></td>
+          <td><input type="number" step="0.1" class="table-input item-qty-val" value="1" style="width: 50px;" /></td>
+          <td><input type="text" class="table-input item-unit-val" value="pcs" style="width: 50px;" /></td>
+          <td><input type="number" step="0.01" class="table-input item-price-val" placeholder="0.00" style="width: 70px;" /></td>
+          <td><input type="number" step="0.01" class="table-input item-total-val" placeholder="0.00" style="width: 80px;" /></td>
+          <td><button type="button" class="btn-icon remove-item-row-btn">✕</button></td>
+        `;
+        tbody.appendChild(tr);
+        attachRowRemoveListeners();
+      }
+    });
+  }
+
+  function attachRowRemoveListeners() {
+    document.querySelectorAll('.remove-item-row-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        const row = e.target.closest('tr');
+        if (row) row.remove();
+      };
+    });
+  }
+  attachRowRemoveListeners();
+
+  // Save Verified Receipt Shopping Trip
+  const receiptVerificationForm = document.querySelector('#receipt-verification-form');
+  if (receiptVerificationForm) {
+    receiptVerificationForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      const storeName = document.querySelector('#edit-store-name')?.value || 'Supermarket';
+      const purchaseDate = document.querySelector('#edit-purchase-date')?.value || new Date().toISOString().split('T')[0];
+      const scaleWeight = parseFloat(document.querySelector('#edit-scale-weight')?.value || 0);
+      const totalAmount = parseFloat(document.querySelector('#edit-total-amount')?.value || 0);
+      const tripType = document.querySelector('#edit-trip-type')?.value || 'Supermarket';
+
+      const items = [];
+      document.querySelectorAll('#receipt-items-tbody tr').forEach(row => {
+        const name = row.querySelector('.item-name-val')?.value?.trim();
+        const qty = parseFloat(row.querySelector('.item-qty-val')?.value || 1);
+        const unit = row.querySelector('.item-unit-val')?.value?.trim() || 'pcs';
+        const price = parseFloat(row.querySelector('.item-price-val')?.value || 0);
+        const total = parseFloat(row.querySelector('.item-total-val')?.value || price || 0);
+
+        if (name) {
+          items.push({
+            name,
+            quantity: qty,
+            unit,
+            unitPrice: price,
+            totalPrice: total
+          });
+        }
+      });
+
+      saveShoppingTrip({
+        storeName,
+        date: purchaseDate,
+        totalScaleWeightKg: scaleWeight, // Whole grocery physical scale weight
+        totalAmountPaid: totalAmount,
+        tripType,
+        receiptImageUrl: state.receiptPreviewUrl || null,
+        notes: `Receipt scanned (${items.length} items verified)`
+      }, items);
+
+      state.receiptModalOpen = false;
+      state.scannedReceiptData = null;
+      state.receiptPreviewUrl = null;
+      render();
+    });
+  }
+
+  // Manual Trip Modal Open & Close
+  const openManualTripBtn = document.querySelector('#open-manual-trip-btn');
+  const emptyManualBtn = document.querySelector('#empty-manual-btn');
+  const closeManualTripBtn = document.querySelector('#close-manual-trip-btn');
+  const cancelManualTripBtn = document.querySelector('#cancel-manual-trip-btn');
+
+  if (openManualTripBtn) openManualTripBtn.addEventListener('click', () => { state.manualTripModalOpen = true; render(); });
+  if (emptyManualBtn) emptyManualBtn.addEventListener('click', () => { state.manualTripModalOpen = true; render(); });
+  if (closeManualTripBtn) closeManualTripBtn.addEventListener('click', () => { state.manualTripModalOpen = false; render(); });
+  if (cancelManualTripBtn) cancelManualTripBtn.addEventListener('click', () => { state.manualTripModalOpen = false; render(); });
+
+  // Manual Trip Form Submit
+  const manualTripForm = document.querySelector('#manual-trip-form');
+  if (manualTripForm) {
+    manualTripForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const storeName = document.querySelector('#manual-store-name')?.value || 'Wet Market';
+      const date = document.querySelector('#manual-trip-date')?.value || new Date().toISOString().split('T')[0];
+      const tripType = document.querySelector('#manual-trip-type')?.value || 'Wet Market / Palengke';
+      const scaleWeight = parseFloat(document.querySelector('#manual-scale-weight')?.value || 0);
+      const totalAmount = parseFloat(document.querySelector('#manual-total-amount')?.value || 0);
+      const notes = document.querySelector('#manual-notes')?.value || '';
+
+      saveShoppingTrip({
+        storeName,
+        date,
+        tripType,
+        totalScaleWeightKg: scaleWeight,
+        totalAmountPaid: totalAmount,
+        notes
+      }, []);
+
+      state.manualTripModalOpen = false;
+      render();
+    });
+  }
+
+  // Delete Trip
+  document.querySelectorAll('.delete-trip-btn[data-delete-trip]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.getAttribute('data-delete-trip');
+      if (confirm('Delete this shopping trip and its linked grocery items & expense record?')) {
+        deleteShoppingTrip(id);
+        render();
+      }
+    });
+  });
+
+  // Food Waste Modal Open & Close
+  const openWasteModalBtn = document.querySelector('#open-waste-modal-btn');
+  const emptyWasteBtn = document.querySelector('#empty-waste-btn');
+  const closeWasteModalBtn = document.querySelector('#close-waste-modal-btn');
+  const cancelWasteModalBtn = document.querySelector('#cancel-waste-modal-btn');
+
+  if (openWasteModalBtn) openWasteModalBtn.addEventListener('click', () => { state.wasteModalOpen = true; render(); });
+  if (emptyWasteBtn) emptyWasteBtn.addEventListener('click', () => { state.wasteModalOpen = true; render(); });
+  if (closeWasteModalBtn) closeWasteModalBtn.addEventListener('click', () => { state.wasteModalOpen = false; render(); });
+  if (cancelWasteModalBtn) cancelWasteModalBtn.addEventListener('click', () => { state.wasteModalOpen = false; render(); });
+
+  // Food Waste Form Submit
+  const foodWasteForm = document.querySelector('#food-waste-form');
+  if (foodWasteForm) {
+    foodWasteForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const itemName = document.querySelector('#waste-item-name')?.value || 'Food Waste';
+      const date = document.querySelector('#waste-date')?.value || new Date().toISOString().split('T')[0];
+      const weightG = parseFloat(document.querySelector('#waste-weight-g')?.value || 0);
+      const reason = document.querySelector('#waste-reason')?.value || 'Spoiled / Molded';
+      const costEst = parseFloat(document.querySelector('#waste-cost-est')?.value || 0);
+
+      saveFoodWasteRecord({
+        itemName,
+        date,
+        measuredWeightG: weightG,
+        isEstimated: false, // Confirmed weighed on digital scale
+        estimatedCost: costEst,
+        reason,
+        notes: 'Net edible food waste (packaging excluded)'
+      });
+
+      state.wasteModalOpen = false;
+      render();
+    });
+  }
+
+  // Delete Food Waste Record
+  document.querySelectorAll('.delete-waste-btn[data-delete-waste]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.getAttribute('data-delete-waste');
+      if (confirm('Delete this food waste record?')) {
+        deleteFoodWasteRecord(id);
+        render();
+      }
+    });
+  });
+
+  // Meal Plan Modal Open & Close
+  const openMealPlanModalBtn = document.querySelector('#open-mealplan-modal-btn');
+  const closeMealPlanModalBtn = document.querySelector('#close-mealplan-modal-btn');
+  const cancelMealPlanModalBtn = document.querySelector('#cancel-mealplan-modal-btn');
+
+  if (openMealPlanModalBtn) openMealPlanModalBtn.addEventListener('click', () => { state.mealPlanModalOpen = true; render(); });
+  if (closeMealPlanModalBtn) closeMealPlanModalBtn.addEventListener('click', () => { state.mealPlanModalOpen = false; render(); });
+  if (cancelMealPlanModalBtn) cancelMealPlanModalBtn.addEventListener('click', () => { state.mealPlanModalOpen = false; render(); });
+
+  // Meal Plan Form Submit
+  const mealPlanForm = document.querySelector('#mealplan-form');
+  if (mealPlanForm) {
+    mealPlanForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const projectWeek = parseInt(document.querySelector('#plan-week')?.value || 2, 10);
+      const dayOfWeek = document.querySelector('#plan-day')?.value || 'Saturday';
+      const mealType = document.querySelector('#plan-meal-type')?.value || 'Dinner';
+      const dishName = document.querySelector('#plan-dish-name')?.value || 'Planned Meal';
+      const lidVerified = document.querySelector('#plan-lid-verified')?.checked ?? true;
+
+      const allocated = [];
+      document.querySelectorAll('input[name="allocated-items"]:checked').forEach(cb => {
+        allocated.push(cb.value);
+      });
+
+      saveMealPlan({
+        projectWeek,
+        dayOfWeek,
+        mealType,
+        dishName,
+        allocatedGroceryItemIds: allocated,
+        lidVerified
+      });
+
+      state.mealPlanWeek = projectWeek;
+      state.mealPlanModalOpen = false;
+      render();
+    });
+  }
+
+  // Delete Meal Plan
+  document.querySelectorAll('.delete-meal-btn[data-delete-meal]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.getAttribute('data-delete-meal');
+      if (confirm('Remove this planned meal?')) {
+        deleteMealPlan(id);
+        render();
+      }
+    });
+  });
+
+  // CSV Export Buttons
+  document.querySelectorAll('.export-btn[data-export-type]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const type = e.currentTarget.getAttribute('data-export-type');
+      const csvs = exportAllCourseCsvs();
+
+      if (type === 'summary') {
+        downloadCsvFile(csvs.summaryCsv, 'kosherai_six_week_summary_comparison.csv');
+      } else if (type === 'trips') {
+        downloadCsvFile(csvs.tripsCsv, 'kosherai_shopping_trips_expenses.csv');
+      } else if (type === 'items') {
+        downloadCsvFile(csvs.itemsCsv, 'kosherai_grocery_purchased_items.csv');
+      } else if (type === 'waste') {
+        downloadCsvFile(csvs.wasteCsv, 'kosherai_food_waste_records.csv');
+      }
+    });
+  });
+
+  // Download All CSVs
+  const downloadAllCsvsBtn = document.querySelector('#download-all-csvs-btn');
+  if (downloadAllCsvsBtn) {
+    downloadAllCsvsBtn.addEventListener('click', () => {
+      const csvs = exportAllCourseCsvs();
+      downloadCsvFile(csvs.summaryCsv, 'kosherai_six_week_summary_comparison.csv');
+      setTimeout(() => downloadCsvFile(csvs.tripsCsv, 'kosherai_shopping_trips_expenses.csv'), 300);
+      setTimeout(() => downloadCsvFile(csvs.itemsCsv, 'kosherai_grocery_purchased_items.csv'), 600);
+      setTimeout(() => downloadCsvFile(csvs.wasteCsv, 'kosherai_food_waste_records.csv'), 900);
+    });
+  }
+
+  // Course Project Config Modal Open & Close
+  const openConfigBtn = document.querySelector('#open-config-btn');
+  const closeConfigModalBtn = document.querySelector('#close-config-modal-btn');
+  const cancelConfigModalBtn = document.querySelector('#cancel-config-modal-btn');
+
+  if (openConfigBtn) openConfigBtn.addEventListener('click', () => { state.configModalOpen = true; render(); });
+  if (closeConfigModalBtn) closeConfigModalBtn.addEventListener('click', () => { state.configModalOpen = false; render(); });
+  if (cancelConfigModalBtn) cancelConfigModalBtn.addEventListener('click', () => { state.configModalOpen = false; render(); });
+
+  // Course Project Config Form Submit
+  const projectConfigForm = document.querySelector('#project-config-form');
+  if (projectConfigForm) {
+    projectConfigForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const startDate = document.querySelector('#cfg-start-date')?.value || PROJECT_CONFIG.START_DATE;
+      const baseline = parseFloat(document.querySelector('#cfg-baseline-budget')?.value || 4000);
+
+      const weeklyBudgets = {};
+      for (let w = 1; w <= 6; w++) {
+        const val = parseFloat(document.querySelector(`#cfg-week-${w}-budget`)?.value || baseline);
+        weeklyBudgets[w] = val;
+      }
+
+      saveCourseConfig({
+        startDate,
+        baselineBudget: baseline,
+        weeklyBudgets
+      });
+
+      state.configModalOpen = false;
+      render();
+    });
+  }
 }
 
 // Helper: Processes scanned/entered text with Gemini AI (if key present) or offline rule engine
@@ -784,18 +1261,26 @@ window.addEventListener('offline', () => {
   render();
 });
 
-// Register Service Worker for Offline PWA Capabilities
+// Register Service Worker for Offline PWA Capabilities (Production only)
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then(
-      (reg) => {
-        console.log('KosherAI Service Worker registered successfully with scope:', reg.scope);
-      },
-      (err) => {
-        console.warn('KosherAI Service Worker registration failed:', err);
+  if (import.meta.env.DEV) {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister();
       }
-    );
-  });
+    });
+  } else {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').then(
+        (reg) => {
+          console.log('KosherAI Service Worker registered successfully with scope:', reg.scope);
+        },
+        (err) => {
+          console.warn('KosherAI Service Worker registration failed:', err);
+        }
+      );
+    });
+  }
 }
 
 // Initial Render and mount sync from Neon PostgreSQL

@@ -1,5 +1,5 @@
 // KosherAI Service Worker - Offline-First Caching for RAI Low-Iodine Diet Companion
-const CACHE_NAME = 'kosherai-v1-static';
+const CACHE_NAME = 'kosherai-v2-course';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -34,6 +34,11 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
+
+  // Bypass Vite dev server modules and HMR
+  if (url.pathname.startsWith('/@') || url.pathname.startsWith('/src/')) {
+    return;
+  }
 
   // Stale-While-Revalidate strategy for same-origin app shell & scripts
   if (url.origin === self.location.origin) {
