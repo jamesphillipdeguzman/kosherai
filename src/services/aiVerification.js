@@ -182,7 +182,8 @@ export function parseGeminiJson(rawText) {
  * Deep Clinical AI Verification via Gemini API
  * Calls gemini-2.5-flash to enforce strict Radioactive Iodine (RAI) / Low-Iodine Diet protocol
  */
-export async function verifyWithGeminiAI(ingredientTextOrPayload, apiKey, activeDiet = 'lid') {
+export async function verifyWithGeminiAI(ingredientTextOrPayload, apiKey, activeDiet = 'lid', scanTarget = 'food_label') {
+  const activeTarget = scanTarget || 'food_label';
   const activeKey = (apiKey?.trim() || import.meta.env.VITE_GEMINI_API_KEY || '').trim();
   if (!activeKey) {
     throw new Error('Please add your Gemini API Key in Settings or set VITE_GEMINI_API_KEY to enable online AI deep reasoning.');

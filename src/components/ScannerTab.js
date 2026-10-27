@@ -103,8 +103,12 @@ export async function executeScanWorkflow(file, context = {}) {
     const settings = getSettings();
     const apiKey = settings.geminiApiKey;
     const activeDiet = state.activeDiet || 'lid';
-    const activeScannerTab = state.scannerTab || (state.scanTarget === 'receipt' ? 'receipt' : 'food_label');
-    const isReceipt = activeScannerTab === 'receipt';
+
+    // Safely resolve active scan mode
+    const scanTarget = state.scanTarget || state.scannerTab || state.scannerMode;
+    const scannerMode = state.scannerMode || state.scannerTab;
+    const activeTarget = scanTarget || scannerMode || 'food_label';
+    const isReceipt = activeTarget === 'receipt' || activeTarget === 'supermarket_receipt';
 
     // Background Cloudinary Upload if configured (targets kosherai/receipts for receipts)
     const cloudName = settings.cloudinaryCloudName;
@@ -249,7 +253,7 @@ export async function executeScanWorkflow(file, context = {}) {
               mimeType: 'image/jpeg'
             };
 
-        aiResult = await verifyWithGeminiAI(payload, apiKey, state.activeDiet || 'lid');
+        aiResult = await verifyWithGeminiAI(payload, apiKey, state.activeDiet || 'lid', activeTarget);
         state.aiAnalysis = aiResult;
 
         const probTokens = aiResult.problemIngredients || [];
@@ -332,7 +336,13 @@ export async function executeScanWorkflow(file, context = {}) {
     console.error('Scan workflow error:', err);
     state.ocrStatus = null;
     state.aiLoading = false;
-    state.scanError = err.message || 'Could not parse receipt contents. Please ensure the receipt is well-lit and legible.';
+    const scanTarget = state.scanTarget || state.scannerTab || state.scannerMode;
+    const scannerMode = state.scannerMode || state.scannerTab;
+    const activeTarget = scanTarget || scannerMode || 'food_label';
+    const isReceiptMode = activeTarget === 'receipt' || activeTarget === 'supermarket_receipt';
+    state.scanError = err.message || (isReceiptMode
+      ? 'Could not parse receipt contents. Please ensure the receipt is well-lit and legible.'
+      : 'Could not read food packaging label. Please ensure the nutrition facts or ingredient label is clear and well-lit.');
     render();
   }
 }
@@ -412,7 +422,10 @@ export function renderScannerTab(state) {
   } = state;
 
   // Single source of truth for scanner active tab
-  const activeScannerTab = state.scannerTab || (inputMode === 'text' ? 'paste' : (scanTarget === 'receipt' ? 'receipt' : 'food_label'));
+  const scanTarget = state.scanTarget || state.scannerTab || state.scannerMode;
+  const scannerMode = state.scannerMode || state.scannerTab;
+  const activeTarget = scanTarget || scannerMode || 'food_label';
+  const activeScannerTab = state.scannerTab || (inputMode === 'text' ? 'paste' : (activeTarget === 'receipt' ? 'receipt' : 'food_label'));
   const isPaste = activeScannerTab === 'paste';
   const isReceipt = activeScannerTab === 'receipt';
 
@@ -501,12 +514,21 @@ export function renderScannerTab(state) {
         <div class="scan-error-banner" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.45); border-radius: 14px; padding: 14px 18px; margin: 16px 0; color: #fca5a5; display: flex; align-items: flex-start; gap: 12px;">
           <div style="font-size: 1.35rem; line-height: 1;">⚠️</div>
           <div style="flex: 1;">
-            <div style="font-weight: 700; color: #ef4444; font-size: 0.95rem; margin-bottom: 4px;">Receipt Scanning Failure</div>
+            <div style="font-weight: 700; color: #ef4444; font-size: 0.95rem; margin-bottom: 4px;">
+              ${(!isReceipt || activeScannerTab === 'food_label' || activeTarget === 'food_label') 
+                ? 'Food Label Scanning Failed' 
+                : 'Receipt Scanning Failed'}
+            </div>
             <div style="font-size: 0.88rem; line-height: 1.45; color: #fecaca;">${escapeHtml(scanError)}</div>
             <div style="font-size: 0.78rem; color: #f87171; margin-top: 8px; line-height: 1.4;">
               💡 <strong>Troubleshooting Tips:</strong>
               <ul style="margin: 4px 0 0 16px; list-style-type: disc;">
-                <li>Ensure the printed receipt is well-lit, laid flat, and in focus.</li>
+                ${(!isReceipt) ? `
+                  <li>Ensure the food package nutrition label or ingredient list is well-lit, laid flat, and in focus.</li>
+                  <li>Avoid glare, reflections, or crumpled packaging that obscures ingredient text.</li>
+                ` : `
+                  <li>Ensure the printed receipt is well-lit, laid flat, and in focus.</li>
+                `}
                 <li>Verify your <code>GEMINI_API_KEY</code> is configured in Settings or Vercel Environment Variables.</li>
                 <li>You can also click <strong>✏️ Paste Text</strong> or try a <strong>⚡ One-Tap Clinical Sample</strong> below.</li>
               </ul>

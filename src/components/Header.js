@@ -21,25 +21,9 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
       </div>
 
       <div class="header-actions">
-        <!-- Multi-Diet Profile Selector Dropdown (LID Default) -->
-        <div class="header-diet-picker-wrap" title="Active Dietary Protocol">
-          <label for="header-diet-selector" class="sr-only">Select Diet Protocol</label>
-          <div class="diet-select-badge">
-            <span class="diet-select-icon mr-1.5">${currentProfile.emoji || currentProfile.icon}</span>
-            <select id="header-diet-selector" class="header-diet-dropdown bg-teal-950/40 dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-teal-500/30 rounded-xl px-3 py-1.5 focus:outline-none" aria-label="Select Dietary Protocol">
-              ${Object.values(DIET_PROFILES).map(profile => `
-                <option value="${profile.id}" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 py-1.5" ${profile.id === activeDiet ? 'selected' : ''}>
-                  ${profile.label || profile.name}
-                </option>
-              `).join('')}
-            </select>
-            <span class="diet-select-chevron">▾</span>
-          </div>
-        </div>
-
-        <div class="status-pill hidden sm:inline-flex" title="${isOnline ? 'Online - AI Verification Available' : 'Offline Mode - Local Database Active'}">
+        <div class="status-pill" title="${isOnline ? 'Online - AI Verification Available' : 'Offline Mode - Local Database Active'}">
           <span class="status-dot ${isOnline ? '' : 'offline'}"></span>
-          <span>${isOnline ? 'Offline-Ready' : 'Offline Active'}</span>
+          <span class="status-label">${isOnline ? 'Online' : 'Offline'}</span>
         </div>
 
         <!-- Quick Light / Dark Mode Toggle -->
@@ -63,6 +47,31 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
     </header>
 
     <div class="app-container" style="padding-top: 12px; padding-bottom: 0;">
+      <!-- Dedicated Full-Width Diet Protocol Selector Strip -->
+      <div class="diet-selector-strip w-full flex items-center justify-between gap-2 p-2 my-2 rounded-2xl bg-slate-100/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-md">
+        <div class="flex items-center gap-2 min-w-0 pl-1">
+          <span class="text-lg flex-shrink-0">${currentProfile.emoji || currentProfile.icon}</span>
+          <div class="min-w-0">
+            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Dietary Protocol</div>
+            <div class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">${currentProfile.name}</div>
+          </div>
+        </div>
+
+        <div class="header-diet-picker-wrap flex-shrink-0" title="Active Dietary Protocol">
+          <label for="header-diet-selector" class="sr-only">Select Diet Protocol</label>
+          <div class="diet-select-badge">
+            <span class="diet-select-icon mr-1.5">${currentProfile.emoji || currentProfile.icon}</span>
+            <select id="header-diet-selector" class="header-diet-dropdown bg-teal-950/40 dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-teal-500/30 rounded-xl px-3 py-1.5 focus:outline-none" aria-label="Select Dietary Protocol">
+              ${Object.values(DIET_PROFILES).map(profile => `
+                <option value="${profile.id}" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 py-1.5" ${profile.id === activeDiet ? 'selected' : ''}>
+                  ${profile.label || profile.name}
+                </option>
+              `).join('')}
+            </select>
+            <span class="diet-select-chevron">▾</span>
+          </div>
+        </div>
+      </div>
       <!-- Centered Selector Area with Dynamic Tagline -->
       <div class="flex flex-col items-center justify-center my-2 text-center px-4">
         ${showProjectTab ? `

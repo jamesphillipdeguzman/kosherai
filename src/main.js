@@ -1574,7 +1574,11 @@ async function processScanText(text, title = 'Food Label', isReceipt = false) {
   console.log(`[Scanner] Gemini Key present: ${Boolean(settings.geminiApiKey)}`);
   console.log(`[Scanner] Cloudinary configured: ${Boolean(settings.cloudinaryCloudName && settings.cloudinaryPreset)}`);
 
-  const isReceiptScan = isReceipt || state.scannerTab === 'receipt' || state.scanTarget === 'receipt' || /SIL LABUYO|CKN BRST|MG BRTH|PTIS REF|SM SUPERMARKET|PUREGOLD|ROBINSONS/i.test(text);
+  const scanTarget = state.scanTarget || state.scannerTab || state.scannerMode;
+  const scannerMode = state.scannerMode || state.scannerTab;
+  const activeTarget = scanTarget || scannerMode || 'food_label';
+
+  const isReceiptScan = isReceipt || activeTarget === 'receipt' || activeTarget === 'supermarket_receipt' || /SIL LABUYO|CKN BRST|MG BRTH|PTIS REF|SM SUPERMARKET|PUREGOLD|ROBINSONS/i.test(text);
   if (isReceiptScan) {
     const rawLines = text.split('\n').map(l => l.trim()).filter(l => l && !l.toUpperCase().startsWith('TOTAL') && !l.toUpperCase().includes('CHANGE') && !l.toUpperCase().includes('CASHIER'));
     const storeMatch = text.match(/(SM SUPERMARKET|PUREGOLD|ROBINSONS|SAVEMORE|WALTERMART|SUPERMARKET)/i);
@@ -1628,7 +1632,7 @@ async function processScanText(text, title = 'Food Label', isReceipt = false) {
     try {
       state.aiLoading = true;
       render();
-      aiResult = await verifyWithGeminiAI(text, settings.geminiApiKey, state.activeDiet || 'lid');
+      aiResult = await verifyWithGeminiAI(text, settings.geminiApiKey, state.activeDiet || 'lid', activeTarget);
       state.aiAnalysis = aiResult;
       const probTokens = aiResult.problemIngredients || [];
       analysis = {
