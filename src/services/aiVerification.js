@@ -581,8 +581,8 @@ RETURN ONLY VALID JSON (no markdown fences, no explanatory text):
   "paymentMethod": "CASH"
 }
 `;
-      // Cascade: Try gemini-3.8-pro first, fall back to gemini-1.5-flash
-      const models = ['gemini-3.8-pro', 'gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+      // Cascade: Try gemini-3.8-flash first, fall back to gemini-2.0-flash
+      const models = ['gemini-3.8-flash', 'gemini-2.0-flash'];
       const cleanBase64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
 
       for (const model of models) {
