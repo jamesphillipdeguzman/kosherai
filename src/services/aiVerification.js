@@ -422,7 +422,7 @@ export async function uploadToCloudinary(blob, cloudName, uploadPreset, isReceip
  *  2. The device is detected as strictly offline (!navigator.onLine)
  *  3. The API responds with a definitive server error (500/503/400)
  */
-export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, clientApiKey = '', activeDiet = 'lid') {
+export async function scanSupermarketReceipt(dataUrl, onProgress = () => { }, clientApiKey = '', activeDiet = 'lid') {
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
   // Resolve API key from arguments, Vite env, or process env
@@ -581,7 +581,8 @@ RETURN ONLY VALID JSON (no markdown fences, no explanatory text):
   "paymentMethod": "CASH"
 }
 `;
-      const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+      // Cascade: Try gemini-3.8-pro first, fall back to gemini-1.5-flash
+      const models = ['gemini-3.8-pro', 'gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
       const cleanBase64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
 
       for (const model of models) {
@@ -817,7 +818,7 @@ export const scanReceipt = scanSupermarketReceipt;
 /**
  * High-level receipt audit function for Scanner tab & Course Project
  */
-export async function auditGroceryReceipt(imageSource, onProgress = () => {}, clientApiKey = '', activeDiet = 'lid') {
+export async function auditGroceryReceipt(imageSource, onProgress = () => { }, clientApiKey = '', activeDiet = 'lid') {
   const resolvedApiKey = (
     clientApiKey ||
     (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) ||
@@ -850,7 +851,7 @@ export async function auditGroceryReceipt(imageSource, onProgress = () => {}, cl
  * @param {Function} onProgress
  * @returns {Promise<Object>}
  */
-export async function scanReceiptWithPaddleOCR(imageSource, onProgress = () => {}, activeDiet = 'lid') {
+export async function scanReceiptWithPaddleOCR(imageSource, onProgress = () => { }, activeDiet = 'lid') {
   onProgress({
     status: 'paddle_manual',
     progress: 0.15,

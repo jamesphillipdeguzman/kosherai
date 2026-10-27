@@ -290,8 +290,8 @@ RETURN ONLY VALID JSON (no markdown fences, no explanatory text):
 }
 `;
 
-    // Cascade: Try gemini-2.5-flash first, fall back to gemini-1.5-flash
-    const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+    // Cascade: Try gemini-3.8-pro first, fall back to gemini-1.5-flash
+    const models = ['gemini-3.8-pro', 'gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
     let response = null;
     let lastErrMessage = '';
 
@@ -408,8 +408,8 @@ export async function maybeLogReceiptScan(receiptData, activeDiet = 'lid') {
     const status = (receiptData.items || []).some(i => i.status === 'AVOID')
       ? 'AVOID'
       : (receiptData.items || []).some(i => i.status === 'CAUTION')
-      ? 'CAUTION'
-      : 'SAFE';
+        ? 'CAUTION'
+        : 'SAFE';
     const reason = `Audited ${(receiptData.items || []).length} items under ${(activeDiet || 'lid').toUpperCase()}`;
     const flagged = (receiptData.items || []).filter(i => i.status === 'AVOID').map(i => i.cleanName);
     const jsonFlagged = JSON.stringify(flagged);
