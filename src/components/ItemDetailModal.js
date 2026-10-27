@@ -1,6 +1,7 @@
 // Item Detail Modal Component (Multi-Diet Clinical Guidance & Pinoy Smart Swaps)
 import { STATUS, getItemDietaryInfo, getCategoryEmoji } from '../data/lidDatabase.js';
 import { getDietProfile } from '../data/dietProfiles.js';
+import generatedImages from '../data/generatedImages.json';
 
 export function renderItemDetailModal(item, activeDiet = 'lid') {
   const info = getItemDietaryInfo(item, activeDiet);
@@ -11,6 +12,7 @@ export function renderItemDetailModal(item, activeDiet = 'lid') {
   const isCaution = info.status === STATUS.CAUTION;
 
   const swaps = info.substitutes || [];
+  const imgUrl = item.imageUrl || generatedImages?.[item.id] || null;
 
   return `
     <div class="modal-overlay" id="item-modal-overlay">
@@ -31,9 +33,9 @@ export function renderItemDetailModal(item, activeDiet = 'lid') {
         </div>
 
         <div style="width: 100%; height: 160px; border-radius: var(--radius-md); overflow: hidden; margin-bottom: 16px; border: 1px solid var(--border-color); background: var(--bg-card-subtle); display: flex; align-items: center; justify-content: center; position: relative;">
-          ${item.imageUrl ? `
+          ${imgUrl ? `
             <img
-              src="${escapeHtml(item.imageUrl)}"
+              src="${escapeHtml(imgUrl)}"
               alt="${escapeHtml(item.name)}"
               loading="lazy"
               decoding="async"
