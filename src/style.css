@@ -391,11 +391,16 @@ html.dark .brand-title,
   font-weight: 700;
   padding: 2px 7px;
   border-radius: var(--radius-full);
-  background: rgba(16, 185, 129, 0.15);
-  color: var(--safe-green);
-  border: 1px solid var(--safe-border);
+  background: rgba(16, 185, 129, 0.1);
+  color: #065f46;
+  border: 1px solid rgba(5, 150, 105, 0.5);
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+html.dark .brand-badge {
+  background: rgba(6, 78, 59, 0.3);
+  color: #6ee7b7;
+  border-color: rgba(52, 211, 153, 0.5);
 }
 
 .brand-subtitle {
@@ -565,13 +570,20 @@ html.light select option, html.light .header-diet-dropdown option, html.light .f
 
 .banner-target {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  background: rgba(16, 185, 129, 0.2);
-  color: #34d399;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
+  background: rgba(13, 148, 136, 0.1);
+  color: #134e4a;
+  border: 1px solid rgba(13, 148, 136, 0.6);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
   white-space: nowrap;
+  letter-spacing: 0.025em;
+}
+html.dark .banner-target {
+  background: rgba(4, 47, 46, 0.4);
+  color: #99f6e4;
+  border-color: rgba(45, 212, 191, 0.6);
 }
 
 /* ==================== BOTTOM / TOP NAVIGATION ==================== */
@@ -987,21 +999,47 @@ html.dark .card-thumbnail-wrap,
 }
 
 .badge-status.badge-safe {
-  background: var(--safe-bg);
-  color: var(--safe-green);
-  border: 1px solid var(--safe-border);
+  background: rgba(16, 185, 129, 0.1);
+  color: #065f46;
+  border: 1px solid rgba(5, 150, 105, 0.5);
+}
+html.dark .badge-status.badge-safe {
+  background: rgba(6, 78, 59, 0.3);
+  color: #6ee7b7;
+  border-color: rgba(52, 211, 153, 0.5);
 }
 
 .badge-status.badge-avoid {
-  background: var(--avoid-bg);
-  color: var(--avoid-red);
-  border: 1px solid var(--avoid-border);
+  background: rgba(244, 63, 94, 0.1);
+  color: #9f1239;
+  border: 1px solid rgba(225, 29, 72, 0.5);
+}
+html.dark .badge-status.badge-avoid {
+  background: rgba(136, 19, 55, 0.3);
+  color: #fda4af;
+  border-color: rgba(251, 113, 133, 0.5);
 }
 
 .badge-status.badge-caution {
-  background: var(--caution-bg);
-  color: var(--caution-amber);
-  border: 1px solid var(--caution-border);
+  background: rgba(245, 158, 11, 0.1);
+  color: #92400e;
+  border: 1px solid rgba(217, 119, 6, 0.5);
+}
+html.dark .badge-status.badge-caution {
+  background: rgba(120, 53, 15, 0.3);
+  color: #fcd34d;
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
+.badge-status.badge-neutral {
+  background: rgba(241, 245, 249, 0.6);
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+html.dark .badge-status.badge-neutral {
+  background: rgba(30, 41, 59, 0.5);
+  color: #e2e8f0;
+  border-color: #334155;
 }
 
 .card-iodine-bar {
@@ -1747,14 +1785,25 @@ html.dark .card-thumbnail-wrap,
   justify-content: space-between;
 }
 .checklist-meter.all-clear {
-  background: var(--safe-bg);
-  border: 1px solid var(--safe-border);
-  color: var(--safe-green);
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(5, 150, 105, 0.5);
+  color: #065f46;
 }
+html.dark .checklist-meter.all-clear {
+  background: rgba(6, 78, 59, 0.3);
+  border-color: rgba(52, 211, 153, 0.5);
+  color: #6ee7b7;
+}
+
 .checklist-meter.pending {
-  background: var(--caution-bg);
-  border: 1px solid var(--caution-border);
-  color: var(--caution-amber);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(217, 119, 6, 0.5);
+  color: #92400e;
+}
+html.dark .checklist-meter.pending {
+  background: rgba(120, 53, 15, 0.3);
+  border-color: rgba(251, 191, 36, 0.5);
+  color: #fcd34d;
 }
 
 /* Recipe Analyzer */

@@ -81,7 +81,7 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
               <div class="banner-desc">${currentProfile.tagline}</div>
             </div>
           </div>
-          <div class="banner-target">${currentProfile.shortName}</div>
+          <span class="banner-target inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-wide border border-teal-600/60 dark:border-teal-400/60 bg-teal-500/10 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200">${currentProfile.shortName}</span>
         </div>
       ` : ''}
     </div>

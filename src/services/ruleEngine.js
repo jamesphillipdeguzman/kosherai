@@ -38,11 +38,13 @@ const FORBIDDEN_RULES = [
   },
   {
     regex: /\b(milk|dairy|butter|cheese|cheddar|mozzarella|parmesan|cottage cheese|ricotta|yogurt|whey|casein|caseinate|cream cheese|sour cream|heavy cream|ice cream|milk chocolate|evaporated milk|condensed milk|gatas)\b/i,
+    exclude: /\b(?:without|no|zero|free of|dairy-free|no dairy|no butter)\b/i,
     name: 'Dairy Milk & Byproducts',
     reason: 'Cattle udders washed with iodophors and dairy cattle given iodine feed; milk delivers ~100 mcg/cup.'
   },
   {
     regex: /\b(egg yolk|whole eggs?|mayonnaise|mayo|custard|hollandaise)\b/i,
+    exclude: /\b(?:without|no|zero|free of|separated(?:\s+strictly)?\s+from\s+yolks?)\b/i,
     name: 'Egg Yolks / Whole Eggs',
     reason: 'Iodine concentrates selectively in the egg yolk (~12-25 mcg each). Only pure egg whites are allowed.'
   },

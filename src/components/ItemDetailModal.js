@@ -23,7 +23,7 @@ export function renderItemDetailModal(item, activeDiet = 'lid') {
               <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.05em;">
                 ${escapeHtml(item.category)}
               </span>
-              <span class="diet-tag-pill" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px; background: rgba(13, 148, 136, 0.15); color: #0d9488; font-weight: 700;">
+              <span class="diet-tag-pill border border-emerald-600/50 dark:border-emerald-400/50 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 text-xs px-2.5 py-0.5 rounded-full font-bold">
                 ${profile.icon} ${escapeHtml(profile.shortName)}
               </span>
             </div>

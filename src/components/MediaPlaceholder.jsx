@@ -16,10 +16,13 @@ export function getCategoryIcon(category = '', name = '') {
   // 3. Soups & Stews
   if (c.includes('soup') || c.includes('stew') || c.includes('tinola') || c.includes('broth') || c.includes('sinigang') || c.includes('pesa') || c.includes('nilaga')) return '🍲';
 
-  // 4. Snacks & Sides
+  // 4. Breakfast / Silog / Morning
+  if (c.includes('breakfast') || c.includes('silog') || c.includes('morning')) return '🍳';
+
+  // 5. Snacks & Sides
   if (c.includes('snack') || c.includes('side')) return '🍠';
 
-  // 5. Mains / Rice
+  // 6. Mains / Rice
   if (c.includes('main') || c.includes('rice')) return '🍛';
 
   // 6. Produce, Herbs, Chilies

@@ -110,6 +110,34 @@ assert.strictEqual(getCategoryIcon('Meats & Poultry', 'Pork Belly Liempo'), '�
 assert.strictEqual(getCategoryIcon('Soups & Stews', 'LID Chicken Tinola Broth'), '🍲');
 assert.strictEqual(getCategoryIcon('Mains', 'Homemade Bistek Tagalog'), '🍛');
 assert.strictEqual(getCategoryIcon('Snacks & Sides', 'Steamed Kamote with Coconut Oil'), '🍠');
+assert.strictEqual(getCategoryIcon('Breakfast', 'LID Garlic Sinangag & Egg White Scramble'), '🍳');
 console.log('  ✅ All standardized culinary category icons verified successfully.\n');
+
+// 7. Verify Authentic Filipino Breakfast Meals Across All Protocols
+console.log('Test 7: Verify Authentic Filipino Breakfast Meals Across All Protocols');
+const breakfastDiets = ['lid', 'diabetic', 'low_purine', 'low_sodium', 'pinoy_keto'];
+for (const diet of breakfastDiets) {
+  const data = DIET_RECIPES[diet];
+  const breakfastMeals = data.meals.filter(m => (m.type || m.category) === 'Breakfast');
+  assert.ok(breakfastMeals.length >= 1, `Diet ${diet} must have at least 1 breakfast meal`);
+
+  const bMeal = breakfastMeals[0];
+  assert.ok(bMeal.id, `Breakfast meal under ${diet} must have id`);
+  assert.ok(bMeal.name, `Breakfast meal under ${diet} must have name`);
+  assert.ok(bMeal.clinicalRationale || bMeal.clinicalNote, `Breakfast meal under ${diet} must have clinical rationale`);
+  assert.strictEqual(bMeal.imageUrl, null, `Breakfast meal under ${diet} must have null imageUrl`);
+}
+
+// Test CookModeTab filtering with 'Breakfast' and 'ALL'
+const { renderCookModeTab } = await import('../src/components/CookModeTab.js');
+for (const diet of breakfastDiets) {
+  const allHtml = renderCookModeTab({ activeDiet: diet, recipeCategoryFilter: 'ALL' });
+  assert.ok(allHtml.includes('4 Dishes'), `CookModeTab on ${diet} with ALL filter must show 4 Dishes`);
+
+  const breakfastHtml = renderCookModeTab({ activeDiet: diet, recipeCategoryFilter: 'Breakfast' });
+  assert.ok(!breakfastHtml.includes('0 Dishes') && !breakfastHtml.includes('0 Dish'), `CookModeTab on ${diet} with Breakfast filter must not show 0 Dishes`);
+  assert.ok(breakfastHtml.includes('1 Dish'), `CookModeTab on ${diet} with Breakfast filter must show 1 Dish`);
+}
+console.log('  ✅ Authentic Filipino breakfast meals verified across all 5 protocols.\n');
 
 console.log('🎉 ALL MULTI-DIET REFACTOR, PLACEHOLDER & ICON TESTS PASSED SUCCESSFULLY!');

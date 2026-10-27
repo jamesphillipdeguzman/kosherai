@@ -150,7 +150,13 @@ function renderIngredientCard(item, activeDiet = 'lid') {
         <div class="card-title-group flex-1 min-w-0">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
             <h3 class="card-name">${escapeHtml(item.name)}</h3>
-            <span class="badge-status ${badgeClass}" style="flex-shrink: 0;">
+            <span class="badge-status ${badgeClass} inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+              isSafe 
+                ? 'border border-emerald-600/50 dark:border-emerald-400/50 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300' 
+                : isAvoid 
+                  ? 'border border-rose-600/50 dark:border-rose-400/50 bg-rose-500/10 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300' 
+                  : 'border border-amber-600/50 dark:border-amber-400/50 bg-amber-500/10 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300'
+            }" style="flex-shrink: 0;">
               ${badgeIcon} ${info.status}
             </span>
           </div>

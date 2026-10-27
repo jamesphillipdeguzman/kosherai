@@ -26,14 +26,30 @@ export function renderCookModeTab(state) {
   const checkedCount = activeChecklist.filter(item => checklistState[item.id]).length;
   const isAllClear = checkedCount === totalChecks;
 
-  const activeCategory = recipeCategoryFilter || 'ALL';
-  const allMeals = currentDietData.meals || [];
-  const filteredRecipes = (activeCategory === 'ALL' || activeCategory === 'All')
+  const activeTab = recipeCategoryFilter || 'All';
+  const allMeals = currentDietData?.meals || [];
+  const targetTab = (activeTab || 'all').toLowerCase().trim();
+
+  const filteredRecipes = (targetTab === 'all')
     ? allMeals
-    : allMeals.filter(r => {
-        const mealType = (r.type || r.category || '').toLowerCase();
-        const cat = activeCategory.toLowerCase();
-        return mealType === cat || mealType.includes(cat) || cat.includes(mealType);
+    : allMeals.filter(meal => {
+        // Check all potential category/type fields
+        const mealCat = (meal.category || meal.type || meal.course || '').toLowerCase().trim();
+        
+        if (targetTab === 'breakfast') {
+          return mealCat.includes('breakfast');
+        }
+        if (targetTab === 'mains' || targetTab === 'main') {
+          return mealCat.includes('main') || mealCat.includes('ulam');
+        }
+        if (targetTab.includes('soup') || targetTab.includes('stew')) {
+          return mealCat.includes('soup') || mealCat.includes('stew') || mealCat.includes('sabaw');
+        }
+        if (targetTab.includes('snack') || targetTab.includes('side')) {
+          return mealCat.includes('snack') || mealCat.includes('side') || mealCat.includes('merienda');
+        }
+
+        return mealCat === targetTab;
       });
 
   return `
@@ -69,7 +85,7 @@ export function renderCookModeTab(state) {
         </div>
 
         <!-- Meter -->
-        <div class="checklist-meter ${isAllClear ? 'all-clear' : 'pending'}">
+        <div class="checklist-meter ${isAllClear ? 'all-clear border border-emerald-600/50 dark:border-emerald-400/50 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300' : 'pending border border-amber-600/50 dark:border-amber-400/50 bg-amber-500/10 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300'}">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 1.3rem;">${isAllClear ? '🛡️' : '⚠️'}</span>
             <div>
@@ -99,8 +115,13 @@ export function renderCookModeTab(state) {
         <!-- Quick Demo Recipes -->
         <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
           <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); align-self: center;">Try Sample:</span>
-          <button id="load-safe-recipe-btn" class="quick-tag-chip" style="color: #34d399; border-color: var(--safe-border);">
-            🟢 ${escapeHtml(currentDietData.sampleAudit.name)}
+          <button 
+            id="load-safe-recipe-btn" 
+            type="button" 
+            class="quick-tag-chip inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all border border-teal-600/60 dark:border-teal-400/60 bg-teal-500/10 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200 hover:bg-teal-500/20 shadow-sm"
+          >
+            <span class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></span>
+            <span>${escapeHtml(currentDietData?.sampleAudit?.name || 'Safe Sample')}</span>
           </button>
           <button id="load-risky-recipe-btn" class="quick-tag-chip" style="color: #f87171; border-color: var(--avoid-border);">
             🔴 Careless Beef Stew (Violations Detected)
@@ -136,21 +157,21 @@ export function renderCookModeTab(state) {
               ${escapeHtml(currentDietData.description)}
             </p>
           </div>
-          <span class="recipe-count-badge px-2.5 py-0.5 rounded-full text-xs font-bold border border-emerald-600/40 dark:border-emerald-500/50 bg-emerald-500/5 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
-            ${filteredRecipes.length} Dishes
+          <span class="recipe-count-badge px-2.5 py-0.5 rounded-full text-xs font-bold border border-teal-600/40 dark:border-teal-400/40 bg-teal-500/10 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300">
+            ${filteredRecipes.length} ${filteredRecipes.length === 1 ? 'Dish' : 'Dishes'}
           </span>
         </div>
 
         <!-- Category Filter Bar -->
         <div class="recipe-filter-bar" role="tablist" aria-label="Recipe categories">
           ${CATEGORIES.map(cat => {
-            const isSelected = (cat === 'All' && (activeCategory === 'ALL' || activeCategory === 'All')) || 
-                               (cat.toLowerCase() === activeCategory.toLowerCase());
+            const isSelected = (cat === 'All' && (targetTab === 'all')) || 
+                               (cat.toLowerCase() === targetTab);
             return `
               <button 
                 class="recipe-filter-btn ${isSelected ? 'active ' : ''}px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
                   isSelected 
-                    ? 'border border-emerald-600 bg-emerald-500/10 text-emerald-800 dark:border-emerald-400 dark:text-emerald-300 dark:bg-emerald-950/40 shadow-sm' 
+                    ? 'border border-teal-600/60 dark:border-teal-400/60 bg-teal-500/10 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200 shadow-sm' 
                     : 'border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 bg-white/70 dark:bg-slate-900/60'
                 }" 
                 data-category="${cat === 'All' ? 'ALL' : cat}"
@@ -181,7 +202,7 @@ function renderRecipeCard(recipe) {
     'Cook gently over medium heat until tender.',
     'Serve immediately with protocol-compliant sides.'
   ];
-  const clinicalNote = recipe.clinicalNote || 'Specifically formulated to comply with the active dietary guidelines.';
+  const clinicalNote = recipe.clinicalRationale || recipe.clinicalNote || 'Specifically formulated to comply with the active dietary guidelines.';
   const dishImgUrl = recipe.imageUrl || generatedImages?.[recipe.id] || null;
 
   return `
@@ -219,7 +240,7 @@ function renderRecipeCard(recipe) {
           </div>
         </div>
         <h3 class="recipe-card-title">${escapeHtml(title)}</h3>
-        <div class="recipe-clinical-badge inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border border-emerald-600/50 dark:border-emerald-400/50 bg-transparent text-emerald-800 dark:text-emerald-300">
+        <div class="recipe-clinical-badge inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-emerald-600/50 dark:border-emerald-400/50 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
           </svg>

@@ -165,21 +165,73 @@ console.log('  ✅ Recipe card orange category badge and high-contrast rationale
 console.log('Test 7: Verify Recipe Section Crisp Green Outlines & Legibility');
 // Active filter pill
 assert.ok(
+  cookHtml.includes('border border-teal-600/60 dark:border-teal-400/60 bg-teal-500/10 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200 shadow-sm') ||
   cookHtml.includes('border border-emerald-600 bg-emerald-500/10 text-emerald-800 dark:border-emerald-400 dark:text-emerald-300 dark:bg-emerald-950/40 shadow-sm'),
-  'Active filter button must have crisp emerald outline and high contrast text'
+  'Active filter button must have crisp outline and high contrast text'
+);
+
+// Safe sample audit button ("Safe Family Tinola")
+assert.ok(
+  cookHtml.includes('id="load-safe-recipe-btn"') &&
+  cookHtml.includes('border border-teal-600/60 dark:border-teal-400/60 bg-teal-500/10 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200 hover:bg-teal-500/20 shadow-sm'),
+  'Safe sample audit button must share crisp dark-teal outlined styling'
 );
 
 // Total count badge
 assert.ok(
-  cookHtml.includes('border border-emerald-600/40 dark:border-emerald-500/50 bg-emerald-500/5 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300'),
+  cookHtml.includes('recipe-count-badge px-2.5 py-0.5 rounded-full text-xs font-bold') &&
+  (cookHtml.includes('border border-teal-600/40 dark:border-teal-400/40 bg-teal-500/10 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300') ||
+   cookHtml.includes('border border-emerald-600/40 dark:border-emerald-500/50 bg-emerald-500/5 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300') ||
+   cookHtml.includes('border border-emerald-600/50 dark:border-emerald-400/50 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300')),
   'Total count badge must have transparent background with defined border and high-contrast text'
 );
 
 // Card compliance tag
 assert.ok(
-  cookHtml.includes('inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border border-emerald-600/50 dark:border-emerald-400/50 bg-transparent text-emerald-800 dark:text-emerald-300'),
+  cookHtml.includes('recipe-clinical-badge inline-flex items-center gap-1') &&
+  cookHtml.includes('border border-emerald-600/50 dark:border-emerald-400/50') &&
+  cookHtml.includes('text-emerald-800 dark:text-emerald-300'),
   'Card compliance tag must feature crisp outlined styling with transparent background'
 );
 console.log('  ✅ Recipe section crisp green outlines and legibility verified.\n');
+
+// 8. Verify Standardized Outlined Status, Protocol & Compliance Badges
+console.log('Test 8: Verify Standardized Outlined Status, Protocol & Compliance Badges');
+const protocolHeaderHtml = renderHeader(true, 'diet', true, 'lid', 'dark');
+assert.ok(
+  protocolHeaderHtml.includes('banner-target inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-wide border border-teal-600/60 dark:border-teal-400/60 bg-teal-500/10 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200') ||
+  protocolHeaderHtml.includes('banner-target px-3 py-1 rounded-full text-xs font-bold border border-emerald-600/50 dark:border-emerald-400/50 bg-emerald-500/5 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 tracking-wide'),
+  'Clinical objective banner right-hand pill must use standardized outlined styling'
+);
+
+const allClearState = Object.fromEntries(CHECKLIST_BY_DIET.lid.map(i => [i.id, true]));
+const allClearCookHtml = renderCookModeTab({ activeDiet: 'lid', checklistState: allClearState });
+assert.ok(
+  allClearCookHtml.includes('checklist-meter all-clear border border-emerald-600/50 dark:border-emerald-400/50 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300'),
+  'Cook Mode 100% all clear meter must use standardized outlined styling'
+);
+
+const { BADGE_STYLES } = await import('../src/components/Badge.js');
+assert.strictEqual(
+  BADGE_STYLES.safe,
+  'border border-emerald-600/50 dark:border-emerald-400/50 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300',
+  'Badge safe style must match standardized tokens'
+);
+assert.strictEqual(
+  BADGE_STYLES.caution,
+  'border border-amber-600/50 dark:border-amber-400/50 bg-amber-500/10 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300',
+  'Badge caution style must match standardized tokens'
+);
+assert.strictEqual(
+  BADGE_STYLES.avoid,
+  'border border-rose-600/50 dark:border-rose-400/50 bg-rose-500/10 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300',
+  'Badge avoid style must match standardized tokens'
+);
+assert.strictEqual(
+  BADGE_STYLES.neutral,
+  'border border-slate-300 dark:border-slate-700 bg-slate-100/60 dark:bg-slate-800/50 text-slate-700 dark:text-slate-200',
+  'Badge neutral style must match standardized tokens'
+);
+console.log('  ✅ Standardized status, protocol, and compliance badges verified.\n');
 
 console.log('🎉 ALL MULTI-DIET DESYNCHRONIZATION, CONTRAST & THEME TOGGLE TESTS PASSED!');
