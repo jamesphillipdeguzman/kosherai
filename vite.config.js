@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import scansApiHandler from './api/scans.js';
 import receiptScanHandler from './api/receipt-scan.js';
+import tripsApiHandler from './api/trips.js';
 
 export default defineConfig({
   server: {
@@ -20,6 +21,24 @@ export default defineConfig({
               await receiptScanHandler(req, res);
             } catch (err) {
               console.error('[Vite Receipt Scan API Error]:', err);
+              if (!res.headersSent) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  error: 'INTERNAL_SERVER_ERROR',
+                  message: err.message
+                }));
+              }
+            }
+            return;
+          }
+
+          // Intercept /api/trips route
+          if (url.pathname === '/api/trips') {
+            try {
+              await tripsApiHandler(req, res);
+            } catch (err) {
+              console.error('[Vite Trips API Error]:', err);
               if (!res.headersSent) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');

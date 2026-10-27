@@ -376,6 +376,9 @@ function renderShoppingTripsTab(state) {
           <button class="btn-secondary" id="open-manual-trip-btn">
             ✍️ Manual Trip Entry (Wet Market)
           </button>
+          <button class="btn-secondary" id="manual-sync-trips-btn" title="Synchronize local IndexedDB trips to Neon PostgreSQL">
+            ☁️ Sync Neon
+          </button>
         </div>
       </div>
 
@@ -411,7 +414,18 @@ function renderShoppingTripsTab(state) {
                     <span class="trip-store-icon">${trip.tripType.includes('Wet') ? '🐟' : '🛒'}</span>
                     <div>
                       <div class="trip-store-name">${escapeHtml(trip.storeName)}</div>
-                      <div class="trip-date-pill">Week ${trip.projectWeek} • ${trip.date}</div>
+                      <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 2px;">
+                        <span class="trip-date-pill">Week ${trip.projectWeek} • ${trip.date}</span>
+                        ${trip.synced === false ? `
+                          <span class="trip-sync-badge offline" title="Saved locally in IndexedDB; will auto-sync to Neon when online">
+                            ☁️⏳ Offline
+                          </span>
+                        ` : `
+                          <span class="trip-sync-badge synced" title="Synced with Neon PostgreSQL cloud database">
+                            ☁️✓ Neon Synced
+                          </span>
+                        `}
+                      </div>
                     </div>
                   </div>
                   <div class="trip-price-tag">₱${formatNumber(trip.totalAmountPaid)}</div>

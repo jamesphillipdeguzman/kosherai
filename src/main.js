@@ -32,6 +32,7 @@ import {
   saveCourseConfig,
   saveShoppingTrip,
   deleteShoppingTrip,
+  syncPendingTrips,
   saveFoodWasteRecord,
   deleteFoodWasteRecord,
   saveMealPlan,
@@ -1259,7 +1260,8 @@ Cracked black pepper`;
         }
       });
 
-      saveShoppingTrip({
+      // Save trip: POST to Neon first, persist to IndexedDB (offline-first sync)
+      await saveShoppingTrip({
         storeName,
         date: purchaseDate,
         totalScaleWeightKg: scaleWeight, // Whole grocery physical scale weight
@@ -1290,7 +1292,7 @@ Cracked black pepper`;
   // Manual Trip Form Submit
   const manualTripForm = document.querySelector('#manual-trip-form');
   if (manualTripForm) {
-    manualTripForm.addEventListener('submit', (e) => {
+    manualTripForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const storeName = document.querySelector('#manual-store-name')?.value || 'Wet Market';
       const date = document.querySelector('#manual-trip-date')?.value || new Date().toISOString().split('T')[0];
@@ -1299,7 +1301,7 @@ Cracked black pepper`;
       const totalAmount = parseFloat(document.querySelector('#manual-total-amount')?.value || 0);
       const notes = document.querySelector('#manual-notes')?.value || '';
 
-      saveShoppingTrip({
+      await saveShoppingTrip({
         storeName,
         date,
         tripType,
@@ -1313,12 +1315,32 @@ Cracked black pepper`;
     });
   }
 
+  // Manual Neon Sync Button
+  const manualSyncTripsBtn = document.querySelector('#manual-sync-trips-btn');
+  if (manualSyncTripsBtn) {
+    manualSyncTripsBtn.addEventListener('click', async () => {
+      manualSyncTripsBtn.disabled = true;
+      manualSyncTripsBtn.innerHTML = '🔄 Syncing...';
+      try {
+        const res = await syncPendingTrips();
+        render();
+      } catch (err) {
+        console.warn('Manual sync failed:', err);
+      } finally {
+        if (manualSyncTripsBtn) {
+          manualSyncTripsBtn.disabled = false;
+          manualSyncTripsBtn.innerHTML = '☁️ Sync Neon';
+        }
+      }
+    });
+  }
+
   // Delete Trip
   document.querySelectorAll('.delete-trip-btn[data-delete-trip]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       const id = e.currentTarget.getAttribute('data-delete-trip');
       if (confirm('Delete this shopping trip and its linked grocery items & expense record?')) {
-        deleteShoppingTrip(id);
+        await deleteShoppingTrip(id);
         render();
       }
     });
@@ -1635,9 +1657,14 @@ window.addEventListener('online', () => {
   state.isOnline = true;
   render();
   refreshScanHistory();
+  syncPendingTrips().then(() => render()).catch(() => {});
 });
 window.addEventListener('offline', () => {
   state.isOnline = false;
+  render();
+});
+
+window.addEventListener('kosherai-trips-synced', () => {
   render();
 });
 
@@ -1663,7 +1690,8 @@ if ('serviceWorker' in navigator) {
   }
 }
 
-// Initial Render and mount sync from Neon PostgreSQL
+// Initial Render and mount sync from Neon PostgreSQL & IndexedDB
 render();
 refreshScanHistory();
+syncPendingTrips().then(() => render()).catch(() => {});
 

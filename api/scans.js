@@ -229,11 +229,181 @@ export default async function handler(req, res) {
     }
 
     // ----------------------------------------------------
-    // POST /api/scans: Accepts { id, title, status, reason, flaggedIngredients, imageUrl }
+    // POST /api/scans: Accepts scan records OR verified receipt shopping trips
     // ----------------------------------------------------
     if (method === 'POST') {
       const body = await parseRequestBody(req);
 
+      // Check if this payload represents a verified receipt shopping trip
+      const isTripPayload = body.type === 'trip' || Boolean(body.trip) || (Boolean(body.storeName) && (body.totalAmountPaid !== undefined || body.totalScaleWeightKg !== undefined));
+
+      if (isTripPayload) {
+        const tripData = body.trip || body;
+        const rawItems = Array.isArray(body.items) ? body.items : (Array.isArray(tripData.items) ? tripData.items : []);
+
+        const tripId = tripData.id || `trip_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const date = tripData.date || new Date().toISOString().split('T')[0];
+        const projectWeek = Number(tripData.projectWeek || tripData.project_week || 1);
+        const storeName = tripData.storeName || tripData.store_name || 'Supermarket';
+        const tripType = tripData.tripType || tripData.trip_type || 'Supermarket';
+        const totalAmountPaid = Number(tripData.totalAmountPaid || tripData.total_amount_paid || 0);
+        const totalScaleWeightKg = Number(tripData.totalScaleWeightKg || tripData.total_scale_weight_kg || 0);
+        const receiptImageUrl = tripData.receiptImageUrl || tripData.receipt_image_url || null;
+        const receiptRawText = tripData.receiptRawText || tripData.receipt_raw_text || '';
+        const notes = tripData.notes || '';
+        const createdAt = tripData.createdAt || tripData.created_at || new Date().toISOString();
+
+        // 1. Insert into shopping_trips
+        await sql`
+          CREATE TABLE IF NOT EXISTS shopping_trips (
+            id TEXT PRIMARY KEY,
+            date TEXT NOT NULL,
+            project_week INTEGER DEFAULT 1,
+            store_name TEXT DEFAULT 'Supermarket',
+            trip_type TEXT DEFAULT 'Supermarket',
+            total_amount_paid NUMERIC(10, 2) DEFAULT 0,
+            total_scale_weight_kg NUMERIC(10, 3) DEFAULT 0,
+            receipt_image_url TEXT,
+            receipt_raw_text TEXT,
+            items_count INTEGER DEFAULT 0,
+            notes TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            synced BOOLEAN DEFAULT TRUE
+          );
+        `;
+
+        await sql`
+          CREATE TABLE IF NOT EXISTS grocery_purchases (
+            id TEXT PRIMARY KEY,
+            trip_id TEXT NOT NULL REFERENCES shopping_trips(id) ON DELETE CASCADE,
+            purchase_date TEXT NOT NULL,
+            project_week INTEGER DEFAULT 1,
+            name TEXT NOT NULL,
+            raw_receipt_text TEXT,
+            quantity NUMERIC(10, 2) DEFAULT 1,
+            unit TEXT DEFAULT 'pcs',
+            unit_price NUMERIC(10, 2) DEFAULT 0,
+            total_price NUMERIC(10, 2) DEFAULT 0,
+            weight_grams NUMERIC(10, 2) DEFAULT 0,
+            category TEXT DEFAULT 'General Food',
+            lid_status TEXT DEFAULT 'SAFE',
+            lid_reason TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          );
+        `;
+
+        await sql`
+          INSERT INTO shopping_trips (
+            id, date, project_week, store_name, trip_type, 
+            total_amount_paid, total_scale_weight_kg, 
+            receipt_image_url, receipt_raw_text, items_count, 
+            notes, created_at, synced
+          ) VALUES (
+            ${tripId}, ${date}, ${projectWeek}, ${storeName}, ${tripType},
+            ${totalAmountPaid}, ${totalScaleWeightKg},
+            ${receiptImageUrl}, ${receiptRawText}, ${rawItems.length},
+            ${notes}, ${createdAt}, true
+          )
+          ON CONFLICT (id) DO UPDATE SET
+            date = EXCLUDED.date,
+            project_week = EXCLUDED.project_week,
+            store_name = EXCLUDED.store_name,
+            trip_type = EXCLUDED.trip_type,
+            total_amount_paid = EXCLUDED.total_amount_paid,
+            total_scale_weight_kg = EXCLUDED.total_scale_weight_kg,
+            receipt_image_url = EXCLUDED.receipt_image_url,
+            receipt_raw_text = EXCLUDED.receipt_raw_text,
+            items_count = EXCLUDED.items_count,
+            notes = EXCLUDED.notes,
+            synced = true;
+        `;
+
+        // 2. Batch insert grocery_purchases items
+        const savedItems = [];
+        if (rawItems && rawItems.length > 0) {
+          await sql`DELETE FROM grocery_purchases WHERE trip_id = ${tripId};`;
+
+          for (let idx = 0; idx < rawItems.length; idx++) {
+            const item = rawItems[idx];
+            const itemId = item.id || `item_${tripId}_${idx}_${Math.random().toString(36).slice(2, 5)}`;
+            const itemName = item.name || item.itemName || 'Grocery Item';
+            const itemRawText = item.rawReceiptText || item.name || '';
+            const quantity = Number(item.quantity || item.qty || 1);
+            const unit = item.unit || 'pcs';
+            const unitPrice = Number(item.unitPrice || item.price || 0);
+            const totalPrice = Number(item.totalPrice || item.total || (quantity * unitPrice));
+            const weightGrams = Number(item.weightGrams || item.weightG || 0);
+            const category = item.category || 'General Food';
+            const lidStatus = item.lidStatus || 'SAFE';
+            const lidReason = item.lidReason || '';
+
+            await sql`
+              INSERT INTO grocery_purchases (
+                id, trip_id, purchase_date, project_week, name,
+                raw_receipt_text, quantity, unit, unit_price,
+                total_price, weight_grams, category, lid_status, lid_reason, created_at
+              ) VALUES (
+                ${itemId}, ${tripId}, ${date}, ${projectWeek}, ${itemName},
+                ${itemRawText}, ${quantity}, ${unit}, ${unitPrice},
+                ${totalPrice}, ${weightGrams}, ${category}, ${lidStatus}, ${lidReason}, ${createdAt}
+              )
+              ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                quantity = EXCLUDED.quantity,
+                unit = EXCLUDED.unit,
+                unit_price = EXCLUDED.unit_price,
+                total_price = EXCLUDED.total_price,
+                weight_grams = EXCLUDED.weight_grams,
+                category = EXCLUDED.category,
+                lid_status = EXCLUDED.lid_status,
+                lid_reason = EXCLUDED.lid_reason;
+            `;
+
+            savedItems.push({
+              id: itemId,
+              tripId,
+              purchaseDate: date,
+              projectWeek,
+              name: itemName,
+              rawReceiptText: itemRawText,
+              quantity,
+              unit,
+              unitPrice,
+              totalPrice,
+              weightGrams,
+              category,
+              lidStatus,
+              lidReason
+            });
+          }
+        }
+
+        return sendJson(res, 201, {
+          success: true,
+          synced: true,
+          type: 'trip',
+          trip: {
+            id: tripId,
+            date,
+            projectWeek,
+            storeName,
+            tripType,
+            totalAmountPaid,
+            totalScaleWeightKg,
+            receiptImageUrl,
+            receiptRawText,
+            itemsCount: savedItems.length,
+            notes,
+            createdAt,
+            synced: true,
+            items: savedItems
+          },
+          items: savedItems,
+          message: `Verified shopping trip ${tripId} and ${savedItems.length} grocery items recorded to Neon PostgreSQL.`
+        });
+      }
+
+      // Standard Food Label Scan Persistence
       const id = body.id || `scan_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       const title = body.title || 'Scanned Food Label';
       const status = body.status || 'SAFE';

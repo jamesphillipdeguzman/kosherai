@@ -1,8 +1,13 @@
-// Six-Week Food Cost and Waste Tracking Service (Sustaining Human Life Project)
-// Offline-first local storage with data validation, week calculation, and CSV generation
-
 import { searchDatabase } from './ruleEngine.js';
 import { LID_DATABASE, STATUS } from '../data/lidDatabase.js';
+import {
+  saveTripToIndexedDB,
+  getTripsFromIndexedDB,
+  getUnsyncedTripsFromIndexedDB,
+  markTripAsSyncedInIndexedDB,
+  deleteTripFromIndexedDB,
+  getGroceryItemsFromIndexedDB
+} from './indexedDbStorage.js';
 
 export const PROJECT_CONFIG = {
   START_DATE: '2026-10-31', // Saturday, October 31, 2026 (Day 1 of Week 1)
@@ -179,10 +184,14 @@ export function detectDuplicateReceipt(storeName, purchaseDate, totalAmount, exc
 }
 
 /**
- * Saves a complete Shopping Trip alongside its itemized grocery records and linked expense
- * GUARANTEE: The trip total amount is recorded ONCE in expenses. Itemized rows never double-count!
+ * Saves a complete Shopping Trip alongside its itemized grocery records and linked expense.
+ * Offline-first sync guarantee:
+ * 1. POSTs to /api/trips first when online.
+ * 2. If successful, persists to Neon and saves into IndexedDB with synced: true.
+ * 3. If offline or API fails, saves to IndexedDB with synced: false for auto-retry when online.
+ * 4. Also keeps localStorage and linked expense synchronized.
  */
-export function saveShoppingTrip(tripData, items = []) {
+export async function saveShoppingTrip(tripData, items = []) {
   try {
     const trips = getShoppingTrips();
     const allItems = getGroceryItems();
@@ -207,14 +216,10 @@ export function saveShoppingTrip(tripData, items = []) {
       receiptRawText: tripData.receiptRawText || '',
       itemsCount: items.length,
       notes: tripData.notes || '',
-      createdAt: tripData.createdAt || new Date().toISOString()
+      createdAt: tripData.createdAt || new Date().toISOString(),
+      synced: false
     };
 
-    // Update trips list
-    const updatedTrips = [tripRecord, ...trips.filter(t => t.id !== tripId)];
-    localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(updatedTrips));
-
-    // Update itemized grocery items (replace old items for this trip)
     const cleanedItems = items.map((item, idx) => {
       const lidEval = evaluateItemLidStatus(item.name || item.itemName);
       return {
@@ -228,12 +233,58 @@ export function saveShoppingTrip(tripData, items = []) {
         unit: item.unit || 'pcs',
         unitPrice: Number(item.unitPrice || 0),
         totalPrice: Number(item.totalPrice || item.unitPrice || 0),
-        weightGrams: Number(item.weightGrams || item.weightG || 0), // Specific item net weight if noted
+        weightGrams: Number(item.weightGrams || item.weightG || 0),
         category: item.category || 'General Food',
         lidStatus: item.lidStatus || lidEval.status,
-        lidReason: lidEval.reason || ''
+        lidReason: lidEval.reason || '',
+        synced: false
       };
     });
+
+    // 1. POST to API route first when online
+    let isSynced = false;
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+    if (isOnline && typeof fetch === 'function') {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+        const res = await fetch('/api/trips', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trip: tripRecord, items: cleanedItems }),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (res && res.ok) {
+          const payload = await res.json().catch(() => null);
+          if (payload && (payload.synced || payload.success)) {
+            isSynced = true;
+            console.info('[Storage] Successfully synced shopping trip to Neon PostgreSQL:', tripId);
+          }
+        } else {
+          console.warn('[Storage] Remote POST /api/trips returned status:', res.status);
+        }
+      } catch (err) {
+        console.warn('[Storage] Remote POST /api/trips error (saving offline):', err.message);
+      }
+    }
+
+    tripRecord.synced = isSynced;
+    cleanedItems.forEach(i => { i.synced = isSynced; });
+
+    // 2. Persist to IndexedDB (offline-first sync)
+    try {
+      await saveTripToIndexedDB(tripRecord, cleanedItems, isSynced);
+    } catch (idbErr) {
+      console.warn('[Storage] IndexedDB save warning:', idbErr);
+    }
+
+    // 3. Keep localStorage synchronized for synchronous UI queries
+    const updatedTrips = [tripRecord, ...trips.filter(t => t.id !== tripId)];
+    localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(updatedTrips));
 
     const remainingItems = allItems.filter(i => i.tripId !== tripId);
     const updatedAllItems = [...remainingItems, ...cleanedItems];
@@ -257,7 +308,7 @@ export function saveShoppingTrip(tripData, items = []) {
     const updatedExpenses = [tripExpenseRecord, ...remainingExpenses];
     localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(updatedExpenses));
 
-    return { trip: tripRecord, items: cleanedItems, expense: tripExpenseRecord };
+    return { trip: tripRecord, items: cleanedItems, expense: tripExpenseRecord, synced: isSynced };
   } catch (e) {
     console.error('Failed to save shopping trip:', e);
     throw e;
@@ -265,9 +316,76 @@ export function saveShoppingTrip(tripData, items = []) {
 }
 
 /**
- * Deletes a shopping trip and cleans up linked grocery items and expense record
+ * Auto-retries synchronization of pending offline trips to Neon PostgreSQL
  */
-export function deleteShoppingTrip(tripId) {
+export async function syncPendingTrips() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return { syncedCount: 0, pendingCount: 0 };
+  if (typeof fetch !== 'function') return { syncedCount: 0, pendingCount: 0 };
+
+  try {
+    const unsyncedFromDb = await getUnsyncedTripsFromIndexedDB();
+    const unsyncedFromLocal = getShoppingTrips().filter(t => t.synced === false);
+
+    // Merge pending trips by ID
+    const pendingMap = new Map();
+    unsyncedFromDb.forEach(t => pendingMap.set(t.id, t));
+    unsyncedFromLocal.forEach(t => {
+      if (!pendingMap.has(t.id)) pendingMap.set(t.id, t);
+    });
+
+    const pendingTrips = Array.from(pendingMap.values());
+    if (pendingTrips.length === 0) return { syncedCount: 0, pendingCount: 0 };
+
+    let syncedCount = 0;
+    for (const trip of pendingTrips) {
+      const items = (await getGroceryItemsFromIndexedDB(trip.id)) || getGroceryItems(trip.id);
+      try {
+        const res = await fetch('/api/trips', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trip, items })
+        });
+
+        if (res && res.ok) {
+          await markTripAsSyncedInIndexedDB(trip.id);
+
+          // Update localStorage
+          const localTrips = getShoppingTrips().map(t => t.id === trip.id ? { ...t, synced: true } : t);
+          localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(localTrips));
+
+          syncedCount++;
+        }
+      } catch (postErr) {
+        console.warn(`[Sync] Failed to sync pending trip ${trip.id} to Neon:`, postErr.message);
+      }
+    }
+
+    if (syncedCount > 0) {
+      console.info(`[Sync] Auto-retry synced ${syncedCount} offline shopping trips to Neon.`);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('kosherai-trips-synced', { detail: { syncedCount } }));
+      }
+    }
+
+    return { syncedCount, pendingCount: pendingTrips.length - syncedCount };
+  } catch (err) {
+    console.warn('[Sync] Error during syncPendingTrips:', err);
+    return { syncedCount: 0, pendingCount: 0 };
+  }
+}
+
+// Auto-retry when connection restored
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    console.info('[Network] Back online: initiating automatic background sync with Neon...');
+    syncPendingTrips().catch(() => {});
+  });
+}
+
+/**
+ * Deletes a shopping trip and cleans up linked grocery items, expense record, and IndexedDB/Neon
+ */
+export async function deleteShoppingTrip(tripId) {
   try {
     const trips = getShoppingTrips().filter(t => t.id !== tripId);
     const items = getGroceryItems().filter(i => i.tripId !== tripId);
@@ -276,6 +394,20 @@ export function deleteShoppingTrip(tripId) {
     localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(trips));
     localStorage.setItem(STORAGE_KEYS.GROCERY_ITEMS, JSON.stringify(items));
     localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(expenses));
+
+    // Delete from IndexedDB
+    try {
+      await deleteTripFromIndexedDB(tripId);
+    } catch (idbErr) {
+      console.warn('[Storage] IndexedDB delete error:', idbErr);
+    }
+
+    // Remote DELETE if online
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    if (isOnline && typeof fetch === 'function') {
+      fetch(`/api/trips?id=${encodeURIComponent(tripId)}`, { method: 'DELETE' }).catch(() => {});
+    }
+
     return true;
   } catch (e) {
     console.error('Failed to delete shopping trip:', e);

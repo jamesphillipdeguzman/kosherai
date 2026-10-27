@@ -4123,5 +4123,45 @@ html.dark .dark\:text-teal-400,
 html.dark .dark\:bg-teal-500,
 :root:not(.light) .dark\:bg-teal-500 { background-color: #14b8a6 !important; color: #ffffff !important; }
 
+/* Shopping Trip Sync Badges */
+.trip-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: var(--radius-full, 9999px);
+  line-height: 1.2;
+}
+
+.trip-sync-badge.synced {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+
+.trip-sync-badge.offline {
+  background: rgba(245, 158, 11, 0.14);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.32);
+}
+
+html.dark .trip-sync-badge.synced,
+:root:not(.light) .trip-sync-badge.synced {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.3);
+}
+
+html.dark .trip-sync-badge.offline,
+:root:not(.light) .trip-sync-badge.offline {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
 
 
