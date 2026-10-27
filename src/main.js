@@ -189,7 +189,7 @@ function render() {
       <div class="ambient-streak ambient-streak-2"></div>
     </div>
 
-    ${renderHeader(state.isOnline, state.appMode, state.showProjectTab, state.activeDiet)}
+    ${renderHeader(state.isOnline, state.appMode, state.showProjectTab, state.activeDiet, state.theme)}
     
     <main class="app-container pt-24">
       ${activeContentHtml}
@@ -281,6 +281,25 @@ function attachEventHandlers() {
   if (settingsOpenBtn) {
     settingsOpenBtn.addEventListener('click', () => {
       state.settingsOpen = true;
+      render();
+    });
+  }
+
+  // Quick Header Theme Toggle (Sun/Moon)
+  const headerThemeToggleBtn = document.querySelector('#header-theme-toggle-btn');
+  if (headerThemeToggleBtn) {
+    headerThemeToggleBtn.addEventListener('click', () => {
+      const newTheme = state.theme === 'dark' ? 'light' : 'dark';
+      state.theme = newTheme;
+      if (newTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+      }
+      localStorage.setItem('kosherai_theme', newTheme);
+      localStorage.setItem('theme', newTheme);
       render();
     });
   }

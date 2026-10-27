@@ -1,10 +1,10 @@
 // Meal & Family Cook Mode Component (Pre-Cooking Checklist, Recipe Analyzer & Practical Dishes)
-import { PRE_COOKING_CHECKLIST } from '../data/protocolRules.js';
+import { CHECKLIST_BY_DIET, PRE_COOKING_CHECKLIST } from '../data/protocolRules.js';
 import { analyzeRecipe } from '../services/ruleEngine.js';
 import { DIET_RECIPES } from '../data/dietRecipes.js';
 import { getCategoryIcon } from '../data/lidDatabase.js';
-import lidRecipes from '../data/lidRecipes.json';
-import generatedImages from '../data/generatedImages.json';
+import lidRecipes from '../data/lidRecipes.json' with { type: 'json' };
+import generatedImages from '../data/generatedImages.json' with { type: 'json' };
 
 export { DIET_RECIPES, lidRecipes };
 
@@ -20,9 +20,10 @@ export function renderCookModeTab(state) {
   } = state;
 
   const currentDietData = DIET_RECIPES[activeDiet] || DIET_RECIPES.lid;
+  const activeChecklist = CHECKLIST_BY_DIET[activeDiet] || CHECKLIST_BY_DIET.lid || PRE_COOKING_CHECKLIST;
 
-  const totalChecks = PRE_COOKING_CHECKLIST.length;
-  const checkedCount = PRE_COOKING_CHECKLIST.filter(item => checklistState[item.id]).length;
+  const totalChecks = activeChecklist.length;
+  const checkedCount = activeChecklist.filter(item => checklistState[item.id]).length;
   const isAllClear = checkedCount === totalChecks;
 
   const activeCategory = recipeCategoryFilter || 'ALL';
@@ -43,7 +44,7 @@ export function renderCookModeTab(state) {
           <div>
             <h2 class="checklist-title">Pre-Cooking Safety Checklist</h2>
             <p class="checklist-desc">
-              Caregivers and home cooks: verify these 7 safety rules before turning on the stove.
+              Caregivers and home cooks: verify these ${totalChecks} safety rules before turning on the stove.
             </p>
           </div>
           <button id="reset-checklist-btn" class="btn-secondary" style="padding: 6px 12px; font-size: 0.78rem;">
@@ -52,7 +53,7 @@ export function renderCookModeTab(state) {
         </div>
 
         <div class="checklist-items">
-          ${PRE_COOKING_CHECKLIST.map(item => {
+          ${activeChecklist.map(item => {
             const isChecked = !!checklistState[item.id];
             return `
               <div class="check-item ${isChecked ? 'checked' : ''}" data-check-id="${item.id}" role="checkbox" aria-checked="${isChecked}" tabindex="0">

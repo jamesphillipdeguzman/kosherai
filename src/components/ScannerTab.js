@@ -320,7 +320,7 @@ export function renderScannerTab(state) {
   return `
     <div class="scanner-container">
       <!-- Scanner Hero & Controls -->
-      <div class="scanner-hero">
+      <div class="rounded-2xl p-6 bg-slate-900 text-white shadow-lg border border-slate-800">
         <div class="scanner-hero-icon">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
@@ -328,9 +328,9 @@ export function renderScannerTab(state) {
           </svg>
         </div>
 
-        <h2 class="scanner-hero-title">Label & Packaging Scanner</h2>
-        <p class="scanner-hero-desc">
-          Capture food nutrition labels with your camera or paste the ingredient list. Automatically verified using Gemini 2.5 Flash and our offline Low-Iodine Diet clinical engine.
+        <h2 class="text-xl font-bold text-white mb-2">Label & Packaging Scanner</h2>
+        <p class="text-xs text-slate-300 mb-6">
+          Capture food nutrition labels with your camera for instant diet compliance auditing.
         </p>
 
         <!-- Mode Toggle -->

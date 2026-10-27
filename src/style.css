@@ -1106,11 +1106,12 @@ html.dark .card-thumbnail-wrap,
   font-size: 1.4rem;
   font-weight: 800;
   margin-bottom: 8px;
+  color: #ffffff !important;
 }
 
 .scanner-hero-desc {
   font-size: 0.88rem;
-  color: var(--text-secondary);
+  color: #cbd5e1 !important;
   max-width: 500px;
   margin: 0 auto 20px;
 }

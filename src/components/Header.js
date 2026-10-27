@@ -1,7 +1,7 @@
 // App Header Component with Multi-Diet Selector, Connectivity Status & Settings Trigger
 import { DIET_PROFILES, getDietProfile } from '../data/dietProfiles.js';
 
-export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', showProjectTab = true, activeDiet = 'lid') {
+export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', showProjectTab = true, activeDiet = 'lid', theme = 'dark') {
   const currentProfile = getDietProfile(activeDiet);
 
   return `
@@ -22,11 +22,11 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
         <div class="header-diet-picker-wrap" title="Active Dietary Protocol">
           <label for="header-diet-selector" class="sr-only">Select Diet Protocol</label>
           <div class="diet-select-badge">
-            <span class="diet-select-icon">${currentProfile.icon}</span>
+            <span class="diet-select-icon mr-1.5">${currentProfile.emoji || currentProfile.icon}</span>
             <select id="header-diet-selector" class="header-diet-dropdown bg-teal-950/40 dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-teal-500/30 rounded-xl px-3 py-1.5 focus:outline-none" aria-label="Select Dietary Protocol">
               ${Object.values(DIET_PROFILES).map(profile => `
                 <option value="${profile.id}" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 py-1.5" ${profile.id === activeDiet ? 'selected' : ''}>
-                  ${profile.icon} ${profile.name}
+                  ${profile.label || profile.name}
                 </option>
               `).join('')}
             </select>
@@ -38,6 +38,17 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
           <span class="status-dot ${isOnline ? '' : 'offline'}"></span>
           <span>${isOnline ? 'Offline-Ready' : 'Offline Active'}</span>
         </div>
+
+        <!-- Quick Light / Dark Mode Toggle -->
+        <button
+          id="header-theme-toggle-btn"
+          type="button"
+          aria-label="Toggle theme"
+          title="Toggle Light / Dark Mode"
+          class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900 text-slate-700 dark:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
+          ${theme === 'dark' ? '☀️' : '🌙'}
+        </button>
 
         <button class="btn-icon" id="settings-open-btn" title="App & API Settings" aria-label="Settings">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
