@@ -98,9 +98,10 @@ const state = {
   searchResults: LID_DATABASE,
   selectedItem: null,
 
-  // Scanner Tab
+  // Scanner Tab (Consolidated single source of truth: 'food_label' | 'receipt' | 'paste')
+  scannerTab: 'food_label',
   inputMode: 'camera', // 'camera' | 'text'
-  scanTarget: 'receipt', // 'receipt' | 'label'
+  scanTarget: 'label', // 'label' | 'receipt'
   scannedReceiptAudit: null,
   scanError: null,
   scanText: '',
@@ -509,34 +510,39 @@ function attachEventHandlers() {
   const toggleLabelModeBtn = document.querySelector('#toggle-label-mode');
   const dismissScanErrorBtn = document.querySelector('#dismiss-scan-error-btn');
 
-  if (toggleReceiptModeBtn) {
-    toggleReceiptModeBtn.addEventListener('click', () => {
-      state.scanTarget = 'receipt';
-      render();
-    });
-  }
   if (toggleLabelModeBtn) {
     toggleLabelModeBtn.addEventListener('click', () => {
+      state.scannerTab = 'food_label';
       state.scanTarget = 'label';
+      state.inputMode = 'camera';
       render();
     });
   }
-  if (dismissScanErrorBtn) {
-    dismissScanErrorBtn.addEventListener('click', () => {
-      state.scanError = null;
-      render();
-    });
-  }
-
-  if (toggleCameraModeBtn) {
-    toggleCameraModeBtn.addEventListener('click', () => {
+  if (toggleReceiptModeBtn) {
+    toggleReceiptModeBtn.addEventListener('click', () => {
+      state.scannerTab = 'receipt';
+      state.scanTarget = 'receipt';
       state.inputMode = 'camera';
       render();
     });
   }
   if (toggleTextModeBtn) {
     toggleTextModeBtn.addEventListener('click', () => {
+      state.scannerTab = 'paste';
       state.inputMode = 'text';
+      render();
+    });
+  }
+  if (toggleCameraModeBtn) {
+    toggleCameraModeBtn.addEventListener('click', () => {
+      state.scannerTab = state.scanTarget === 'receipt' ? 'receipt' : 'food_label';
+      state.inputMode = 'camera';
+      render();
+    });
+  }
+  if (dismissScanErrorBtn) {
+    dismissScanErrorBtn.addEventListener('click', () => {
+      state.scanError = null;
       render();
     });
   }
@@ -576,7 +582,11 @@ function attachEventHandlers() {
         state.scanText = sample.text;
         state.imagePreviewUrl = null;
         if (sample.isReceipt) {
+          state.scannerTab = 'receipt';
           state.scanTarget = 'receipt';
+        } else {
+          state.scannerTab = 'food_label';
+          state.scanTarget = 'label';
         }
         processScanText(sample.text, sample.title, sample.isReceipt);
       }
@@ -1553,7 +1563,7 @@ async function processScanText(text, title = 'Food Label', isReceipt = false) {
   console.log(`[Scanner] Gemini Key present: ${Boolean(settings.geminiApiKey)}`);
   console.log(`[Scanner] Cloudinary configured: ${Boolean(settings.cloudinaryCloudName && settings.cloudinaryPreset)}`);
 
-  const isReceiptScan = isReceipt || state.scanTarget === 'receipt' || /SIL LABUYO|CKN BRST|MG BRTH|PTIS REF|SM SUPERMARKET|PUREGOLD|ROBINSONS/i.test(text);
+  const isReceiptScan = isReceipt || state.scannerTab === 'receipt' || state.scanTarget === 'receipt' || /SIL LABUYO|CKN BRST|MG BRTH|PTIS REF|SM SUPERMARKET|PUREGOLD|ROBINSONS/i.test(text);
   if (isReceiptScan) {
     const rawLines = text.split('\n').map(l => l.trim()).filter(l => l && !l.toUpperCase().startsWith('TOTAL') && !l.toUpperCase().includes('CHANGE') && !l.toUpperCase().includes('CASHIER'));
     const storeMatch = text.match(/(SM SUPERMARKET|PUREGOLD|ROBINSONS|SAVEMORE|WALTERMART|SUPERMARKET)/i);

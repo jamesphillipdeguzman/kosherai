@@ -103,9 +103,8 @@ export async function executeScanWorkflow(file, context = {}) {
     const settings = getSettings();
     const apiKey = settings.geminiApiKey;
     const activeDiet = state.activeDiet || 'lid';
-    const scanTarget = state.scanTarget || 'receipt';
-
-    const isReceipt = scanTarget === 'receipt';
+    const activeScannerTab = state.scannerTab || (state.scanTarget === 'receipt' ? 'receipt' : 'food_label');
+    const isReceipt = activeScannerTab === 'receipt';
 
     // Background Cloudinary Upload if configured (targets kosherai/receipts for receipts)
     const cloudName = settings.cloudinaryCloudName;
@@ -404,12 +403,33 @@ export function renderScannerTab(state) {
     aiLoading,
     imagePreviewUrl,
     cloudinaryUrl,
-    inputMode = 'camera', // 'camera' or 'text'
-    scanTarget = 'receipt', // 'receipt' or 'label'
+    scannerTab = 'food_label',
+    inputMode = 'camera',
+    scanTarget = 'label',
     activeDiet = 'lid',
     scanHistory = [],
     selectedScanItem = null
   } = state;
+
+  // Single source of truth for scanner active tab
+  const activeScannerTab = state.scannerTab || (inputMode === 'text' ? 'paste' : (scanTarget === 'receipt' ? 'receipt' : 'food_label'));
+  const isPaste = activeScannerTab === 'paste';
+  const isReceipt = activeScannerTab === 'receipt';
+
+  let heroTitle = 'Food & Ingredient Safety Scanner';
+  let heroSubtitle = 'Photograph nutrition labels, packaged goods, or whole produce to audit LID compliance.';
+  let primaryBtnText = 'Take Photo of Food / Label';
+  let secondaryBtnText = 'Upload Food / Label Photo';
+
+  if (isReceipt) {
+    heroTitle = 'Supermarket Receipt Scanner';
+    heroSubtitle = 'Scan supermarket receipts (SM, Puregold, Robinsons) to audit items and find Pinoy Smart Swaps.';
+    primaryBtnText = 'Take Photo of Receipt';
+    secondaryBtnText = 'Upload Receipt Photo';
+  } else if (isPaste) {
+    heroTitle = 'Manual Text & Item Auditor';
+    heroSubtitle = 'Paste ingredients or receipt text to audit dietary compliance.';
+  }
 
   return `
     <div class="scanner-container">
@@ -423,39 +443,37 @@ export function renderScannerTab(state) {
         </div>
 
         <h2 class="text-xl font-bold text-white mb-2">
-          ${scanTarget === 'receipt' ? 'Supermarket Receipt Scanner' : 'Label & Packaging Scanner'}
+          ${heroTitle}
         </h2>
         <p class="text-xs text-slate-300 mb-6">
-          ${scanTarget === 'receipt'
-            ? 'Scan supermarket receipts (SM, Puregold, Robinsons) to audit items and find Pinoy Smart Swaps.'
-            : 'Capture food nutrition labels with your camera for instant diet compliance auditing.'}
+          ${heroSubtitle}
         </p>
 
-        <!-- Mode Toggles: Scan Target (Receipt vs Label) & Input Mode -->
+        <!-- Mode Toggles: Food Label vs Grocery Receipt vs Paste Text -->
         <div style="display: flex; justify-content: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
-          <button id="toggle-receipt-mode" class="filter-btn ${scanTarget === 'receipt' ? 'active' : ''}">
-            🧾 Grocery Receipt
-          </button>
-          <button id="toggle-label-mode" class="filter-btn ${scanTarget === 'label' ? 'active' : ''}">
+          <button id="toggle-label-mode" class="filter-btn ${activeScannerTab === 'food_label' ? 'active' : ''}">
             🏷️ Food Label
           </button>
-          <button id="toggle-text-mode" class="filter-btn ${inputMode === 'text' ? 'active' : ''}">
+          <button id="toggle-receipt-mode" class="filter-btn ${activeScannerTab === 'receipt' ? 'active' : ''}">
+            🧾 Grocery Receipt
+          </button>
+          <button id="toggle-text-mode" class="filter-btn ${activeScannerTab === 'paste' ? 'active' : ''}">
             ✏️ Paste Text
           </button>
         </div>
 
-        ${inputMode === 'camera' ? `
+        ${!isPaste ? `
           <!-- Camera Actions -->
           <div class="scanner-actions">
             <label class="btn-primary" style="cursor: pointer;">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-              <span>${scanTarget === 'receipt' ? 'Take Photo of Receipt' : 'Take Photo with Camera'}</span>
+              <span>${primaryBtnText}</span>
               <input type="file" id="camera-file-input" accept="image/*" capture="environment" style="display: none;" />
             </label>
 
             <label class="btn-secondary" style="cursor: pointer;">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-              <span>${scanTarget === 'receipt' ? 'Upload Receipt Photo' : 'Upload Gallery Image'}</span>
+              <span>${secondaryBtnText}</span>
               <input type="file" id="gallery-file-input" accept="image/*" style="display: none;" />
             </label>
           </div>
@@ -465,13 +483,13 @@ export function renderScannerTab(state) {
             <textarea 
               id="scanner-manual-textarea" 
               class="ingredients-textarea" 
-              placeholder="Paste grocery receipt items (e.g. SIL LABUYO, CKN BRST, MG BRTH CB, PTIS REF) or ingredient text here..."
+              placeholder="Paste ingredients or receipt text here..."
             >${escapeHtml(scanText || '')}</textarea>
             
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
               <button id="scanner-clear-text-btn" class="btn-secondary" style="padding: 8px 16px;">Clear</button>
               <button id="scanner-analyze-btn" class="btn-primary" style="padding: 8px 20px;">
-                ${scanTarget === 'receipt' ? 'Audit Receipt Items' : 'Analyze Ingredients'}
+                Audit Pasted Items
               </button>
             </div>
           </div>
