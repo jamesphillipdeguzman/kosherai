@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import { DIET_RECIPES } from '../src/data/dietRecipes.js';
 import { analyzeRecipe } from '../src/services/ruleEngine.js';
-import { LID_DATABASE, FOOD_DATABASE } from '../src/data/lidDatabase.js';
+import { LID_DATABASE, FOOD_DATABASE, getCategoryEmoji, LID_CATEGORIES } from '../src/data/lidDatabase.js';
 
 console.log('🧪 Starting Multi-Diet Collections & Reactive Explanation Tests...\n');
 
@@ -97,4 +97,33 @@ for (const [diet, dietData] of Object.entries(DIET_RECIPES)) {
 }
 console.log('  ✅ All DIET_RECIPES meals have verified responsive imageUrl properties.\n');
 
-console.log('🎉 ALL MULTI-DIET REFACTOR & IMAGE THUMBNAIL TESTS PASSED SUCCESSFULLY!');
+// 6. Verify Accurate Philippine Pantry Image IDs and Category Icon Badges
+console.log('Test 6: Verify Accurate Philippine Pantry Image IDs and Category Icon Badges');
+
+const expectedPantryImages = {
+  'banana-ketchup': 'photo-1582515073490-39981397c445',
+  'vinegars': 'photo-1590736969955-71cc94801759',
+  'oyster-sauce': 'photo-1546069901-ba9599a7e63c',
+  'fresh-chilies': 'photo-1588252303782-cb80119abd6d',
+  'pure-oils': 'photo-1474979266404-7eaacbcd87c5',
+  'organ-meats-isaw-atay': 'photo-1544025162-d76694265947'
+};
+
+for (const [id, expectedId] of Object.entries(expectedPantryImages)) {
+  const item = FOOD_DATABASE.find(f => f.id === id);
+  assert.ok(item, `Item ${id} must exist in FOOD_DATABASE`);
+  assert.ok(item.imageUrl.includes(expectedId), `Item ${id} must have verified accurate Unsplash ID ${expectedId}`);
+  assert.ok(item.icon, `Item ${id} must have an icon badge`);
+}
+
+// Verify getCategoryEmoji fallback
+assert.strictEqual(getCategoryEmoji(LID_CATEGORIES.CONDIMENTS, 'sukang paombong'), '🍶');
+assert.strictEqual(getCategoryEmoji(LID_CATEGORIES.CONDIMENTS, 'siling labuyo'), '🌶️');
+assert.strictEqual(getCategoryEmoji(LID_CATEGORIES.CONDIMENTS, 'kosher salt'), '🧂');
+assert.strictEqual(getCategoryEmoji(LID_CATEGORIES.PROTEINS, 'pork belly'), '🥩');
+assert.strictEqual(getCategoryEmoji(LID_CATEGORIES.PROTEINS, 'manok'), '🍗');
+assert.strictEqual(getCategoryEmoji(LID_CATEGORIES.PROTEINS, 'isaw'), '🍢');
+assert.strictEqual(getCategoryEmoji(LID_CATEGORIES.PROTEINS, 'tahong'), '🦪');
+console.log('  ✅ Verified accurate pantry images and category icon badge fallbacks.\n');
+
+console.log('🎉 ALL MULTI-DIET REFACTOR, ACCURATE IMAGES & ICON BADGE TESTS PASSED SUCCESSFULLY!');

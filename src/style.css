@@ -900,25 +900,29 @@ html.dark .nav-tab-btn.active .nav-icon-wrapper,
 }
 
 .card-thumbnail-wrap {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   flex-shrink: 0;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid rgba(226, 232, 240, 0.6);
   background: var(--bg-card-subtle);
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 html.dark .card-thumbnail-wrap,
 :root:not(.light) .card-thumbnail-wrap {
   border-color: rgba(51, 65, 85, 0.6);
+  background: rgba(30, 41, 59, 0.7);
 }
 
 @media (min-width: 640px) {
   .card-thumbnail-wrap {
-    width: 64px;
-    height: 64px;
+    width: 56px;
+    height: 56px;
   }
 }
 
@@ -931,6 +935,22 @@ html.dark .card-thumbnail-wrap,
 
 .ingredient-card:hover .card-thumbnail-wrap img {
   transform: scale(1.06);
+}
+
+.category-icon-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+@media (min-width: 640px) {
+  .category-icon-fallback {
+    font-size: 1.75rem;
+  }
 }
 
 .card-title-group {

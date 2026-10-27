@@ -24,6 +24,51 @@ export const STATUS = {
 };
 
 /**
+ * Resolves appropriate culinary emoji icon for item category or food title
+ */
+export function getCategoryEmoji(category, name = '') {
+  const n = String(name).toLowerCase();
+  if (n.includes('chili') || n.includes('sili')) return '🌶️';
+  if (n.includes('salt') || n.includes('asin')) return '🧂';
+  if (n.includes('vinegar') || n.includes('suka')) return '🍶';
+  if (n.includes('oil') || n.includes('mantika')) return '🫗';
+  if (n.includes('sauce') || n.includes('toyo') || n.includes('ketchup')) return '🫗';
+  if (n.includes('egg') || n.includes('itlog')) return '🥚';
+  if (n.includes('chicken') || n.includes('manok')) return '🍗';
+  if (n.includes('isaw') || n.includes('liver') || n.includes('atay')) return '🍢';
+  if (n.includes('pork') || n.includes('beef') || n.includes('baboy') || n.includes('baka') || n.includes('meat')) return '🥩';
+  if (n.includes('fish') || n.includes('tuyo') || n.includes('daing') || n.includes('bangus')) return '🐟';
+  if (n.includes('shrimp') || n.includes('hipon') || n.includes('bagoong')) return '🦐';
+  if (n.includes('oyster') || n.includes('tahong') || n.includes('mussel') || n.includes('clam')) return '🦪';
+  if (n.includes('rice') || n.includes('kanin')) return '🍚';
+  if (n.includes('bread') || n.includes('pandesal')) return '🍞';
+  if (n.includes('milk') || n.includes('gatas')) return '🥛';
+  if (n.includes('cheese') || n.includes('keso')) return '🧀';
+
+  switch (category) {
+    case LID_CATEGORIES.CONDIMENTS:
+      return '🧂';
+    case LID_CATEGORIES.PROTEINS:
+      return '🥩';
+    case LID_CATEGORIES.PRODUCE:
+      return '🥬';
+    case LID_CATEGORIES.GRAINS:
+      return '🍚';
+    case LID_CATEGORIES.DAIRY_EGGS:
+      return '🥚';
+    case LID_CATEGORIES.SNACKS_SWEETS:
+      return '🍿';
+    case LID_CATEGORIES.BEVERAGES:
+      return '🍵';
+    case LID_CATEGORIES.ADDITIVES:
+      return '🧪';
+    default:
+      return '🥗';
+  }
+}
+
+
+/**
  * Resolves diet-specific status, clinical guidance, metric value, and Pinoy smart swaps
  */
 export function getItemDietaryInfo(item, dietKey = 'lid') {
@@ -82,7 +127,8 @@ export const LID_DATABASE = [
   // ==================== SALTS & CONDIMENTS ====================
   {
     id: 'salt-kosher',
-    imageUrl: 'https://images.unsplash.com/photo-1518110925495-5fe2fda0442c?auto=format&fit=crop&w=400&q=80',
+    icon: '🧂',
+    imageUrl: 'https://images.unsplash.com/photo-1518110925495-5fe2fda0442c?auto=format&fit=crop&w=240&q=80',
     name: 'Kosher Salt (Non-Iodized)',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.SAFE,
@@ -102,7 +148,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'salt-iodized',
-    imageUrl: 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=400&q=80',
+    icon: '🧂',
+    imageUrl: 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=240&q=80',
     name: 'Iodized Salt / Table Salt',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.AVOID,
@@ -122,7 +169,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'salt-sea',
-    imageUrl: 'https://images.unsplash.com/photo-1506368083636-6defb67639a7?auto=format&fit=crop&w=400&q=80',
+    icon: '🧂',
+    imageUrl: 'https://images.unsplash.com/photo-1506368083636-6defb67639a7?auto=format&fit=crop&w=240&q=80',
     name: 'Sea Salt & Himalayan Pink Salt',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.AVOID,
@@ -141,7 +189,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'soy-sauce',
-    imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=400&q=80',
+    icon: '🫗',
+    imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=240&q=80',
     name: 'Soy Sauce (Toyo)',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.AVOID,
@@ -160,7 +209,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'fish-sauce-patis',
-    imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=400&q=80',
+    icon: '🐟',
+    imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=240&q=80',
     name: 'Fish Sauce (Patis) & Bagoong Alamang',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.AVOID,
@@ -179,7 +229,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'toyomansi-condiment',
-    imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=400&q=80',
+    icon: '🫗',
+    imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=240&q=80',
     name: 'Toyomansi & Commercial Seasoning Liquids',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.AVOID,
@@ -198,7 +249,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'oyster-sauce',
-    imageUrl: 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=400&q=80',
+    icon: '🦪',
+    imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=240&q=80',
     name: 'Oyster Sauce & Seafood Pastes',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.AVOID,
@@ -217,7 +269,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'banana-ketchup',
-    imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=400&q=80',
+    icon: '🍅',
+    imageUrl: 'https://images.unsplash.com/photo-1582515073490-39981397c445?auto=format&fit=crop&w=240&q=80',
     name: 'Banana Ketchup (UFC, Papa, Jufran)',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.AVOID,
@@ -236,7 +289,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'fresh-chilies',
-    imageUrl: 'https://images.unsplash.com/photo-1588252303782-cb80119abd6d?auto=format&fit=crop&w=400&q=80',
+    icon: '🌶️',
+    imageUrl: 'https://images.unsplash.com/photo-1588252303782-cb80119abd6d?auto=format&fit=crop&w=240&q=80',
     name: 'Fresh Chilies (Siling Labuyo & Siling Haba)',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.SAFE,
@@ -255,7 +309,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'pure-oils',
-    imageUrl: 'https://images.unsplash.com/photo-1526947425960-945c6e72858f?auto=format&fit=crop&w=400&q=80',
+    icon: '🫗',
+    imageUrl: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=240&q=80',
     name: '100% Pure Vegetable Oils (Coconut, Olive, Canola)',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.SAFE,
@@ -274,7 +329,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'vinegars',
-    imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=400&q=80',
+    icon: '🍶',
+    imageUrl: 'https://images.unsplash.com/photo-1590736969955-71cc94801759?auto=format&fit=crop&w=240&q=80',
     name: 'Pure Vinegars (Cane, Coconut, Apple Cider, White)',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.SAFE,
@@ -295,7 +351,8 @@ export const LID_DATABASE = [
   // ==================== MEAT & PROTEINS ====================
   {
     id: 'organ-meats-isaw-atay',
-    imageUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=400&q=80',
+    icon: '🍢',
+    imageUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=240&q=80',
     name: 'Organ Meats (Isaw, Bopis, Atay / Pork & Chicken Liver)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.SAFE,
@@ -314,7 +371,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'fresh-chicken',
-    imageUrl: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?auto=format&fit=crop&w=400&q=80',
+    icon: '🍗',
+    imageUrl: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?auto=format&fit=crop&w=240&q=80',
     name: 'Fresh Chicken (Breast, Thigh - Unbrined & Uncured)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.SAFE,
@@ -333,7 +391,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'fresh-pork',
-    imageUrl: 'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?auto=format&fit=crop&w=400&q=80',
+    icon: '🥩',
+    imageUrl: 'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?auto=format&fit=crop&w=240&q=80',
     name: 'Fresh Pork (Uncured & Raw - Liempo, Kasim, Loin)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.SAFE,
@@ -352,7 +411,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'fresh-beef',
-    imageUrl: 'https://images.unsplash.com/photo-1558030006-450675393462?auto=format&fit=crop&w=400&q=80',
+    icon: '🥩',
+    imageUrl: 'https://images.unsplash.com/photo-1558030006-450675393462?auto=format&fit=crop&w=240&q=80',
     name: 'Fresh Beef (Uncured & Raw - Sirloin, Brisket)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.SAFE,
@@ -371,7 +431,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'mung-beans-munggo',
-    imageUrl: 'https://images.unsplash.com/photo-1515543237350-b3eea1ec8082?auto=format&fit=crop&w=400&q=80',
+    icon: '🌱',
+    imageUrl: 'https://images.unsplash.com/photo-1515543237350-b3eea1ec8082?auto=format&fit=crop&w=240&q=80',
     name: 'Mung Beans (Ginisang Munggo / Balatong)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.AVOID,
@@ -390,7 +451,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'egg-whites',
-    imageUrl: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?auto=format&fit=crop&w=400&q=80',
+    icon: '🥚',
+    imageUrl: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?auto=format&fit=crop&w=240&q=80',
     name: 'Egg Whites (Pure)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.SAFE,
@@ -409,7 +471,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'egg-yolks-whole',
-    imageUrl: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?auto=format&fit=crop&w=400&q=80',
+    icon: '🥚',
+    imageUrl: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?auto=format&fit=crop&w=240&q=80',
     name: 'Whole Eggs & Egg Yolks',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.AVOID,
@@ -428,7 +491,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'dried-fish-tuyo-daing',
-    imageUrl: 'https://images.unsplash.com/photo-1534043464124-3be32fe000c9?auto=format&fit=crop&w=400&q=80',
+    icon: '🐟',
+    imageUrl: 'https://images.unsplash.com/photo-1534043464124-3be32fe000c9?auto=format&fit=crop&w=240&q=80',
     name: 'Dried Salted Fish (Tuyo, Daing, Tinapa)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.AVOID,
@@ -447,7 +511,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'seafood-fish',
-    imageUrl: 'https://images.unsplash.com/photo-1534043464124-3be32fe000c9?auto=format&fit=crop&w=400&q=80',
+    icon: '🐟',
+    imageUrl: 'https://images.unsplash.com/photo-1534043464124-3be32fe000c9?auto=format&fit=crop&w=240&q=80',
     name: 'Fresh Fish (Tuna, Salmon, Tilapia, Bangus)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.AVOID,
@@ -466,7 +531,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'shellfish-crustaceans',
-    imageUrl: 'https://images.unsplash.com/photo-1506484381205-f7945653044d?auto=format&fit=crop&w=400&q=80',
+    icon: '🦐',
+    imageUrl: 'https://images.unsplash.com/photo-1506484381205-f7945653044d?auto=format&fit=crop&w=240&q=80',
     name: 'Shellfish & Crustaceans (Tahong, Hipon, Alimango, Talaba)',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.AVOID,
@@ -485,7 +551,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'tofu-soy-protein',
-    imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80',
+    icon: '🥣',
+    imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=240&q=80',
     name: 'Tofu (Tokwa), Taho & Soy Protein',
     category: LID_CATEGORIES.PROTEINS,
     status: STATUS.AVOID,
@@ -506,7 +573,8 @@ export const LID_DATABASE = [
   // ==================== PRODUCE (VEGETABLES & FRUITS) ====================
   {
     id: 'sayote-chayote',
-    imageUrl: 'https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?auto=format&fit=crop&w=400&q=80',
+    icon: '🍐',
+    imageUrl: 'https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?auto=format&fit=crop&w=240&q=80',
     name: 'Sayote (Chayote Squash)',
     category: LID_CATEGORIES.PRODUCE,
     status: STATUS.SAFE,
@@ -525,7 +593,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'kalabasa-squash',
-    imageUrl: 'https://images.unsplash.com/photo-1518843875459-f738682238a6?auto=format&fit=crop&w=400&q=80',
+    icon: '🎃',
+    imageUrl: 'https://images.unsplash.com/photo-1518843875459-f738682238a6?auto=format&fit=crop&w=240&q=80',
     name: 'Kalabasa (Squash / Kabocha)',
     category: LID_CATEGORIES.PRODUCE,
     status: STATUS.SAFE,
@@ -544,7 +613,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'potatoes-all',
-    imageUrl: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=400&q=80',
+    icon: '🥔',
+    imageUrl: 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=240&q=80',
     name: 'Potatoes (All Varieties - French Fries, Chips, Mash)',
     category: LID_CATEGORIES.PRODUCE,
     status: STATUS.AVOID,
@@ -563,7 +633,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'cruciferous-veggies',
-    imageUrl: 'https://images.unsplash.com/photo-1576045057995-568f588f82fb?auto=format&fit=crop&w=400&q=80',
+    icon: '🥬',
+    imageUrl: 'https://images.unsplash.com/photo-1576045057995-568f588f82fb?auto=format&fit=crop&w=240&q=80',
     name: 'Cruciferous Greens (Cabbage, Broccoli, Cauliflower, Pechay)',
     category: LID_CATEGORIES.PRODUCE,
     status: STATUS.AVOID,
@@ -582,7 +653,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'seaweed-all',
-    imageUrl: 'https://images.unsplash.com/photo-1506484381205-f7945653044d?auto=format&fit=crop&w=400&q=80',
+    icon: '🌿',
+    imageUrl: 'https://images.unsplash.com/photo-1506484381205-f7945653044d?auto=format&fit=crop&w=240&q=80',
     name: 'Sea Vegetables & Seaweed (Nori, Kelp, Wakame, Lato)',
     category: LID_CATEGORIES.PRODUCE,
     status: STATUS.AVOID,
@@ -601,7 +673,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'bell-peppers',
-    imageUrl: 'https://images.unsplash.com/photo-1563565375-f3fdfdbefa83?auto=format&fit=crop&w=400&q=80',
+    icon: '🫑',
+    imageUrl: 'https://images.unsplash.com/photo-1563565375-f3fdfdbefa83?auto=format&fit=crop&w=240&q=80',
     name: 'Bell Peppers, Eggplant & Cucumbers',
     category: LID_CATEGORIES.PRODUCE,
     status: STATUS.SAFE,
@@ -620,7 +693,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'tomatoes-fresh',
-    imageUrl: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=400&q=80',
+    icon: '🍅',
+    imageUrl: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=240&q=80',
     name: 'Fresh Tomatoes, Onions, Garlic & Ginger',
     category: LID_CATEGORIES.PRODUCE,
     status: STATUS.SAFE,
@@ -641,7 +715,8 @@ export const LID_DATABASE = [
   // ==================== GRAINS, FLOURS & BAKERY ====================
   {
     id: 'white-brown-rice',
-    imageUrl: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=400&q=80',
+    icon: '🍚',
+    imageUrl: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=240&q=80',
     name: 'White & Brown Rice (Sinandomeng, Dinorado, Jasmine)',
     category: LID_CATEGORIES.GRAINS,
     status: STATUS.SAFE,
@@ -660,7 +735,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'commercial-bread',
-    imageUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=400&q=80',
+    icon: '🍞',
+    imageUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=240&q=80',
     name: 'Commercial White Bread, Pandesal & Buns',
     category: LID_CATEGORIES.GRAINS,
     status: STATUS.AVOID,
@@ -681,7 +757,8 @@ export const LID_DATABASE = [
   // ==================== DAIRY & SWEETS ====================
   {
     id: 'cow-milk',
-    imageUrl: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=400&q=80',
+    icon: '🥛',
+    imageUrl: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=240&q=80',
     name: 'Cow’s Milk & Goat’s Milk',
     category: LID_CATEGORIES.DAIRY_EGGS,
     status: STATUS.AVOID,
@@ -700,7 +777,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'sweetened-condensed-milk',
-    imageUrl: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=400&q=80',
+    icon: '🥛',
+    imageUrl: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=240&q=80',
     name: 'Sweetened Condensed Milk (Gatas Kondensada)',
     category: LID_CATEGORIES.DAIRY_EGGS,
     status: STATUS.AVOID,
@@ -719,7 +797,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'cheese-all',
-    imageUrl: 'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=400&q=80',
+    icon: '🧀',
+    imageUrl: 'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=240&q=80',
     name: 'All Cheeses (Cheddar, Mozzarella, Kesong Puti)',
     category: LID_CATEGORIES.DAIRY_EGGS,
     status: STATUS.AVOID,
@@ -740,7 +819,8 @@ export const LID_DATABASE = [
   // ==================== ADDITIVES & SUPPLEMENTS ====================
   {
     id: 'carrageenan-e407',
-    imageUrl: 'https://images.unsplash.com/photo-1506484381205-f7945653044d?auto=format&fit=crop&w=400&q=80',
+    icon: '🧪',
+    imageUrl: 'https://images.unsplash.com/photo-1506484381205-f7945653044d?auto=format&fit=crop&w=240&q=80',
     name: 'Carrageenan (E407) & Agar-Agar (Gulaman)',
     category: LID_CATEGORIES.ADDITIVES,
     status: STATUS.AVOID,
@@ -759,7 +839,8 @@ export const LID_DATABASE = [
   },
   {
     id: 'red-dye-3-erythrosine',
-    imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=400&q=80',
+    icon: '🧪',
+    imageUrl: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=240&q=80',
     name: 'FD&C Red Dye #3 (Erythrosine / E127)',
     category: LID_CATEGORIES.ADDITIVES,
     status: STATUS.AVOID,

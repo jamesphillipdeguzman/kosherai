@@ -1,5 +1,5 @@
 // Quick Search & Multi-Diet Checker Tab Component (Offline First)
-import { LID_CATEGORIES, STATUS, getItemDietaryInfo, getItemStatus } from '../data/lidDatabase.js';
+import { LID_CATEGORIES, STATUS, getItemDietaryInfo, getItemStatus, getCategoryEmoji } from '../data/lidDatabase.js';
 import { searchDatabase } from '../services/ruleEngine.js';
 
 export function renderCheckerTab(state) {
@@ -126,18 +126,25 @@ function renderIngredientCard(item, activeDiet = 'lid') {
   return `
     <div class="ingredient-card group ${statusClass}" data-item-id="${item.id}" role="button" tabindex="0">
       <div class="card-header flex items-start gap-3">
-        ${item.imageUrl ? `
-          <div class="relative w-14 h-14 sm:w-16 sm:h-16 flex-shrink-0 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 card-thumbnail-wrap">
+        <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-2xl border border-slate-200/60 dark:border-slate-700/60 flex-shrink-0 card-thumbnail-wrap overflow-hidden relative">
+          ${item.imageUrl ? `
             <img
               src="${escapeHtml(item.imageUrl)}"
               alt="${escapeHtml(item.name)}"
               loading="lazy"
               decoding="async"
               class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-              onerror="this.parentElement.style.display='none'"
+              onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';"
             />
-          </div>
-        ` : ''}
+            <div class="category-icon-fallback w-full h-full flex items-center justify-center text-2xl select-none" style="display: none;">
+              ${escapeHtml(item.icon || getCategoryEmoji(item.category, item.name))}
+            </div>
+          ` : `
+            <div class="category-icon-fallback w-full h-full flex items-center justify-center text-2xl select-none">
+              ${escapeHtml(item.icon || getCategoryEmoji(item.category, item.name))}
+            </div>
+          `}
+        </div>
         <div class="card-title-group flex-1 min-w-0">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
             <h3 class="card-name">${escapeHtml(item.name)}</h3>

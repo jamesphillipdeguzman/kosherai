@@ -1,5 +1,5 @@
 // Item Detail Modal Component (Multi-Diet Clinical Guidance & Pinoy Smart Swaps)
-import { STATUS, getItemDietaryInfo } from '../data/lidDatabase.js';
+import { STATUS, getItemDietaryInfo, getCategoryEmoji } from '../data/lidDatabase.js';
 import { getDietProfile } from '../data/dietProfiles.js';
 
 export function renderItemDetailModal(item, activeDiet = 'lid') {
@@ -30,18 +30,25 @@ export function renderItemDetailModal(item, activeDiet = 'lid') {
           <button class="btn-icon" id="item-modal-close-btn" aria-label="Close">✕</button>
         </div>
 
-        ${item.imageUrl ? `
-          <div style="width: 100%; height: 160px; border-radius: var(--radius-md); overflow: hidden; margin-bottom: 16px; border: 1px solid var(--border-color); background: var(--bg-card-subtle);">
+        <div style="width: 100%; height: 160px; border-radius: var(--radius-md); overflow: hidden; margin-bottom: 16px; border: 1px solid var(--border-color); background: var(--bg-card-subtle); display: flex; align-items: center; justify-content: center; position: relative;">
+          ${item.imageUrl ? `
             <img
               src="${escapeHtml(item.imageUrl)}"
               alt="${escapeHtml(item.name)}"
               loading="lazy"
               decoding="async"
               style="width: 100%; height: 100%; object-fit: cover;"
-              onerror="this.parentElement.style.display='none'"
+              onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';"
             />
-          </div>
-        ` : ''}
+            <div class="modal-icon-fallback" style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 3.5rem; background: var(--bg-card-subtle);">
+              ${escapeHtml(item.icon || getCategoryEmoji(item.category, item.name))}
+            </div>
+          ` : `
+            <div class="modal-icon-fallback" style="display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 3.5rem; background: var(--bg-card-subtle);">
+              ${escapeHtml(item.icon || getCategoryEmoji(item.category, item.name))}
+            </div>
+          `}
+        </div>
 
         <!-- Big Status Indicator Tailored to Active Diet -->
         <div class="result-banner ${isSafe ? 'banner-safe' : isAvoid ? 'banner-avoid' : 'banner-caution'}" style="margin-bottom: 16px;">
