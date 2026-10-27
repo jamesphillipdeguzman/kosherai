@@ -242,11 +242,14 @@ You are an expert clinical nutrition auditor and optical character recognition (
 Analyze this grocery receipt image for dietary compliance under the active protocol: "${currentDietName}" (Protocol key: "${currentDiet}").
 
 INSTRUCTIONS:
-1. Extract line-item food purchases, ignoring cashier metadata, totals, change, timestamps, and store headers.
-2. Clean and expand abbreviated Pinoy grocery terms (e.g., "SIL LABUYO" -> "Siling Labuyo", "CKN BRST" -> "Chicken Breast", "MG BRTH CB" -> "Bouillon Cubes", "PTIS REF" -> "Patis / Fish Sauce", "BGNG ALMNG" -> "Bagoong Alamang", "SAYOTE FRESH" -> "Sayote").
-3. Audit each identified item against the active protocol guidelines. Mark as "SAFE", "CAUTION", or "AVOID".
-4. For any item marked "AVOID", provide a direct "Pinoy Smart Swap" and a brief clinical reason.
-5. Currency and amounts: Amounts are in Philippine Peso ('P', '₱', 'PHP'). Disregard trailing tax letters (e.g., "1,757.50 V" -> 1757.50). Normalize numbers into clean numeric floats without commas.
+1. Extract line-item food purchases, ignoring cashier metadata, blank customer form fields, totals, change, timestamps, and store headers.
+2. Clean and expand abbreviated Pinoy grocery terms & brands (e.g., "SIL LABUYO" -> "Siling Labuyo", "CKN BRST" -> "Chicken Breast", "MG BRTH CB" -> "Bouillon Cubes", "PTIS REF" -> "Patis / Fish Sauce", "BEAR BRAND / NIDO / ALASKA" -> "Powdered Cow's Milk", "CREAM CORNSTARCH" -> "Cornstarch", "HERSHEYS COCOA IN CA" -> "Cocoa Powder").
+3. Handle Philippine receipt formatting nuances:
+   - Barcode numbers: Strip 8-14 digit UPC/EAN barcode numbers (e.g., "04800361393515", "00731126011020"). Never output barcode numbers as item names or separate items.
+   - Multi-line quantities: When quantity and unit price appear on the next line (e.g., "2 X P310.00/Unit    620.00 V"), combine with the parent item (qty: 2, price: 310.0, total: 620.0).
+   - Trailing tax letters: Disregard trailing letters such as "V" (VATable). Normalize amounts to clean numeric floats (e.g., "620.00 V" -> 620.0).
+4. Audit each identified item against the active protocol guidelines. Mark as "SAFE", "CAUTION", or "AVOID".
+5. For any item marked "AVOID", provide a direct "Pinoy Smart Swap" and a brief clinical reason.
 
 DIETARY PROTOCOL GUIDELINES FOR "${currentDiet}":
 - Low-Iodine Diet (lid): AVOID iodized salt, table salt, marine seafood/fish, dairy (milk, cheese, butter, whey), egg yolks, soy (toyo, tofu), carrageenan/seaweed. SAFE: pure non-iodized kosher salt, fresh chicken/pork/beef, pure egg whites, sayote, kalabasa.

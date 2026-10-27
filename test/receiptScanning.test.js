@@ -221,4 +221,78 @@ assert.ok(htmlAudited.includes('Homemade broth simmered with kosher salt'), 'Ren
 
 console.log('  ✅ ScannerTab UI rendering verified successfully.');
 
+// ----------------------------------------------------
+// Test 7: Real-World Robinsons Supermarket Receipt Test
+// ----------------------------------------------------
+console.log('\nTest 7: Real-World Robinsons Supermarket Receipt Layout & Audit');
+
+// 7a: Barcode line isolation
+assert.strictEqual(cleanPinoyGroceryTerm('00731126011020'), '', 'Pure barcode lines must be stripped');
+assert.strictEqual(cleanPinoyGroceryTerm('00034000458615'), '', 'Pure barcode lines must be stripped');
+
+// 7b: Inline barcode stripping & brand dairy expansion
+const bearBrandClean = cleanPinoyGroceryTerm('BEAR BRAND FORTIFIED 04800361393515');
+assert.strictEqual(bearBrandClean, 'Bear Brand Fortified Milk Powder');
+
+// 7c: Clinical compliance under Low-Iodine Diet (LID)
+const bearBrandAudit = auditReceiptItemOffline('BEAR BRAND FORTIFIED 04800361393515', 'lid');
+assert.strictEqual(bearBrandAudit.status, 'AVOID', 'Bear Brand Milk must be flagged AVOID on LID');
+assert.ok(bearBrandAudit.clinicalReason.toLowerCase().includes('dairy') || bearBrandAudit.clinicalReason.toLowerCase().includes('iodine'));
+assert.ok(bearBrandAudit.suggestedSwap !== null);
+
+const cornstarchAudit = auditReceiptItemOffline('CREAM CORNSTARCH 200', 'lid');
+assert.strictEqual(cornstarchAudit.cleanName, 'Cream Cornstarch');
+assert.strictEqual(cornstarchAudit.status, 'SAFE', 'Pure cornstarch is safe on LID');
+
+const cocoaAudit = auditReceiptItemOffline('HERSHEYS COCOA IN CA', 'lid');
+assert.strictEqual(cocoaAudit.cleanName, "Hershey's Cocoa Powder");
+assert.strictEqual(cocoaAudit.status, 'SAFE', 'Pure cocoa powder is safe on LID');
+
+// 7d: Server sanitization of Robinsons receipt JSON
+const robinsonsServerData = {
+  storeName: "Robinsons Supermarket",
+  purchaseDate: "2026-10-27",
+  items: [
+    {
+      rawText: "BEAR BRAND FORTIFIED 04800361393515\n2 X P310.00/Unit",
+      cleanName: "Bear Brand Fortified Milk Powder",
+      status: "AVOID",
+      clinicalReason: "Dairy milk contains elevated natural and sanitizing iodine",
+      suggestedSwap: "Pure coconut milk or oat milk",
+      qty: 2,
+      price: 310.0,
+      total: 620.0
+    },
+    {
+      rawText: "CREAM CORNSTARCH 200",
+      cleanName: "Cream Cornstarch (200g)",
+      status: "SAFE",
+      clinicalReason: "Plant-based thickener safe on low-iodine diet",
+      suggestedSwap: null,
+      qty: 1,
+      price: 23.75,
+      total: 23.75
+    },
+    {
+      rawText: "HERSHEYS COCOA IN CA",
+      cleanName: "Hershey's Cocoa Powder",
+      status: "SAFE",
+      clinicalReason: "Pure unsweetened cocoa is naturally dairy-free",
+      suggestedSwap: null,
+      qty: 1,
+      price: 382.25,
+      total: 382.25
+    }
+  ],
+  totalAmountPaid: "P1,026.00"
+};
+
+const robinsonsSanitized = sanitizeReceiptData(robinsonsServerData, 'lid');
+assert.strictEqual(robinsonsSanitized.storeName, "Robinsons Supermarket");
+assert.strictEqual(robinsonsSanitized.totalAmountPaid, 1026.0);
+assert.strictEqual(robinsonsSanitized.items.length, 3);
+assert.strictEqual(robinsonsSanitized.safeItemCount, 2);
+assert.strictEqual(robinsonsSanitized.flaggedItemCount, 1);
+console.log('  ✅ Real Robinsons receipt layout & compliance verified successfully.');
+
 console.log('\n🎉 ALL RECEIPT SCANNING TESTS PASSED!\n');
