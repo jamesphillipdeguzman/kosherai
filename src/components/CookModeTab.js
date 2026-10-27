@@ -201,7 +201,9 @@ function renderRecipeCard(recipe) {
       </div>
       <div class="recipe-card-header">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px;">
-          <span class="recipe-category-pill">${escapeHtml(category)}</span>
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider uppercase bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25">
+            ${escapeHtml(category)}
+          </span>
           <div class="recipe-time-tag">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.8;">
               <circle cx="12" cy="12" r="10"></circle>
@@ -248,16 +250,13 @@ function renderRecipeCard(recipe) {
         </div>
 
         <!-- Clinical Note Callout -->
-        <div class="recipe-clinical-callout">
-          <div class="callout-header">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="12" y1="8" x2="12" y2="16"></line>
-              <line x1="8" y1="12" x2="16" y2="12"></line>
-            </svg>
-            <span class="callout-title">Clinical Protocol Rationale</span>
+        <div class="rounded-xl p-3.5 bg-emerald-500/10 dark:bg-emerald-950/30 border border-emerald-500/20 dark:border-emerald-500/30">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider mb-1">
+            <span class="text-sm">🛡️</span> CLINICAL PROTOCOL RATIONALE
           </div>
-          <p class="callout-text">${escapeHtml(clinicalNote)}</p>
+          <p class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed">
+            ${escapeHtml(recipe.clinicalRationale || recipe.rationale || clinicalNote)}
+          </p>
         </div>
       </div>
 

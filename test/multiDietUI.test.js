@@ -136,4 +136,29 @@ for (const diet of expectedDiets) {
 }
 console.log('  ✅ SubstitutesTab multi-diet reactivity and high contrast verified.\n');
 
+// 6. Verify Recipe Card Orange Category Badge & High-Contrast Clinical Rationale Container
+console.log('Test 6: Verify Recipe Card Orange Category Badge & High-Contrast Clinical Rationale Container');
+const cookHtml = renderCookModeTab({ activeDiet: 'lid', checklistState: {} });
+
+// Check warm orange badge
+assert.ok(
+  cookHtml.includes('bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25'),
+  'Recipe cards must feature warm amber/orange category tag badge'
+);
+
+// Check clean light surface container for Clinical Protocol Rationale
+assert.ok(
+  cookHtml.includes('bg-emerald-500/10 dark:bg-emerald-950/30 border border-emerald-500/20 dark:border-emerald-500/30'),
+  'Recipe cards must feature clean theme-adaptive background for Clinical Protocol Rationale container'
+);
+assert.ok(
+  cookHtml.includes('text-emerald-800 dark:text-emerald-400'),
+  'Clinical Protocol Rationale header must use text-emerald-800 dark:text-emerald-400'
+);
+assert.ok(
+  cookHtml.includes('text-slate-700 dark:text-slate-200 leading-relaxed'),
+  'Clinical Protocol Rationale body text must use high-contrast text-slate-700 dark:text-slate-200'
+);
+console.log('  ✅ Recipe card orange category badge and high-contrast rationale verified.\n');
+
 console.log('🎉 ALL MULTI-DIET DESYNCHRONIZATION, CONTRAST & THEME TOGGLE TESTS PASSED!');
