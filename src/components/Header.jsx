@@ -113,20 +113,21 @@ export function Header({
         </div>
 
         {appMode === 'diet' && (
-          <div className="protocol-banner mt-3 mb-2">
+          <div className="protocol-banner flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 mt-3 mb-2">
             <div className="banner-content min-w-0 flex-1">
               <span className="banner-icon flex-shrink-0">{currentProfile.icon}</span>
               <div className="min-w-0">
                 <div className="banner-title">{currentProfile.target}</div>
-                <div className="banner-desc truncate sm:whitespace-normal">{currentProfile.tagline}</div>
+                <div className="banner-desc sm:whitespace-normal">{currentProfile.tagline}</div>
               </div>
             </div>
             <div className="banner-target inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-wide border border-teal-600/60 dark:border-teal-400/60 bg-teal-500/10 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200 banner-target-interactive" title="Change Diet Protocol">
-              <label htmlFor="header-diet-selector" className="sr-only">Select Diet Protocol</label>
-              <div className="protocol-pill-btn inline-flex items-center gap-1.5">
-                <span className="protocol-pill-icon text-sm select-none">{currentProfile.icon}</span>
-                <span className="protocol-pill-label truncate font-bold">{currentProfile.shortName}</span>
-                <svg className="protocol-pill-chevron w-3.5 h-3.5 text-teal-600 dark:text-teal-400 flex-shrink-0 pointer-events-none" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <div className="protocol-pill-btn inline-flex items-center justify-between w-full gap-2">
+                <span className="protocol-pill-info inline-flex items-center gap-1.5 min-w-0">
+                  <span className="protocol-pill-icon text-sm select-none">{currentProfile.icon}</span>
+                  <span className="protocol-pill-label truncate font-bold">{currentProfile.shortName}</span>
+                </span>
+                <svg className="protocol-pill-chevron w-4 h-4 flex-shrink-0 text-teal-600 dark:text-teal-400 pointer-events-none" width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                 </svg>
               </div>
