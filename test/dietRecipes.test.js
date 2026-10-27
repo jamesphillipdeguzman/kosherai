@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import { DIET_RECIPES } from '../src/data/dietRecipes.js';
 import { analyzeRecipe } from '../src/services/ruleEngine.js';
-import { LID_DATABASE } from '../src/data/lidDatabase.js';
+import { LID_DATABASE, FOOD_DATABASE } from '../src/data/lidDatabase.js';
 
 console.log('🧪 Starting Multi-Diet Collections & Reactive Explanation Tests...\n');
 
@@ -75,4 +75,26 @@ assert.ok(lidNote.includes('Severe contraindication for RAI'), 'LID note for iod
 
 console.log('  ✅ Ingredient card reactive explanations strictly verified.\n');
 
-console.log('🎉 ALL MULTI-DIET REFACTOR TESTS PASSED SUCCESSFULLY!');
+// 5. Verify Optimized Image URLs on FOOD_DATABASE and DIET_RECIPES
+console.log('Test 5: Verify optimized imageUrl properties on FOOD_DATABASE and DIET_RECIPES');
+assert.ok(FOOD_DATABASE, 'FOOD_DATABASE must be exported as alias for LID_DATABASE');
+
+// Check that FOOD_DATABASE items have imageUrl with sizing parameters
+for (const item of FOOD_DATABASE) {
+  assert.ok(item.imageUrl, `Food item ${item.id} must have an imageUrl`);
+  assert.ok(item.imageUrl.includes('auto=format'), `Food item ${item.id} imageUrl must include auto=format parameter`);
+  assert.ok(item.imageUrl.includes('w='), `Food item ${item.id} imageUrl must include responsive width parameter`);
+}
+console.log(`  ✅ All ${FOOD_DATABASE.length} food items have verified responsive imageUrl properties.`);
+
+// Check that all meals in DIET_RECIPES have imageUrl with sizing parameters
+for (const [diet, dietData] of Object.entries(DIET_RECIPES)) {
+  for (const meal of dietData.meals) {
+    assert.ok(meal.imageUrl, `Meal ${meal.id} under ${diet} must have an imageUrl`);
+    assert.ok(meal.imageUrl.includes('auto=format'), `Meal ${meal.id} imageUrl must include auto=format parameter`);
+    assert.ok(meal.imageUrl.includes('w='), `Meal ${meal.id} imageUrl must include responsive width parameter`);
+  }
+}
+console.log('  ✅ All DIET_RECIPES meals have verified responsive imageUrl properties.\n');
+
+console.log('🎉 ALL MULTI-DIET REFACTOR & IMAGE THUMBNAIL TESTS PASSED SUCCESSFULLY!');

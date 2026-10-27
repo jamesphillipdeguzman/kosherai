@@ -176,6 +176,18 @@ function renderRecipeCard(recipe) {
 
   return `
     <article class="recipe-card" id="recipe-${recipe.id}">
+      ${recipe.imageUrl ? `
+        <div class="recipe-card-banner relative w-full aspect-video sm:h-36 overflow-hidden rounded-t-lg bg-slate-100 dark:bg-slate-800">
+          <img
+            src="${escapeHtml(recipe.imageUrl)}"
+            alt="${escapeHtml(title)}"
+            loading="lazy"
+            decoding="async"
+            class="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+            onerror="this.parentElement.style.display='none'"
+          />
+        </div>
+      ` : ''}
       <div class="recipe-card-header">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px;">
           <span class="recipe-category-pill">${escapeHtml(category)}</span>

@@ -899,6 +899,40 @@ html.dark .nav-tab-btn.active .nav-icon-wrapper,
   margin-bottom: 8px;
 }
 
+.card-thumbnail-wrap {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  background: var(--bg-card-subtle);
+  position: relative;
+}
+
+html.dark .card-thumbnail-wrap,
+:root:not(.light) .card-thumbnail-wrap {
+  border-color: rgba(51, 65, 85, 0.6);
+}
+
+@media (min-width: 640px) {
+  .card-thumbnail-wrap {
+    width: 64px;
+    height: 64px;
+  }
+}
+
+.card-thumbnail-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.ingredient-card:hover .card-thumbnail-wrap img {
+  transform: scale(1.06);
+}
+
 .card-title-group {
   flex: 1;
 }
@@ -2210,6 +2244,27 @@ html.light select.form-input:focus {
   height: 3px;
   background: linear-gradient(90deg, #10b981, #06b6d4);
   opacity: 0.75;
+  z-index: 2;
+}
+
+.recipe-card-banner {
+  margin: -22px -22px 16px -22px;
+  height: 144px;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg-card-subtle);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.recipe-card-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.35s ease;
+}
+
+.recipe-card:hover .recipe-card-banner img {
+  transform: scale(1.05);
 }
 
 .recipe-card:hover {

@@ -124,15 +124,29 @@ function renderIngredientCard(item, activeDiet = 'lid') {
   const swaps = info.substitutes || [];
 
   return `
-    <div class="ingredient-card ${statusClass}" data-item-id="${item.id}" role="button" tabindex="0">
-      <div class="card-header">
-        <div class="card-title-group">
-          <h3 class="card-name">${escapeHtml(item.name)}</h3>
+    <div class="ingredient-card group ${statusClass}" data-item-id="${item.id}" role="button" tabindex="0">
+      <div class="card-header flex items-start gap-3">
+        ${item.imageUrl ? `
+          <div class="relative w-14 h-14 sm:w-16 sm:h-16 flex-shrink-0 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 card-thumbnail-wrap">
+            <img
+              src="${escapeHtml(item.imageUrl)}"
+              alt="${escapeHtml(item.name)}"
+              loading="lazy"
+              decoding="async"
+              class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              onerror="this.parentElement.style.display='none'"
+            />
+          </div>
+        ` : ''}
+        <div class="card-title-group flex-1 min-w-0">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+            <h3 class="card-name">${escapeHtml(item.name)}</h3>
+            <span class="badge-status ${badgeClass}" style="flex-shrink: 0;">
+              ${badgeIcon} ${info.status}
+            </span>
+          </div>
           <span class="card-category">${escapeHtml(item.category)}</span>
         </div>
-        <span class="badge-status ${badgeClass}">
-          ${badgeIcon} ${info.status}
-        </span>
       </div>
 
       <div class="card-iodine-bar ${metricClass}">

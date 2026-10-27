@@ -30,6 +30,19 @@ export function renderItemDetailModal(item, activeDiet = 'lid') {
           <button class="btn-icon" id="item-modal-close-btn" aria-label="Close">✕</button>
         </div>
 
+        ${item.imageUrl ? `
+          <div style="width: 100%; height: 160px; border-radius: var(--radius-md); overflow: hidden; margin-bottom: 16px; border: 1px solid var(--border-color); background: var(--bg-card-subtle);">
+            <img
+              src="${escapeHtml(item.imageUrl)}"
+              alt="${escapeHtml(item.name)}"
+              loading="lazy"
+              decoding="async"
+              style="width: 100%; height: 100%; object-fit: cover;"
+              onerror="this.parentElement.style.display='none'"
+            />
+          </div>
+        ` : ''}
+
         <!-- Big Status Indicator Tailored to Active Diet -->
         <div class="result-banner ${isSafe ? 'banner-safe' : isAvoid ? 'banner-avoid' : 'banner-caution'}" style="margin-bottom: 16px;">
           <div class="banner-status-icon">${isSafe ? '🟢' : isAvoid ? '🔴' : '🟡'}</div>
