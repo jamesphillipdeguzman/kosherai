@@ -13,17 +13,17 @@ export const CLOUD_NAME = (typeof import.meta !== 'undefined' && import.meta.env
  * @param {string} fallback
  * @returns {string}
  */
-export function getRecipeImageUrl(publicIdOrUrl, fallback = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80') {
-  if (!publicIdOrUrl) return fallback;
+export function getRecipeImageUrl(imageRef, fallback = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80') {
+  if (!imageRef) return fallback;
   
-  if (typeof publicIdOrUrl === 'string' && (publicIdOrUrl.startsWith('http://') || publicIdOrUrl.startsWith('https://'))) {
-    return publicIdOrUrl;
+  if (typeof imageRef === 'string' && (imageRef.startsWith('http://') || imageRef.startsWith('https://'))) {
+    return imageRef;
   }
 
-  // Auto-format, auto-quality, max width 800px for mobile performance
-  const cleanPath = String(publicIdOrUrl).replace(/^\/+/, '');
+  const clean = String(imageRef).replace(/^\/+/, '');
+  const cleanFile = clean.endsWith('.webp') ? clean : `${clean}.webp`;
   const cloudName = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME) || 'dego6hgcb';
-  return `https://res.cloudinary.com/${cloudName}/image/upload/f_auto,q_auto,w_800/${cleanPath}`;
+  return `https://res.cloudinary.com/${cloudName}/image/upload/f_auto,q_auto/${cleanFile}`;
 }
 
 export default {
