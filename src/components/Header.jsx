@@ -66,91 +66,84 @@ export function Header({
         </div>
       </header>
 
-      <div className="app-container" style={{ paddingTop: '12px', paddingBottom: 0 }}>
-        {/* Dedicated Full-Width Diet Protocol Selector Strip */}
-        <div className="diet-selector-strip w-full flex items-center justify-between gap-2 p-2 my-2 rounded-2xl bg-slate-100/90 dark:bg-slate-900/85 border border-slate-200/80 dark:border-slate-800/80 shadow-sm backdrop-blur-md">
-          <div className="flex items-center gap-2 min-w-0 pl-1">
-            <span className="text-lg flex-shrink-0">{currentProfile.emoji || currentProfile.icon}</span>
-            <div className="min-w-0">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Dietary Protocol</div>
-              <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">{currentProfile.name}</div>
-            </div>
-          </div>
-
-          <div className="header-diet-picker-wrap flex-shrink-0" title="Active Dietary Protocol">
-            <label htmlFor="header-diet-selector" className="sr-only">Select Diet Protocol</label>
-            <div className="diet-select-badge">
-              <span className="diet-select-icon mr-1.5">{currentProfile.emoji || currentProfile.icon}</span>
-              <select
-                id="header-diet-selector"
-                value={activeDiet}
-                onChange={(e) => onSelectDiet && onSelectDiet(e.target.value)}
-                className="header-diet-dropdown bg-teal-950/40 dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-teal-500/30 rounded-xl px-3 py-1.5 focus:outline-none"
-                aria-label="Select Dietary Protocol"
-              >
-                {Object.values(DIET_PROFILES).map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.label || profile.name}
-                  </option>
-                ))}
-              </select>
-              <span className="diet-select-chevron">▾</span>
-            </div>
-          </div>
-        </div>
-        {/* Centered Selector Area with Dynamic Tagline */}
-        <div className="flex flex-col items-center justify-center my-2 text-center px-4">
+      <div className="app-container" style={{ paddingTop: '10px', paddingBottom: 0 }}>
+        {/* Centered Mode Selector Area with Dynamic Tagline */}
+        <div className="header-mode-toggle-wrap flex flex-col items-center justify-center pt-1 pb-1 text-center px-4">
           {showProjectTab ? (
-            <div className="inline-flex items-center gap-2 p-1 rounded-full bg-slate-900/60 border border-slate-800">
+            <div className="mode-switcher-bar inline-flex items-center gap-2 p-1 rounded-full bg-slate-900/60 dark:bg-slate-900/80 border border-slate-700/60 dark:border-slate-800 shadow-sm" role="tablist" aria-label="Application View Mode">
               <button
                 type="button"
                 onClick={() => onSelectMode && onSelectMode('diet')}
-                className={`px-4 py-1.5 rounded-full text-xs font-semibold ${
+                className={`mode-tab-btn px-4 py-1.5 rounded-full text-xs font-semibold ${
                   appMode === 'diet'
                     ? 'border border-teal-500/40 bg-teal-500/10 text-teal-300 shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
+                role="tab"
+                aria-selected={appMode === 'diet'}
               >
                 {currentProfile.icon || '🥑'} {currentProfile.shortName}
               </button>
               <button
                 type="button"
                 onClick={() => onSelectMode && onSelectMode('course')}
-                className={`px-4 py-1.5 rounded-full text-xs font-medium ${
+                className={`mode-tab-btn course-mode px-4 py-1.5 rounded-full text-xs font-medium ${
                   appMode === 'course'
                     ? 'border border-teal-500/40 bg-teal-500/10 text-teal-300 shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
+                role="tab"
+                aria-selected={appMode === 'course'}
               >
                 📊 6-Week Project (Oct 31)
               </button>
             </div>
           ) : (
             <div className="inline-flex items-center gap-2 p-1 rounded-full bg-slate-900/60 border border-slate-800">
-              <span className="px-4 py-1.5 rounded-full text-xs font-semibold border border-teal-500/40 bg-teal-500/10 text-teal-300 shadow-sm">
+              <span className="mode-tab-btn active px-4 py-1.5 rounded-full text-xs font-semibold border border-teal-500/40 bg-teal-500/10 text-teal-300 shadow-sm">
                 {currentProfile.icon || '🥑'} {currentProfile.shortName}
               </span>
             </div>
           )}
 
-          {/* New Dynamic Tagline */}
-          <p className="mt-2 text-xs text-slate-400 dark:text-slate-400 max-w-xl text-center leading-relaxed">
+          {/* Dynamic Tagline */}
+          <p className="active-diet-tagline mt-2 text-xs text-slate-500 dark:text-slate-400 max-w-xl text-center leading-relaxed">
             {activeDescription}
           </p>
         </div>
 
         {appMode === 'diet' && (
-          <div className="protocol-banner">
-            <div className="banner-content">
-              <span className="banner-icon">{currentProfile.icon}</span>
-              <div>
+          <div className="protocol-banner mt-3 mb-2">
+            <div className="banner-content min-w-0 flex-1">
+              <span className="banner-icon flex-shrink-0">{currentProfile.icon}</span>
+              <div className="min-w-0">
                 <div className="banner-title">{currentProfile.target}</div>
-                <div className="banner-desc">{currentProfile.tagline}</div>
+                <div className="banner-desc truncate sm:whitespace-normal">{currentProfile.tagline}</div>
               </div>
             </div>
-            <span className="banner-target inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-wide border border-teal-600/60 dark:border-teal-400/60 bg-teal-500/10 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200">
-              {currentProfile.shortName}
-            </span>
+            <div className="banner-target inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-wide border border-teal-600/60 dark:border-teal-400/60 bg-teal-500/10 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200 banner-target-interactive" title="Change Diet Protocol">
+              <label htmlFor="header-diet-selector" className="sr-only">Select Diet Protocol</label>
+              <div className="protocol-pill-btn inline-flex items-center gap-1.5">
+                <span className="protocol-pill-icon text-sm select-none">{currentProfile.icon}</span>
+                <span className="protocol-pill-label truncate font-bold">{currentProfile.shortName}</span>
+                <svg className="protocol-pill-chevron w-3.5 h-3.5 text-teal-600 dark:text-teal-400 flex-shrink-0 pointer-events-none" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <select
+                id="header-diet-selector"
+                value={activeDiet}
+                onChange={(e) => onSelectDiet && onSelectDiet(e.target.value)}
+                className="protocol-select-native"
+                aria-label="Select Dietary Protocol"
+              >
+                {Object.values(DIET_PROFILES).map((profile) => (
+                  <option key={profile.id} value={profile.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 py-1.5">
+                    {profile.label || profile.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         )}
       </div>
