@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import { CHECKLIST_BY_DIET } from '../src/data/protocolRules.js';
 import { SMART_SUBSTITUTES_BY_DIET } from '../src/data/protocolRules.js';
-import { DIET_PROFILES } from '../src/data/dietProfiles.js';
+import { DIET_PROFILES, DIET_DESCRIPTIONS, getDietDescription } from '../src/data/dietProfiles.js';
 import { renderCookModeTab } from '../src/components/CookModeTab.js';
 import { renderSubstitutesTab } from '../src/components/SubstitutesTab.js';
 import { renderHeader } from '../src/components/Header.js';
@@ -99,7 +99,22 @@ for (const diet of Object.values(DIET_PROFILES)) {
   assert.ok(!optionContent.startsWith(diet.emoji), `Option content "${optionContent}" should not start with emoji "${diet.emoji}"`);
   assert.strictEqual(optionContent, diet.label, `Option content should match diet label "${diet.label}"`);
 }
-console.log('  ✅ Header emoji deduplication and quick theme toggle verified.\n');
+
+// Verify Dynamic Tagline under Mode Selector across all 5 protocols
+const expectedDietTaglines = {
+  lid: "Strict low-iodine preparation (<50 mcg/day) to deplete thyroid stores and maximize radioactive iodine (RAI) uptake.",
+  diabetic: "Low glycemic-load protocol focused on high fiber and complex carbs to avoid postprandial glucose spikes.",
+  low_purine: "Restricts purine-dense offal, seafood, and gravies (<200 mg/day) to lower serum uric acid and prevent flares.",
+  low_sodium: "Cardiovascular DASH protocol limiting sodium (<1,500–2,000 mg/day) by cutting patis, bagoong, and MSG.",
+  pinoy_keto: "Very low-carb (<20–50g net carbs/day), high-fat nutrition inducing ketosis while enjoying authentic Pinoy dishes."
+};
+
+for (const [dietKey, expectedTagline] of Object.entries(expectedDietTaglines)) {
+  const renderedHeaderHtml = renderHeader(true, 'diet', true, dietKey);
+  assert.ok(renderedHeaderHtml.includes(expectedTagline), `Header for ${dietKey} must render dynamic tagline: "${expectedTagline}"`);
+  assert.strictEqual(getDietDescription(dietKey), expectedTagline, `getDietDescription("${dietKey}") must match expected tagline`);
+}
+console.log('  ✅ Header emoji deduplication, theme toggle, and dynamic tagline verified across all 5 diets.\n');
 
 // 4. Verify ScannerTab Hero Contrast
 console.log('Test 4: Verify ScannerTab Hero Container Contrast');

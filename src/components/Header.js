@@ -1,8 +1,11 @@
 // App Header Component with Multi-Diet Selector, Connectivity Status & Settings Trigger
-import { DIET_PROFILES, getDietProfile } from '../data/dietProfiles.js';
+import { DIET_PROFILES, getDietProfile, DIET_DESCRIPTIONS, getDietDescription } from '../data/dietProfiles.js';
+
+export { DIET_DESCRIPTIONS, getDietDescription };
 
 export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', showProjectTab = true, activeDiet = 'lid', theme = 'dark') {
   const currentProfile = getDietProfile(activeDiet);
+  const activeDescription = getDietDescription(activeDiet);
 
   return `
     <header class="app-header">
@@ -60,17 +63,39 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
     </header>
 
     <div class="app-container" style="padding-top: 12px; padding-bottom: 0;">
-      <!-- Main Application Mode Switcher (Conditionally rendered when showProjectTab is true) -->
-      ${showProjectTab ? `
-        <div class="mode-switcher-bar" role="tablist" aria-label="Application View Mode">
-          <button class="mode-tab-btn ${appMode === 'diet' ? 'active' : ''}" data-app-mode="diet" role="tab" aria-selected="${appMode === 'diet'}">
-            ${currentProfile.icon} ${currentProfile.shortName}
-          </button>
-          <button class="mode-tab-btn course-mode ${appMode === 'course' ? 'active' : ''}" data-app-mode="course" role="tab" aria-selected="${appMode === 'course'}">
-            📊 6-Week Project (Oct 31)
-          </button>
-        </div>
-      ` : ''}
+      <!-- Centered Selector Area with Dynamic Tagline -->
+      <div class="flex flex-col items-center justify-center my-2 text-center px-4">
+        ${showProjectTab ? `
+          <!-- Segmented Pill Controls -->
+          <div class="mode-switcher-bar inline-flex items-center gap-2 p-1 rounded-full bg-slate-900/60 border border-slate-800" role="tablist" aria-label="Application View Mode">
+            <button class="mode-tab-btn ${appMode === 'diet' ? 'active' : ''} px-4 py-1.5 rounded-full text-xs font-semibold ${
+              appMode === 'diet' 
+                ? 'border border-teal-500/40 bg-teal-500/10 text-teal-300 shadow-sm' 
+                : 'text-slate-400 hover:text-slate-200'
+            }" data-app-mode="diet" role="tab" aria-selected="${appMode === 'diet'}">
+              ${currentProfile.icon} ${currentProfile.shortName}
+            </button>
+            <button class="mode-tab-btn course-mode ${appMode === 'course' ? 'active' : ''} px-4 py-1.5 rounded-full text-xs font-medium ${
+              appMode === 'course' 
+                ? 'border border-teal-500/40 bg-teal-500/10 text-teal-300 shadow-sm' 
+                : 'text-slate-400 hover:text-slate-200'
+            }" data-app-mode="course" role="tab" aria-selected="${appMode === 'course'}">
+              📊 6-Week Project (Oct 31)
+            </button>
+          </div>
+        ` : `
+          <div class="inline-flex items-center gap-2 p-1 rounded-full bg-slate-900/60 border border-slate-800">
+            <button class="mode-tab-btn active px-4 py-1.5 rounded-full text-xs font-semibold border border-teal-500/40 bg-teal-500/10 text-teal-300 shadow-sm" data-app-mode="diet" role="tab">
+              ${currentProfile.icon} ${currentProfile.shortName}
+            </button>
+          </div>
+        `}
+
+        <!-- New Dynamic Tagline -->
+        <p class="active-diet-tagline mt-2 text-xs text-slate-500 dark:text-slate-400 max-w-xl text-center leading-relaxed">
+          ${activeDescription}
+        </p>
+      </div>
 
       ${appMode === 'diet' ? `
         <div class="protocol-banner">

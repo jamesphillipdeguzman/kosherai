@@ -98,3 +98,43 @@ export function setActiveDiet(dietKey) {
 export function getDietProfile(dietKey = 'lid') {
   return DIET_PROFILES[dietKey] || DIET_PROFILES[DEFAULT_DIET];
 }
+
+export const DIET_DESCRIPTIONS = {
+  lid: {
+    badge: "LID (Default)",
+    tagline: "Strict low-iodine preparation (<50 mcg/day) to deplete thyroid stores and maximize radioactive iodine (RAI) uptake."
+  },
+  diabetic: {
+    badge: "Diabetic / Low-GI",
+    tagline: "Low glycemic-load protocol focused on high fiber and complex carbs to avoid postprandial glucose spikes."
+  },
+  low_purine: {
+    badge: "Low-Purine (Gout Care)",
+    tagline: "Restricts purine-dense offal, seafood, and gravies (<200 mg/day) to lower serum uric acid and prevent flares."
+  },
+  low_sodium: {
+    badge: "Low-Sodium / Heart-Care",
+    tagline: "Cardiovascular DASH protocol limiting sodium (<1,500–2,000 mg/day) by cutting patis, bagoong, and MSG."
+  },
+  pinoy_keto: {
+    badge: "Pinoy Keto / Low-Carb",
+    tagline: "Very low-carb (<20–50g net carbs/day), high-fat nutrition inducing ketosis while enjoying authentic Pinoy dishes."
+  }
+};
+
+export function getDietDescription(activeDiet) {
+  const d = (activeDiet || '').toLowerCase();
+  if (d.includes('diabetic') || d.includes('glucose')) {
+    return DIET_DESCRIPTIONS.diabetic.tagline;
+  }
+  if (d.includes('purine') || d.includes('uric') || d.includes('gout')) {
+    return DIET_DESCRIPTIONS.low_purine.tagline;
+  }
+  if (d.includes('sodium') || d.includes('heart') || d.includes('dash')) {
+    return DIET_DESCRIPTIONS.low_sodium.tagline;
+  }
+  if (d.includes('keto') || d.includes('carb')) {
+    return DIET_DESCRIPTIONS.pinoy_keto.tagline;
+  }
+  return DIET_DESCRIPTIONS.lid.tagline;
+}
