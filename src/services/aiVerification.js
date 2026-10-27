@@ -375,9 +375,9 @@ Return clean JSON:
  * Handles FormData POST to https://api.cloudinary.com/v1_1/${cloudName}/image/upload.
  * If credentials are missing, logs a gentle warning and returns null without throwing or breaking UI.
  */
-export async function uploadToCloudinary(blob, cloudName, uploadPreset) {
-  const resolvedCloudName = (cloudName?.trim() || import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '').trim();
-  const resolvedPreset = (uploadPreset?.trim() || import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || '').trim();
+export async function uploadToCloudinary(blob, cloudName, uploadPreset, isReceiptScan = false) {
+  const resolvedCloudName = (cloudName?.trim() || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME) || '').trim();
+  const resolvedPreset = (uploadPreset?.trim() || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_CLOUDINARY_UPLOAD_PRESET) || '').trim();
 
   if (!resolvedCloudName || !resolvedPreset) {
     console.warn('Cloudinary upload skipped: missing cloudName or uploadPreset credentials.');
@@ -388,6 +388,10 @@ export async function uploadToCloudinary(blob, cloudName, uploadPreset) {
     const formData = new FormData();
     formData.append('file', blob);
     formData.append('upload_preset', resolvedPreset);
+
+    // Target receipts folder specifically when in receipt mode
+    const targetFolder = isReceiptScan ? 'kosherai/receipts' : 'kosherai';
+    formData.append('folder', targetFolder);
 
     const url = `https://api.cloudinary.com/v1_1/${encodeURIComponent(resolvedCloudName)}/image/upload`;
     const response = await fetch(url, {
@@ -421,11 +425,21 @@ export async function uploadToCloudinary(blob, cloudName, uploadPreset) {
 export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, clientApiKey = '', activeDiet = 'lid') {
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
+  // Resolve API key from arguments, Vite env, or process env
+  const resolvedApiKey = (
+    clientApiKey ||
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) ||
+    (typeof import.meta !== 'undefined' && import.meta.env?.GEMINI_API_KEY) ||
+    ''
+  ).trim();
+
   // Condition 2: Strict offline check upfront
   if (!isOnline) {
     console.warn('[ReceiptScan] Device strictly offline. Running on-device PaddleOCR fallback...');
     return await executeLocalOcrFallback(dataUrl, onProgress, 'Switching to on-device PaddleOCR engine...', activeDiet);
   }
+
+  console.log(`[ReceiptScan] Initiating supermarket receipt scan for protocol "${activeDiet}". Key present: ${Boolean(resolvedApiKey)}`);
 
   // Phased Status Feedback During Processing:
   // 0s–3s: "Uploading receipt image..."
@@ -470,6 +484,7 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, cli
 
   // 1. Primary: Server-Side Gemini Vision endpoint (/api/receipt-scan)
   try {
+    console.log('[ReceiptScan] Sending receipt to /api/receipt-scan (Server Gemini Vision)...');
     const res = await fetch('/api/receipt-scan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -477,7 +492,7 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, cli
         imageBase64: dataUrl,
         mimeType: 'image/jpeg',
         activeDiet: activeDiet || 'lid',
-        apiKey: clientApiKey || ''
+        apiKey: resolvedApiKey
       }),
       signal: controller.signal
     });
@@ -486,6 +501,7 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, cli
 
     if (res.ok) {
       const data = await res.json();
+      console.log(`[ReceiptScan] Server Gemini Vision receipt scan succeeded! Detected ${data.items?.length || 0} items.`);
       onProgress({ status: 'populating', progress: 0.95, message: 'Populating receipt items...' });
       return normalizeReceiptData(data, 'SERVER_GEMINI_VISION');
     }
@@ -494,7 +510,7 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, cli
     const isDefinitiveServerError = [400, 500, 502, 503].includes(res.status) || res.status >= 400;
     if (isDefinitiveServerError) {
       const errJson = await res.json().catch(() => ({}));
-      console.warn(`[ReceiptScan] Server definitive error (${res.status}):`, errJson);
+      console.warn(`[ReceiptScan] Server Gemini Vision returned status ${res.status}:`, errJson.message || errJson);
       shouldTriggerOcrFallback = true;
       ocrFallbackMessage = 'Cloud vision timed out. Falling back to on-device OCR...';
     } else {
@@ -523,9 +539,9 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, cli
   }
 
   // Direct Client-side Gemini fallback if API key is provided and failure was not 30s timeout
-  const activeKey = (clientApiKey || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || '').trim();
-  if (shouldTriggerOcrFallback && !controller.signal.aborted && activeKey && isOnline) {
+  if (shouldTriggerOcrFallback && !controller.signal.aborted && resolvedApiKey && isOnline) {
     try {
+      console.log('[ReceiptScan] Attempting direct client-side Gemini Vision fallback with resolved API key...');
       const activeDietProtocol = activeDiet || 'lid';
       const prompt = `
 You are an expert clinical nutrition auditor and optical character recognition (OCR) engine specialized in Philippine supermarket and grocery receipts (e.g., SM Supermarket, Puregold, Robinson's, Robinsons Easymart, Mercury Drug, WalterMart, The Landmark).
@@ -569,7 +585,8 @@ RETURN ONLY VALID JSON (no markdown fences, no explanatory text):
       const cleanBase64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
 
       for (const model of models) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(activeKey)}`;
+        console.log(`[ReceiptScan] Calling direct client Gemini Vision with model "${model}"...`);
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(resolvedApiKey)}`;
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -592,18 +609,23 @@ RETURN ONLY VALID JSON (no markdown fences, no explanatory text):
           const text = jsonRes.candidates?.[0]?.content?.parts?.[0]?.text;
           const parsed = parseGeminiJson(text);
           if (parsed) {
+            console.log(`[ReceiptScan] Direct client Gemini Vision call succeeded with model "${model}"! Detected ${parsed.items?.length || 0} items.`);
             onProgress({ status: 'populating', progress: 0.95, message: 'Populating receipt items...' });
             return normalizeReceiptData(parsed, 'CLIENT_GEMINI_VISION');
           }
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          console.warn(`[ReceiptScan] Direct client Gemini Vision model "${model}" failed (${response.status}):`, errData.error?.message || response.statusText);
         }
       }
     } catch (clientErr) {
-      console.warn('[ReceiptScan] Direct client Gemini fallback failed:', clientErr);
+      console.warn('[ReceiptScan] Direct client Gemini fallback exception:', clientErr);
     }
   }
 
   // Graceful Client PaddleOCR (PP-OCRv4) fallback when fallback criteria are met
   if (shouldTriggerOcrFallback) {
+    console.warn('[ReceiptScan] Gemini Vision endpoints unavailable or exhausted. Running on-device PaddleOCR fallback...');
     return await executeLocalOcrFallback(dataUrl, onProgress, ocrFallbackMessage, activeDiet);
   }
 
@@ -796,11 +818,28 @@ export const scanReceipt = scanSupermarketReceipt;
  * High-level receipt audit function for Scanner tab & Course Project
  */
 export async function auditGroceryReceipt(imageSource, onProgress = () => {}, clientApiKey = '', activeDiet = 'lid') {
+  const resolvedApiKey = (
+    clientApiKey ||
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) ||
+    (typeof import.meta !== 'undefined' && import.meta.env?.GEMINI_API_KEY) ||
+    ''
+  ).trim();
+
+  console.log(`[auditGroceryReceipt] Starting receipt audit for diet "${activeDiet}". Live Gemini API key configured: ${Boolean(resolvedApiKey)}`);
+
   let dataUrl = imageSource;
   if (typeof imageSource !== 'string' || !imageSource.startsWith('data:')) {
     dataUrl = await compressImageForOCR(imageSource, 1600, 0.8);
   }
-  return await scanSupermarketReceipt(dataUrl, onProgress, clientApiKey, activeDiet);
+
+  try {
+    const result = await scanSupermarketReceipt(dataUrl, onProgress, resolvedApiKey, activeDiet);
+    console.log(`[auditGroceryReceipt] Receipt scan completed using engine "${result.source}". Detected items: ${result.items?.length || 0}`);
+    return result;
+  } catch (err) {
+    console.error('[auditGroceryReceipt] Receipt scan pipeline failed with error:', err.message || err);
+    throw err;
+  }
 }
 
 /**

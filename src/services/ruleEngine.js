@@ -148,8 +148,8 @@ export function cleanToken(text) {
 export function analyzeIngredients(rawText, activeDiet = 'lid') {
   if (!rawText || !rawText.trim()) {
     return {
-      isSafe: true,
-      status: STATUS.SAFE,
+      isSafe: false,
+      status: 'UNKNOWN',
       overallBadge: 'NO INGREDIENTS DETECTED',
       reasons: ['No ingredient text provided.'],
       detectedForbidden: [],

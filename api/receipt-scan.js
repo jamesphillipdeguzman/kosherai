@@ -217,7 +217,14 @@ export default async function handler(req, res) {
     const body = await parseRequestBody(req);
     const { imageBase64, mimeType = 'image/jpeg', clientHint = '', activeDiet = 'lid' } = body;
 
-    const apiKey = (body.apiKey || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '').trim();
+    const apiKey = (
+      process.env.GEMINI_API_KEY ||
+      process.env.VITE_GEMINI_API_KEY ||
+      process.env.GEMINI_KEY ||
+      req.body?.apiKey ||
+      body?.apiKey ||
+      ''
+    ).trim();
     if (!apiKey) {
       return sendJson(res, 503, {
         error: 'GEMINI_API_KEY_NOT_CONFIGURED',
@@ -365,6 +372,14 @@ RETURN ONLY VALID JSON (no markdown fences, no explanatory text):
     }
 
     const sanitized = sanitizeReceiptData(parsedData, currentDiet);
+
+    // Optional non-blocking database persistence
+    try {
+      await maybeLogReceiptScan(sanitized, currentDiet);
+    } catch (dbErr) {
+      console.warn('[API /api/receipt-scan] Optional DB log failed non-blockingly:', dbErr?.message || dbErr);
+    }
+
     return sendJson(res, 200, sanitized);
   } catch (err) {
     console.error('[API /api/receipt-scan] Exception:', err);
@@ -372,5 +387,41 @@ RETURN ONLY VALID JSON (no markdown fences, no explanatory text):
       error: 'SERVER_SCAN_ERROR',
       message: err.message || 'Internal server error occurred while scanning receipt.'
     });
+  }
+}
+
+/**
+ * Optional non-blocking database persistence for receipt scans
+ * Safely guards against missing or invalid DATABASE_URL
+ */
+export async function maybeLogReceiptScan(receiptData, activeDiet = 'lid') {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl || typeof databaseUrl !== 'string') return;
+  const trimmed = databaseUrl.trim();
+  if (!trimmed.startsWith('postgres://') && !trimmed.startsWith('postgresql://')) return;
+
+  try {
+    const { neon } = await import('@neondatabase/serverless');
+    const sql = neon(trimmed);
+    const id = `scan_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const title = `${receiptData.storeName || 'Supermarket'} Receipt Audit`;
+    const status = (receiptData.items || []).some(i => i.status === 'AVOID')
+      ? 'AVOID'
+      : (receiptData.items || []).some(i => i.status === 'CAUTION')
+      ? 'CAUTION'
+      : 'SAFE';
+    const reason = `Audited ${(receiptData.items || []).length} items under ${(activeDiet || 'lid').toUpperCase()}`;
+    const flagged = (receiptData.items || []).filter(i => i.status === 'AVOID').map(i => i.cleanName);
+    const jsonFlagged = JSON.stringify(flagged);
+
+    await sql`
+      INSERT INTO scans (id, title, status, reason, flagged_ingredients, image_url, created_at)
+      VALUES (${id}, ${title}, ${status}, ${reason}, ${jsonFlagged}::jsonb, NULL, NOW())
+      ON CONFLICT (id) DO NOTHING;
+    `;
+    console.log('[API /api/receipt-scan] Optional DB log succeeded:', id);
+  } catch (dbErr) {
+    // Non-blocking: DB failure must NEVER crash receipt OCR response
+    console.warn('[API /api/receipt-scan] Non-blocking DB log skipped:', dbErr?.message || dbErr);
   }
 }

@@ -105,13 +105,15 @@ export async function executeScanWorkflow(file, context = {}) {
     const activeDiet = state.activeDiet || 'lid';
     const scanTarget = state.scanTarget || 'receipt';
 
-    // Background Cloudinary Upload if configured
+    const isReceipt = scanTarget === 'receipt';
+
+    // Background Cloudinary Upload if configured (targets kosherai/receipts for receipts)
     const cloudName = settings.cloudinaryCloudName;
     const uploadPreset = settings.cloudinaryPreset;
 
     let cloudinaryPromise = null;
     if (cloudName && uploadPreset) {
-      cloudinaryPromise = uploadToCloudinary(file, cloudName, uploadPreset)
+      cloudinaryPromise = uploadToCloudinary(file, cloudName, uploadPreset, isReceipt)
         .then((url) => {
           if (url) {
             state.cloudinaryUrl = url;
@@ -145,15 +147,32 @@ export async function executeScanWorkflow(file, context = {}) {
         activeDiet
       );
 
+      const itemsList = receiptAudit.items || [];
+      const itemsCount = itemsList.length;
+      const hasItems = itemsCount > 0;
+
+      let overallStatus = 'UNKNOWN';
+      if (!hasItems) {
+        overallStatus = 'UNKNOWN';
+      } else if (itemsList.some(i => i.status === 'AVOID')) {
+        overallStatus = 'AVOID';
+      } else if (itemsList.some(i => i.status === 'CAUTION')) {
+        overallStatus = 'CAUTION';
+      } else {
+        overallStatus = 'SAFE';
+      }
+
       state.scannedReceiptAudit = receiptAudit;
       state.scanAnalysis = {
         isReceipt: true,
         storeName: receiptAudit.storeName || 'Supermarket',
-        detectedItemsCount: receiptAudit.detectedItemsCount || (receiptAudit.items ? receiptAudit.items.length : 0),
-        status: (receiptAudit.items || []).some(i => i.status === 'AVOID') ? 'AVOID' : (receiptAudit.items || []).some(i => i.status === 'CAUTION') ? 'CAUTION' : 'SAFE',
-        overallBadge: `${receiptAudit.storeName || 'Supermarket'} Receipt`,
-        reasons: [`Audited ${(receiptAudit.items || []).length} grocery line items under ${activeDiet.toUpperCase()} protocol.`],
-        items: receiptAudit.items || [],
+        detectedItemsCount: itemsCount,
+        status: overallStatus,
+        overallBadge: !hasItems ? 'UNREADABLE RECEIPT' : `${receiptAudit.storeName || 'Supermarket'} Receipt`,
+        reasons: !hasItems
+          ? ["No grocery line items could be detected on this receipt. Please ensure the receipt is flat, well-lit, and text is sharp, or try pasting the raw receipt text directly using the 'Paste Text' tab."]
+          : [`Audited ${itemsCount} grocery line items under ${activeDiet.toUpperCase()} protocol.`],
+        items: itemsList,
         source: receiptAudit.source || 'GEMINI_VISION',
         cloudinaryUrl: state.cloudinaryUrl
       };
@@ -174,10 +193,12 @@ export async function executeScanWorkflow(file, context = {}) {
       state.scanHistory = saveScanResult({
         id: 'scan_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
         title: `${receiptAudit.storeName || 'Supermarket'} Receipt Audit`,
-        rawText: `Receipt: ${receiptAudit.storeName || 'Supermarket'} (${(receiptAudit.items || []).length} items)`,
-        status: state.scanAnalysis.status,
-        reason: `Audited ${(receiptAudit.items || []).length} items under ${activeDiet.toUpperCase()}`,
-        flaggedIngredients: (receiptAudit.items || []).filter(i => i.status === 'AVOID').map(i => i.cleanName),
+        rawText: `Receipt: ${receiptAudit.storeName || 'Supermarket'} (${itemsCount} items)`,
+        status: overallStatus,
+        reason: !hasItems
+          ? 'No grocery line items detected on receipt.'
+          : `Audited ${itemsCount} items under ${activeDiet.toUpperCase()}`,
+        flaggedIngredients: itemsList.filter(i => i.status === 'AVOID').map(i => i.cleanName),
         imageUrl: state.cloudinaryUrl || state.imagePreviewUrl || null,
         cloudinaryUrl: state.cloudinaryUrl || null,
         analysis: state.scanAnalysis,
@@ -548,7 +569,70 @@ function renderReceiptAuditResult(audit, activeDiet = 'lid', cloudinaryUrl = nul
     diabetic: 'Diabetic / Low-GI',
     pinoy_keto: 'Pinoy Keto'
   };
-  const activeDietName = dietLabels[activeDiet] || activeDiet.toUpperCase();
+  const activeDietName = dietLabels[activeDiet] || activeDiet;
+
+  // Prevent "False SAFE" on empty item extraction
+  if (items.length === 0) {
+    return `
+      <div class="scan-result-card" style="border: 1px solid rgba(245, 158, 11, 0.4); background: rgba(30, 27, 20, 0.5);">
+        <!-- Warning Header Banner -->
+        <div class="result-banner" style="background: rgba(120, 53, 15, 0.35); border: 1px solid rgba(245, 158, 11, 0.5); border-radius: 14px; padding: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: flex-start; gap: 12px;">
+              <span style="font-size: 1.8rem; line-height: 1;">⚠️</span>
+              <div>
+                <div style="font-size: 1.05rem; font-weight: 800; color: #fde68a;">
+                  No Grocery Line Items Detected
+                </div>
+                <div style="font-size: 0.82rem; color: #fed7aa; margin-top: 4px; line-height: 1.45;">
+                  No grocery line items could be detected on this receipt. Please ensure the receipt is flat, well-lit, and text is sharp, or try pasting the raw receipt text directly using the 'Paste Text' tab.
+                </div>
+              </div>
+            </div>
+            <span style="font-size: 0.75rem; padding: 3px 10px; border-radius: 9999px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); font-weight: 800;">
+              STATUS: UNREADABLE
+            </span>
+          </div>
+        </div>
+
+        <!-- Verification Source Badge -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin: 12px 0; font-size: 0.78rem;">
+          <span class="engine-badge" style="font-weight: 700; background: rgba(255,255,255,0.06); padding: 3px 8px; border-radius: 6px;">
+            ${audit.source === 'OFFLINE_PADDLE_OCR' ? '⚡ Evaluated by On-Device OCR & Clinical Rule Engine' : '🤖 Evaluated by Gemini AI Vision'}
+          </span>
+          ${(cloudinaryUrl || audit.cloudinaryUrl) ? `
+            <a href="${escapeHtml(cloudinaryUrl || audit.cloudinaryUrl)}" target="_blank" rel="noopener" style="font-size: 0.78rem; color: var(--accent-cyan); display: inline-flex; align-items: center; gap: 4px;">
+              <span>☁️ Saved to kosherai/receipts</span>
+              <span>↗</span>
+            </a>
+          ` : ''}
+        </div>
+
+        <!-- Actionable Guidance Box -->
+        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 14px 16px; margin: 12px 0;">
+          <div style="font-size: 0.82rem; font-weight: 700; color: #fcd34d; margin-bottom: 6px;">
+            📋 Actionable Troubleshooting Tips:
+          </div>
+          <ul style="margin: 0; padding-left: 20px; font-size: 0.8rem; color: #cbd5e1; line-height: 1.6;">
+            <li><strong>Flatten creases:</strong> Thermal receipt paper often curls or has deep folds hiding item text.</li>
+            <li><strong>Improve lighting:</strong> Avoid harsh overhead glare or dim shadows across small printed numbers.</li>
+            <li><strong>Text sharp & close:</strong> Ensure line items fill the frame and are legible.</li>
+            <li><strong>Try Manual / Text Mode:</strong> Switch to the <strong>✏️ Paste Text</strong> tab to paste or type receipt text directly for instant zero-lag auditing.</li>
+          </ul>
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="margin-top: 14px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px;">
+          <button id="rescan-btn" class="btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">
+            📸 Retake / Upload New Photo
+          </button>
+          <button id="toggle-text-mode" class="btn-primary" style="padding: 8px 16px; font-size: 0.85rem; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);">
+            ✏️ Switch to Paste Text
+          </button>
+        </div>
+      </div>
+    `;
+  }
 
   return `
     <div class="scan-result-card">

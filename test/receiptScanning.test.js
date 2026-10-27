@@ -4,13 +4,15 @@ import {
   compressImageForOCR,
   cleanPinoyGroceryTerm,
   auditReceiptItemOffline,
-  parseGeminiJson as parseClientGeminiJson
+  parseGeminiJson as parseClientGeminiJson,
+  uploadToCloudinary
 } from '../src/services/aiVerification.js';
 import {
   parseGeminiJson as parseServerGeminiJson,
   sanitizeReceiptData
 } from '../api/receipt-scan.js';
 import { renderScannerTab, SAMPLE_LABELS } from '../src/components/ScannerTab.js';
+import { analyzeIngredients } from '../src/services/ruleEngine.js';
 
 console.log('🧪 Starting Receipt Scanning, OCR & Compliance Audit Test Suite...\n');
 
@@ -294,5 +296,71 @@ assert.strictEqual(robinsonsSanitized.items.length, 3);
 assert.strictEqual(robinsonsSanitized.safeItemCount, 2);
 assert.strictEqual(robinsonsSanitized.flaggedItemCount, 1);
 console.log('  ✅ Real Robinsons receipt layout & compliance verified successfully.');
+// ----------------------------------------------------
+// Test 8: Cloudinary Folder Target Verification (kosherai/receipts vs kosherai)
+// ----------------------------------------------------
+console.log('\nTest 8: Cloudinary Folder Target for Receipt Mode');
+
+const originalFetch = globalThis.fetch;
+let capturedFolder = null;
+
+globalThis.fetch = async (url, options) => {
+  if (options && options.body instanceof FormData) {
+    capturedFolder = options.body.get('folder');
+  }
+  return {
+    ok: true,
+    json: async () => ({ secure_url: 'https://res.cloudinary.com/test/image/upload/sample.jpg' })
+  };
+};
+
+try {
+  // 8a: Receipt mode upload should target kosherai/receipts
+  await uploadToCloudinary('fake-blob-data', 'my-cloud', 'my-preset', true);
+  assert.strictEqual(capturedFolder, 'kosherai/receipts', 'Receipt mode must upload to "kosherai/receipts"');
+
+  // 8b: Standard label mode upload should target kosherai
+  await uploadToCloudinary('fake-blob-data', 'my-cloud', 'my-preset', false);
+  assert.strictEqual(capturedFolder, 'kosherai', 'Standard label mode must upload to default "kosherai"');
+  console.log('  ✅ Cloudinary target folder routing verified (kosherai/receipts).');
+} finally {
+  globalThis.fetch = originalFetch;
+}
+
+// ----------------------------------------------------
+// Test 9: Prevent "False SAFE" on Empty Item Extraction
+// ----------------------------------------------------
+console.log('\nTest 9: Prevent False SAFE on Empty Item Extraction');
+
+// 9a: ruleEngine analyzeIngredients handles blank input as UNKNOWN
+const emptyAnalysis = analyzeIngredients('');
+assert.strictEqual(emptyAnalysis.status, 'UNKNOWN', 'Empty ingredients must return status UNKNOWN');
+assert.strictEqual(emptyAnalysis.isSafe, false, 'Empty ingredients must NOT be marked isSafe: true');
+assert.strictEqual(emptyAnalysis.overallBadge, 'NO INGREDIENTS DETECTED');
+
+// 9b: ScannerTab renders actionable unreadable warning and NEVER "0 Safe" or false SAFE banner
+const htmlEmptyReceipt = renderScannerTab({
+  activeDiet: 'lid',
+  scanTarget: 'receipt',
+  inputMode: 'camera',
+  scannedReceiptAudit: {
+    storeName: 'SM Supermarket',
+    detectedItemsCount: 0,
+    items: []
+  },
+  scanError: null,
+  scanAnalysis: null,
+  scanHistory: []
+});
+
+assert.ok(htmlEmptyReceipt.includes('STATUS: UNREADABLE'), 'Must render STATUS: UNREADABLE badge');
+assert.ok(htmlEmptyReceipt.includes('No Grocery Line Items Detected'), 'Must render No Grocery Line Items Detected warning');
+assert.ok(htmlEmptyReceipt.includes('No grocery line items could be detected on this receipt'), 'Must render exact actionable warning guidance');
+assert.ok(!htmlEmptyReceipt.includes('0 Safe'), 'Must NOT render green "0 Safe" pill or card');
+assert.ok(!htmlEmptyReceipt.includes('banner-safe'), 'Must NOT render safe banner');
+assert.ok(htmlEmptyReceipt.includes('Retake / Upload New Photo'), 'Must render retake action button');
+assert.ok(htmlEmptyReceipt.includes('Switch to Paste Text'), 'Must render switch to paste text button');
+
+console.log('  ✅ False SAFE prevention and unreadable receipt fallback verified successfully.');
 
 console.log('\n🎉 ALL RECEIPT SCANNING TESTS PASSED!\n');

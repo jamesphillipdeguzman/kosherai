@@ -85,6 +85,19 @@ function parseQueryParams(req) {
 }
 
 /**
+ * Checks whether DATABASE_URL is validly formatted
+ */
+export function isValidPostgresUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  return (
+    (trimmed.startsWith('postgres://') || trimmed.startsWith('postgresql://')) &&
+    !trimmed.includes('user:password@') &&
+    trimmed.length > 15
+  );
+}
+
+/**
  * Primary API Handler for /api/scans
  * Supported Methods:
  * - GET: Returns last 50 scans ordered by created_at DESC
@@ -101,14 +114,38 @@ export default async function handler(req, res) {
     return res.end();
   }
 
+  const method = req.method ? req.method.toUpperCase() : 'GET';
   const databaseUrl = process.env.DATABASE_URL;
 
-  if (!databaseUrl || !databaseUrl.trim()) {
-    return sendJson(res, 200, {
-      data: [],
-      offline: true,
-      message: 'Database not configured or offline'
-    });
+  // 1. Guard against unconfigured or invalid DATABASE_URL
+  if (!isValidPostgresUrl(databaseUrl)) {
+    console.warn('[API /api/scans] DATABASE_URL is not set or invalid. Skipping server-side database persistence.');
+    if (method === 'GET') {
+      return sendJson(res, 200, {
+        synced: false,
+        offline: true,
+        data: [],
+        scans: [],
+        message: 'DATABASE_URL is not set. Scan history is managed locally.'
+      });
+    }
+    if (method === 'POST') {
+      const body = await parseRequestBody(req);
+      return sendJson(res, 200, {
+        synced: false,
+        offline: true,
+        message: 'Saved locally only. DATABASE_URL is not set.',
+        data: body
+      });
+    }
+    if (method === 'DELETE') {
+      return sendJson(res, 200, {
+        synced: false,
+        offline: true,
+        message: 'Deleted locally only. DATABASE_URL is not set.'
+      });
+    }
+    return sendJson(res, 200, { synced: false, data: [] });
   }
 
   let sql;
@@ -117,14 +154,33 @@ export default async function handler(req, res) {
     await ensureTable(sql);
   } catch (err) {
     console.warn('[API /api/scans] Neon Connection Error:', err);
-    return sendJson(res, 200, {
-      data: [],
-      offline: true,
-      message: err.message || 'Database not configured or offline'
-    });
+    if (method === 'GET') {
+      return sendJson(res, 200, {
+        synced: false,
+        offline: true,
+        data: [],
+        scans: [],
+        message: err.message || 'Database connection failed. Operating in offline mode.'
+      });
+    }
+    if (method === 'POST') {
+      const body = await parseRequestBody(req);
+      return sendJson(res, 200, {
+        synced: false,
+        offline: true,
+        message: 'Saved locally only. Database connection failed.',
+        data: body
+      });
+    }
+    if (method === 'DELETE') {
+      return sendJson(res, 200, {
+        synced: false,
+        offline: true,
+        message: 'Deleted locally only. Database connection failed.'
+      });
+    }
+    return sendJson(res, 200, { synced: false, data: [] });
   }
-
-  const method = req.method ? req.method.toUpperCase() : 'GET';
 
   try {
     // ----------------------------------------------------
@@ -253,14 +309,29 @@ export default async function handler(req, res) {
     console.warn('[API /api/scans] Query Execution Error:', err);
     if (method === 'GET') {
       return sendJson(res, 200, {
-        data: [],
+        synced: false,
         offline: true,
+        data: [],
+        scans: [],
         message: err.message || 'Database not configured or offline'
       });
     }
-    return sendJson(res, 500, {
-      error: 'INTERNAL_SERVER_ERROR',
-      message: err.message || 'An error occurred while executing the database query.'
-    });
+    if (method === 'POST') {
+      const body = await parseRequestBody(req).catch(() => ({}));
+      return sendJson(res, 200, {
+        synced: false,
+        offline: true,
+        message: 'Saved locally only. Database error occurred.',
+        data: body
+      });
+    }
+    if (method === 'DELETE') {
+      return sendJson(res, 200, {
+        synced: false,
+        offline: true,
+        message: 'Deleted locally only. Database error occurred.'
+      });
+    }
+    return sendJson(res, 200, { synced: false, data: [] });
   }
 }
