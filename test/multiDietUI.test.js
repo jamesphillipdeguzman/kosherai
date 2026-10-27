@@ -234,4 +234,30 @@ assert.strictEqual(
 );
 console.log('  ✅ Standardized status, protocol, and compliance badges verified.\n');
 
+// 9. Verify ProtocolTab Dynamic Guidelines Reactivity across All 5 Protocols
+console.log('Test 9: Verify ProtocolTab Dynamic Guidelines Reactivity across All 5 Protocols');
+const { renderProtocolTab } = await import('../src/components/ProtocolTab.js');
+
+const pLid = renderProtocolTab({ activeDiet: 'lid' });
+assert.ok(pLid.includes('50 mcg Iodine / Day'), 'LID protocol must show <50 mcg iodine target');
+assert.ok(pLid.includes('Pure Kosher / Non-Iodized Salt'), 'LID protocol must show pure kosher salt');
+
+const pDiabetic = renderProtocolTab({ activeDiet: 'diabetic' });
+assert.ok(pDiabetic.includes('130g Total Carbs / Day (Low-GI)'), 'Diabetic protocol must show carb target');
+assert.ok(pDiabetic.includes('Natural Herbs, Calamansi, Garlic, Bitter Melon'), 'Diabetic protocol must show diabetic seasonings');
+
+const pPurine = renderProtocolTab({ activeDiet: 'low_purine' });
+assert.ok(pPurine.includes('100-150 mg Purines / Day'), 'Purine protocol must show purine target');
+assert.ok(pPurine.includes('Organ Meats (Offal)'), 'Purine protocol must prohibit organ meats');
+
+const pSodium = renderProtocolTab({ activeDiet: 'low_sodium' });
+assert.ok(pSodium.includes('1,500 - 2,000 mg Sodium / Day'), 'Sodium protocol must show sodium target');
+assert.ok(pSodium.includes('Traditional Fermented Sauces'), 'Sodium protocol must prohibit patis/fermented sauces');
+
+const pKeto = renderProtocolTab({ activeDiet: 'pinoy_keto' });
+assert.ok(pKeto.includes('20-50g Net Carbs / Day'), 'Keto protocol must show net carbs target');
+assert.ok(pKeto.includes('Pure Coconut Oil, Sukang Paombong, Coconut Aminos'), 'Keto protocol must show keto seasonings');
+
+console.log('  ✅ ProtocolTab dynamic guidelines reactivity verified across all 5 protocols.\n');
+
 console.log('🎉 ALL MULTI-DIET DESYNCHRONIZATION, CONTRAST & THEME TOGGLE TESTS PASSED!');

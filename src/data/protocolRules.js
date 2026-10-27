@@ -1,5 +1,6 @@
 // Clinical Protocol Guidelines for Radioactive Iodine (RAI) Therapy Preparation
 // Medical Ground Truth Reference
+export { PROTOCOL_GUIDELINES, normalizeDietProtocolKey, getProtocolGuidelines } from './protocolGuidelines.js';
 
 export const PROTOCOL_INFO = {
   title: 'Low-Iodine Diet (LID) Clinical Protocol',
