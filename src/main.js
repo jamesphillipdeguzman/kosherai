@@ -1232,7 +1232,7 @@ Cracked black pepper`;
   // Save Verified Receipt Shopping Trip
   const receiptVerificationForm = document.querySelector('#receipt-verification-form');
   if (receiptVerificationForm) {
-    receiptVerificationForm.addEventListener('submit', (e) => {
+    receiptVerificationForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
       const storeName = document.querySelector('#edit-store-name')?.value || 'Supermarket';
