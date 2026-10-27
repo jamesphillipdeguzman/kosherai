@@ -57,22 +57,26 @@ async function parseRequestBody(req) {
   });
 }
 
-function parseGeminiJson(rawText) {
+export function parseGeminiJson(rawText) {
   if (!rawText || typeof rawText !== 'string') return null;
   let text = rawText.trim();
-  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (codeBlockMatch) {
-    text = codeBlockMatch[1].trim();
-  } else if (text.startsWith('```')) {
-    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-  } else {
+  // Strip markdown code block wrappers if present
+  text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+  try {
+    return JSON.parse(text);
+  } catch (err) {
     const firstBrace = text.indexOf('{');
     const lastBrace = text.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      text = text.slice(firstBrace, lastBrace + 1);
+      try {
+        return JSON.parse(text.slice(firstBrace, lastBrace + 1));
+      } catch {
+        return null;
+      }
     }
+    return null;
   }
-  return JSON.parse(text);
 }
 
 /**
@@ -114,6 +118,7 @@ export function sanitizeReceiptData(data, activeDiet = 'lid') {
   const currentDietName = DIET_NAMES[currentDietKey];
 
   const sanitized = { ...data };
+  sanitized.storeName = data.storeName || 'Unknown Store';
   sanitized.subtotal = sanitizeCurrency(data.subtotal);
   sanitized.discounts = sanitizeCurrency(data.discounts);
   sanitized.tax = sanitizeCurrency(data.tax);
@@ -124,17 +129,20 @@ export function sanitizeReceiptData(data, activeDiet = 'lid') {
 
   if (Array.isArray(data.items)) {
     sanitized.items = data.items.map((item, idx) => {
-      const name = item.name || item.description || `Grocery Item #${idx + 1}`;
+      const cleanName = item.cleanName || item.name || item.description || `Grocery Item #${idx + 1}`;
+      const name = cleanName;
+      const rawText = item.rawText || item.rawReceiptText || name;
       const qty = sanitizeCurrency(item.qty ?? item.quantity ?? 1) || 1;
       const unitPrice = sanitizeCurrency(item.unitPrice ?? item.price ?? 0);
       const lineTotal = sanitizeCurrency(item.lineTotal ?? item.totalPrice ?? item.total ?? (qty * unitPrice));
 
-      const isSafeForDiet = item.isSafeForDiet !== false && item.dietStatus !== 'AVOID';
-      const dietStatus = item.dietStatus || (isSafeForDiet ? 'SAFE' : 'AVOID');
-      const dietFlagReason = item.dietFlagReason || item.flagReason || '';
-      const suggestedSwap = item.suggestedSwap || item.swap || '';
+      const rawStatus = String(item.status || item.dietStatus || (item.isSafeForDiet === false ? 'AVOID' : 'SAFE')).toUpperCase().trim();
+      const status = ['SAFE', 'CAUTION', 'AVOID'].includes(rawStatus) ? rawStatus : 'SAFE';
+      const isSafeForDiet = status === 'SAFE';
+      const clinicalReason = item.clinicalReason || item.dietFlagReason || item.flagReason || '';
+      const suggestedSwap = item.suggestedSwap || item.swap || null;
 
-      if (isSafeForDiet && dietStatus !== 'AVOID') {
+      if (status === 'SAFE') {
         safeCount += 1;
       } else {
         flaggedCount += 1;
@@ -143,8 +151,10 @@ export function sanitizeReceiptData(data, activeDiet = 'lid') {
       return {
         id: item.id || idx + 1,
         name,
-        description: name,
-        rawReceiptText: item.rawReceiptText || name,
+        cleanName,
+        description: cleanName,
+        rawText,
+        rawReceiptText: rawText,
         qty,
         quantity: qty,
         unit: item.unit || 'pcs',
@@ -155,9 +165,11 @@ export function sanitizeReceiptData(data, activeDiet = 'lid') {
         lineTotal,
         weightGrams: item.weightGrams !== undefined && item.weightGrams !== null ? sanitizeCurrency(item.weightGrams) : null,
         discount: sanitizeCurrency(item.discount || 0),
+        status,
+        dietStatus: status,
         isSafeForDiet,
-        dietStatus,
-        dietFlagReason,
+        clinicalReason,
+        dietFlagReason: clinicalReason,
         suggestedSwap
       };
     });
@@ -165,6 +177,7 @@ export function sanitizeReceiptData(data, activeDiet = 'lid') {
     sanitized.items = [];
   }
 
+  sanitized.detectedItemsCount = sanitized.items.length;
   sanitized.discountTotal = sanitizeCurrency(data.discountTotal ?? data.discounts);
   sanitized.cashTendered = data.cashTendered !== undefined ? sanitizeCurrency(data.cashTendered) : null;
   sanitized.change = data.change !== undefined ? sanitizeCurrency(data.change) : null;
@@ -200,17 +213,17 @@ export default async function handler(req, res) {
     return sendJson(res, 405, { error: 'METHOD_NOT_ALLOWED', message: 'Only POST is supported for /api/receipt-scan.' });
   }
 
-  const apiKey = (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '').trim();
-  if (!apiKey) {
-    return sendJson(res, 503, {
-      error: 'GEMINI_API_KEY_NOT_CONFIGURED',
-      message: 'Server-side GEMINI_API_KEY is not configured in process.env. Falling back to client-side OCR.'
-    });
-  }
-
   try {
     const body = await parseRequestBody(req);
     const { imageBase64, mimeType = 'image/jpeg', clientHint = '', activeDiet = 'lid' } = body;
+
+    const apiKey = (body.apiKey || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '').trim();
+    if (!apiKey) {
+      return sendJson(res, 503, {
+        error: 'GEMINI_API_KEY_NOT_CONFIGURED',
+        message: 'GEMINI_API_KEY is not configured in Vercel Project Settings or KosherAI Settings. Falling back to on-device OCR.'
+      });
+    }
 
     const currentDiet = DIET_NAMES[activeDiet] ? activeDiet : 'lid';
     const currentDietName = DIET_NAMES[currentDiet];
@@ -225,109 +238,45 @@ export default async function handler(req, res) {
     const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
 
     const prompt = `
-You are an expert document understanding, supermarket receipt OCR, and clinical nutrition specialist for the Philippines.
-Analyze this supermarket/grocery receipt image with high precision, extract line items and financial totals, and cross-check compliance against the user's active dietary protocol.
+You are an expert clinical nutrition auditor and optical character recognition (OCR) engine specialized in Philippine supermarket and grocery receipts (e.g., SM Supermarket, Puregold, Robinson's, Robinsons Easymart, Mercury Drug, WalterMart, The Landmark).
+Analyze this grocery receipt image for dietary compliance under the active protocol: "${currentDietName}" (Protocol key: "${currentDiet}").
 
-CRITICAL PHILIPPINE RECEIPT CONVENTIONS & RULES:
-1. Currency:
-   - Currency is Philippine Peso, denoted by 'P', '₱', 'PHP', or 'Php' (e.g., "P1,757.50" or "₱ 1,757.50").
-   - NEVER confuse the letter 'P' with digits (e.g. "P1,757.50" is 1757.50, NOT 11757.50).
-2. Number Normalization & Thousands Commas:
-   - Amounts frequently use commas for thousands (e.g. "1,757.50").
-   - ALWAYS normalize all amounts into standard clean numeric floats in the JSON response (e.g. 1757.50, NEVER strings with commas).
-3. VAT & Tax Suffixes:
-   - Disregard trailing tax letters (e.g. "1,757.50 V" -> 1757.50, "120.00 T" -> 120.00, "50.00 E" -> 50.00, "NV", "VAT"). Strip tax classification letters from prices.
-4. Line Items & Multi-line Parsing:
-   - Combine two-line pharmacy/supermarket items (e.g. quantity line + product name line) into a single clean item.
-   - For every purchased food/grocery product, extract:
-     * "name": Clean human-readable product name. Expand obvious abbreviations (e.g., "CHK BRST" -> "Chicken Breast", "NIDO JR MILK", "ROAST CHICKEN").
-     * "description": Clean product name.
-     * "rawReceiptText": The exact text line(s) from receipt.
-     * "qty" / "quantity": Number of units purchased as a numeric float.
-     * "unit": e.g. "kg", "g", "pack", "pc", "bottle", "can", "bag", "box".
-     * "price" / "unitPrice": Unit price in PHP as a numeric float.
-     * "total" / "totalPrice" / "lineTotal": Final line total in PHP as a numeric float.
-     * "weightGrams": If item specifies produce scale weight or grams, record in grams (e.g. 0.850 kg = 850). If not specified, return null.
-     * "discount": Any discount deducted for this specific line item as a numeric float (0 if none).
-5. Senior / PWD Discounts & Final Net Payable:
-   - Look for the FINAL net payable amount settled by Cash/Card before Change as "totalAmountPaid".
-   - Look for payment rows ("CASH", "TENDERED", "BDO", "BPI", "GCASH", "MASTERCARD", "VISA", "MAYA") to confirm final amount paid.
-6. Store & Metadata:
-   - "storeName": Supermarket or grocery name (e.g. SM Supermarket, Puregold, Robinsons Supermarket, Mercury Drug).
-   - "purchaseDate" / "date": YYYY-MM-DD format if visible, or null.
-   - "tripType": "Supermarket" | "Wet Market / Palengke" | "Specialty Grocery" | "Convenience Store" | "Pharmacy".
-   - "subtotal": Gross subtotal before discounts/tax as a numeric float.
-   - "discounts" / "discountTotal": Total discounts applied as a numeric float.
-   - "tax": Tax or VAT indicated as a numeric float.
+INSTRUCTIONS:
+1. Extract line-item food purchases, ignoring cashier metadata, totals, change, timestamps, and store headers.
+2. Clean and expand abbreviated Pinoy grocery terms (e.g., "SIL LABUYO" -> "Siling Labuyo", "CKN BRST" -> "Chicken Breast", "MG BRTH CB" -> "Bouillon Cubes", "PTIS REF" -> "Patis / Fish Sauce", "BGNG ALMNG" -> "Bagoong Alamang", "SAYOTE FRESH" -> "Sayote").
+3. Audit each identified item against the active protocol guidelines. Mark as "SAFE", "CAUTION", or "AVOID".
+4. For any item marked "AVOID", provide a direct "Pinoy Smart Swap" and a brief clinical reason.
+5. Currency and amounts: Amounts are in Philippine Peso ('P', '₱', 'PHP'). Disregard trailing tax letters (e.g., "1,757.50 V" -> 1757.50). Normalize numbers into clean numeric floats without commas.
 
-7. DIET-AWARE PHILIPPINE NUTRITION CROSS-CHECK:
-   Active Dietary Protocol: "${currentDietName}" (Protocol key: "${currentDiet}")
-   For EVERY extracted food/grocery item, evaluate compliance against "${currentDiet}":
-   * If "lid" (Low-Iodine Protocol):
-     - Flag iodized salt, table salt, sea salt, marine seafood (tuna, bangus, tilapia, salmon, sardines, shrimp, crab, tahong, squid), commercial dairy (milk, cheese, butter, yogurt, whey), whole eggs & egg yolks, soy products (toyo, tofu, tokwa), and seaweed/carrageenan.
-     - Safe swap tip: Non-iodized kosher salt, fresh chicken/pork/beef, pure egg whites, sayote, kalabasa.
-   * If "low_purine" (Gout / Anti-Uric Acid):
-     - Flag organ meats (isaw, bopis, atay / liver, tripe, dinuguan), sardines, anchovies, shellfish (tahong, talaba, hipon, alimango), and mung beans (munggo / balatong).
-     - Safe swap tip: Lean skinless chicken breast, sayote, kalabasa, egg whites.
-   * If "low_sodium" (Heart-Care / DASH):
-     - Flag patis (fish sauce), bagoong (alamang), toyomansi, instant noodles (pancit canton, ramen), bouillon cubes/granules (Knorr, Maggi cubes), dried salted fish (tuyo, daing, tinapa), and canned meats (corned beef, spam).
-     - Safe swap tip: Fresh calamansi juice + crushed garlic + siling labuyo, unsalted fresh meats.
-   * If "diabetic" (Diabetic / Low-GI):
-     - Flag refined starches (white rice sacks, white bread, pancit), added sugars, sweet Filipino sauces (banana ketchup, sweet chili sauce), sweetened condensed milk, and sugary sodas/juices.
-     - Safe swap tip: Cauliflower rice, red/brown rice, fresh tomato salsa, unsweetened coconut cream.
-   * If "pinoy_keto" (Pinoy Keto / Low-Carb):
-     - Flag high-carb starches (white rice, corn, potatoes, sweet potato/kamote, flour, pandesal, noodles), sugar, and sweet marinades.
-     - Safe swap tip: Shirataki or riced cauliflower, pork belly, eggs, leafy greens.
+DIETARY PROTOCOL GUIDELINES FOR "${currentDiet}":
+- Low-Iodine Diet (lid): AVOID iodized salt, table salt, marine seafood/fish, dairy (milk, cheese, butter, whey), egg yolks, soy (toyo, tofu), carrageenan/seaweed. SAFE: pure non-iodized kosher salt, fresh chicken/pork/beef, pure egg whites, sayote, kalabasa.
+- Low-Purine (low_purine): AVOID organ meats (isaw, atay, bopis), sardines, shellfish, munggo, rich gravies. SAFE: lean chicken breast, sayote, leafy greens, egg whites.
+- Low-Sodium (low_sodium): AVOID patis, bagoong, toyomansi, MSG, bouillon cubes, instant noodles, tuyo/daing. SAFE: fresh calamansi, crushed garlic, siling labuyo, fresh unbrined meats.
+- Diabetic / Low-GI (diabetic): AVOID refined starches (white rice sacks, white bread), added sugars, banana ketchup, sweet spaghetti sauce, sweet condensed milk. SAFE: cauliflower rice, red/brown rice, non-starchy vegetables.
+- Pinoy Keto (pinoy_keto): AVOID white rice, corn, potatoes, kamote, noodles, sugar. SAFE: pork belly, chicken, eggs, cauliflower rice, sayote.
 
-   For EACH item object:
-   * "isSafeForDiet": boolean (true if permitted on "${currentDiet}", false if flagged)
-   * "dietStatus": "SAFE" | "CAUTION" | "AVOID"
-   * "dietFlagReason": concise explanation if flagged, or empty string if safe
-   * "suggestedSwap": Pinoy smart swap alternative if flagged, or empty string
-
-Return STRICT JSON matching this schema:
+RETURN ONLY VALID JSON (no markdown fences, no explanatory text):
 {
-  "storeName": "string" | null,
-  "date": "YYYY-MM-DD" | null,
-  "purchaseDate": "YYYY-MM-DD" | null,
-  "invoiceNumber": "string" | null,
-  "tripType": "Supermarket" | "Wet Market / Palengke" | "Specialty Grocery" | "Convenience Store" | "Pharmacy",
-  "activeDiet": "${currentDiet}",
-  "activeDietName": "${currentDietName}",
-  "complianceSummary": "string",
+  "storeName": "Detected Store Name or Unknown",
+  "purchaseDate": "YYYY-MM-DD or null",
+  "detectedItemsCount": 0,
   "items": [
     {
-      "name": "string",
-      "description": "string",
-      "rawReceiptText": "string",
+      "rawText": "Original line text from receipt",
+      "cleanName": "Standardized Ingredient Name",
+      "status": "SAFE" | "CAUTION" | "AVOID",
+      "clinicalReason": "Brief explanation under protocol",
+      "suggestedSwap": "Safe Pinoy alternative or null",
       "qty": 1.0,
-      "quantity": 1.0,
-      "unit": "string",
       "price": 0.0,
-      "unitPrice": 0.0,
-      "total": 0.0,
-      "totalPrice": 0.0,
-      "lineTotal": 0.0,
-      "weightGrams": 0.0 | null,
-      "discount": 0.0,
-      "isSafeForDiet": true,
-      "dietStatus": "SAFE",
-      "dietFlagReason": "",
-      "suggestedSwap": ""
+      "total": 0.0
     }
   ],
   "subtotal": 0.0,
-  "discountTotal": 0.0,
   "discounts": 0.0,
   "tax": 0.0,
   "totalAmountPaid": 0.0,
-  "paymentMethod": "CASH",
-  "cashTendered": 0.0 | null,
-  "change": 0.0 | null,
-  "uncertainFields": [],
-  "mathValid": true,
-  "discrepancyNote": "",
-  "rawText": ""
+  "paymentMethod": "CASH"
 }
 `;
 
@@ -393,16 +342,26 @@ Return STRICT JSON matching this schema:
       });
     }
 
-    const parsed = parseGeminiJson(candidateText);
-    if (!parsed) {
+    // Step 3: Enforce Resilient JSON Parsing on the Response
+    let rawResponse = candidateText;
+    rawResponse = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+    let parsedData = null;
+    try {
+      parsedData = parseGeminiJson(rawResponse);
+      if (!parsedData) {
+        throw new Error("Could not parse receipt contents. Please ensure the receipt is well-lit and legible.");
+      }
+    } catch (err) {
+      console.error("Failed to parse receipt scanner JSON:", rawResponse);
       return sendJson(res, 502, {
         error: 'INVALID_JSON_RESPONSE',
-        message: 'Could not parse JSON structure from AI output.',
-        raw: candidateText
+        message: 'Could not parse receipt contents. Please ensure the receipt is well-lit and legible.',
+        raw: rawResponse
       });
     }
 
-    const sanitized = sanitizeReceiptData(parsed, currentDiet);
+    const sanitized = sanitizeReceiptData(parsedData, currentDiet);
     return sendJson(res, 200, sanitized);
   } catch (err) {
     console.error('[API /api/receipt-scan] Exception:', err);

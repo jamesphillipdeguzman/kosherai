@@ -1,6 +1,15 @@
 import { STATUS } from '../data/lidDatabase.js';
 import { SMART_SUBSTITUTES } from '../data/protocolRules.js';
-import { compressImage, runClientOCR, verifyWithGeminiAI, uploadToCloudinary } from '../services/aiVerification.js';
+import {
+  compressImage,
+  compressImageForOCR,
+  runClientOCR,
+  verifyWithGeminiAI,
+  uploadToCloudinary,
+  auditGroceryReceipt,
+  auditReceiptItemOffline,
+  cleanPinoyGroceryTerm
+} from '../services/aiVerification.js';
 import { analyzeIngredients } from '../services/ruleEngine.js';
 import { getSettings, getScanHistory, saveScanResult, clearScanHistory } from '../services/storage.js';
 
@@ -24,6 +33,18 @@ export async function fetchAndSyncHistory(state, render) {
 
 
 export const SAMPLE_LABELS = [
+  {
+    title: 'SM Supermarket Receipt (Pinoy Groceries)',
+    badge: 'Grocery Receipt Audit',
+    isReceipt: true,
+    text: `SM SUPERMARKET - MEGAMALL
+SIL LABUYO 50G - 35.00
+CKN BRST FRESH 1KG - 280.00
+MG BRTH CB 6S - 42.50
+PTIS REF 350ML - 48.00
+SAYOTE FRESH - 25.00
+TOTAL AMOUNT: 430.50`
+  },
   {
     title: 'Commercial Sandwich Bread',
     badge: 'Prohibited Iodate',
@@ -54,11 +75,9 @@ export const SAMPLE_LABELS = [
 /**
  * End-to-end scanning workflow:
  * 1. Capture image from file picker or camera.
- * 2. Compress image using compressImage.
- * 3. If Cloudinary credentials exist, upload to Cloudinary in the background to log/save the image URL.
- * 4. Extract text via OCR (or pass the compressed image base64 directly to Gemini Vision multimodal API).
- * 5. Call verifyWithGeminiAI(extractedText, apiKey) (or multimodal image payload). If no API key is provided, gracefully fall back to the offline local ruleEngine.js keyword scanner.
- * 6. Display clear color-coded result cards (🟢 Safe, 🔴 Avoid, 🟡 Caution) with actionable reasons and substitutions.
+ * 2. Compress image using compressImageForOCR (max 1600px, quality 0.8) to prevent HTTP 413.
+ * 3. If scanning a receipt, audit food line items & Pinoy smart swaps under the active diet protocol.
+ * 4. Display clear color-coded result cards (🟢 Safe, 🔴 Avoid, 🟡 Caution) with actionable reasons and substitutions.
  */
 export async function executeScanWorkflow(file, context = {}) {
   const {
@@ -70,34 +89,34 @@ export async function executeScanWorkflow(file, context = {}) {
   if (!file) return;
 
   try {
-    // 1. Capture image from file picker or camera (file is provided)
-    // 2. Compress image using compressImage
+    state.scanError = null;
     state.ocrStatus = { message: 'Compressing image...' };
     state.ocrProgress = 0.15;
     render();
 
-    const { blob, dataUrl } = await compressImage(file);
+    // Step 1: Client-Side Image Pre-Processing & Compression
+    const dataUrl = await compressImageForOCR(file, 1600, 0.8);
     state.imagePreviewUrl = dataUrl;
     state.cloudinaryUrl = null;
 
     // Retrieve settings using getSettings()
     const settings = getSettings();
-    console.log(`[Scanner] Gemini Key present: ${Boolean(settings.geminiApiKey)}`);
-    console.log(`[Scanner] Cloudinary configured: ${Boolean(settings.cloudinaryCloudName && settings.cloudinaryPreset)}`);
+    const apiKey = settings.geminiApiKey;
+    const activeDiet = state.activeDiet || 'lid';
+    const scanTarget = state.scanTarget || 'receipt';
 
-    // 3. If Cloudinary credentials exist, upload to Cloudinary in the background to log/save the image URL
+    // Background Cloudinary Upload if configured
     const cloudName = settings.cloudinaryCloudName;
     const uploadPreset = settings.cloudinaryPreset;
 
     let cloudinaryPromise = null;
     if (cloudName && uploadPreset) {
-      cloudinaryPromise = uploadToCloudinary(blob, cloudName, uploadPreset)
+      cloudinaryPromise = uploadToCloudinary(file, cloudName, uploadPreset)
         .then((url) => {
           if (url) {
             state.cloudinaryUrl = url;
-            if (state.scanAnalysis) {
-              state.scanAnalysis.cloudinaryUrl = url;
-            }
+            if (state.scanAnalysis) state.scanAnalysis.cloudinaryUrl = url;
+            if (state.scannedReceiptAudit) state.scannedReceiptAudit.cloudinaryUrl = url;
             render();
           }
           return url;
@@ -108,7 +127,69 @@ export async function executeScanWorkflow(file, context = {}) {
         });
     }
 
-    // 4. Extract text via OCR (or pass the compressed image base64 directly to Gemini Vision multimodal API)
+    if (scanTarget === 'receipt') {
+      // Step 2: Receipt Scanning & Audit
+      state.ocrStatus = { message: 'Analyzing grocery receipt items...' };
+      state.ocrProgress = 0.45;
+      render();
+
+      const receiptAudit = await auditGroceryReceipt(
+        dataUrl,
+        (prog) => {
+          state.ocrStatus = { message: prog.message || 'Scanning receipt items...' };
+          state.ocrProgress = prog.progress || 0.5;
+          const fill = document.querySelector('.progress-bar-fill');
+          if (fill) fill.style.width = Math.round((prog.progress || 0.5) * 100) + '%';
+        },
+        apiKey,
+        activeDiet
+      );
+
+      state.scannedReceiptAudit = receiptAudit;
+      state.scanAnalysis = {
+        isReceipt: true,
+        storeName: receiptAudit.storeName || 'Supermarket',
+        detectedItemsCount: receiptAudit.detectedItemsCount || (receiptAudit.items ? receiptAudit.items.length : 0),
+        status: (receiptAudit.items || []).some(i => i.status === 'AVOID') ? 'AVOID' : (receiptAudit.items || []).some(i => i.status === 'CAUTION') ? 'CAUTION' : 'SAFE',
+        overallBadge: `${receiptAudit.storeName || 'Supermarket'} Receipt`,
+        reasons: [`Audited ${(receiptAudit.items || []).length} grocery line items under ${activeDiet.toUpperCase()} protocol.`],
+        items: receiptAudit.items || [],
+        source: receiptAudit.source || 'GEMINI_VISION',
+        cloudinaryUrl: state.cloudinaryUrl
+      };
+
+      state.aiLoading = false;
+      state.ocrStatus = null;
+      state.scanError = null;
+
+      if (cloudinaryPromise) {
+        const cUrl = await cloudinaryPromise;
+        if (cUrl && state.scanAnalysis) {
+          state.scanAnalysis.cloudinaryUrl = cUrl;
+          if (state.scannedReceiptAudit) state.scannedReceiptAudit.cloudinaryUrl = cUrl;
+        }
+      }
+
+      // Save to scan history
+      state.scanHistory = saveScanResult({
+        id: 'scan_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        title: `${receiptAudit.storeName || 'Supermarket'} Receipt Audit`,
+        rawText: `Receipt: ${receiptAudit.storeName || 'Supermarket'} (${(receiptAudit.items || []).length} items)`,
+        status: state.scanAnalysis.status,
+        reason: `Audited ${(receiptAudit.items || []).length} items under ${activeDiet.toUpperCase()}`,
+        flaggedIngredients: (receiptAudit.items || []).filter(i => i.status === 'AVOID').map(i => i.cleanName),
+        imageUrl: state.cloudinaryUrl || state.imagePreviewUrl || null,
+        cloudinaryUrl: state.cloudinaryUrl || null,
+        analysis: state.scanAnalysis,
+        receiptAudit: state.scannedReceiptAudit
+      });
+
+      render();
+      fetchAndSyncHistory(state, render).catch(() => {});
+      return;
+    }
+
+    // Food Packaging Label Scan Mode
     state.ocrStatus = { message: 'Running PaddleOCR engine on label...' };
     state.ocrProgress = 0.45;
     render();
@@ -127,11 +208,6 @@ export async function executeScanWorkflow(file, context = {}) {
     }
 
     state.scanText = extractedText;
-
-    // 5. Call verifyWithGeminiAI(extractedText, apiKey) (or multimodal image payload).
-    // If no API key is provided, gracefully fall back to the offline local ruleEngine.js keyword scanner.
-    const apiKey = settings.geminiApiKey;
-
     state.aiLoading = true;
     render();
 
@@ -140,16 +216,15 @@ export async function executeScanWorkflow(file, context = {}) {
 
     if (apiKey && apiKey.trim()) {
       try {
-        state.ocrStatus = { message: 'Clinical reasoning with Gemini 2.5 Flash...' };
+        state.ocrStatus = { message: 'Clinical reasoning with Gemini AI...' };
         state.ocrProgress = 0.85;
         render();
 
-        // Pass extracted text or multimodal image payload if OCR text was sparse
         const hasSubstantialText = extractedText && extractedText.trim().length > 10;
         const payload = hasSubstantialText
           ? extractedText
           : {
-              text: extractedText || 'Analyze the food packaging label ingredients for Low-Iodine Diet compliance.',
+              text: extractedText || 'Analyze the food packaging label ingredients for dietary compliance.',
               imageBase64: dataUrl,
               mimeType: 'image/jpeg'
             };
@@ -157,7 +232,6 @@ export async function executeScanWorkflow(file, context = {}) {
         aiResult = await verifyWithGeminiAI(payload, apiKey, state.activeDiet || 'lid');
         state.aiAnalysis = aiResult;
 
-        // Map Gemini AI response into a rich scanAnalysis object
         const probTokens = aiResult.problemIngredients || [];
         scanAnalysis = {
           isSafe: aiResult.status === 'SAFE',
@@ -191,7 +265,6 @@ export async function executeScanWorkflow(file, context = {}) {
         state.aiAnalysis = null;
       }
     } else {
-      // Gracefully fall back to the offline local ruleEngine.js keyword scanner
       scanAnalysis = analyzeIngredients(extractedText);
       scanAnalysis.source = 'OFFLINE_RULE_ENGINE';
       state.aiAnalysis = null;
@@ -200,8 +273,8 @@ export async function executeScanWorkflow(file, context = {}) {
     state.scanAnalysis = scanAnalysis;
     state.aiLoading = false;
     state.ocrStatus = null;
+    state.scanError = null;
 
-    // Check if background Cloudinary upload completed
     if (cloudinaryPromise) {
       const cUrl = await cloudinaryPromise;
       if (cUrl && state.scanAnalysis) {
@@ -209,7 +282,6 @@ export async function executeScanWorkflow(file, context = {}) {
       }
     }
 
-    // 6. Persist to history and display clear color-coded result cards
     if (scanAnalysis) {
       const flaggedIngredients = [
         ...(aiResult?.problemIngredients || []),
@@ -235,15 +307,12 @@ export async function executeScanWorkflow(file, context = {}) {
     }
 
     render();
-
-    // Refresh history from remote to sync multi-device scan records immediately
     fetchAndSyncHistory(state, render).catch(() => {});
   } catch (err) {
     console.error('Scan workflow error:', err);
     state.ocrStatus = null;
     state.aiLoading = false;
-    alert('Could not complete scanning workflow. You can paste ingredients in the text tab.');
-    state.inputMode = 'text';
+    state.scanError = err.message || 'Could not parse receipt contents. Please ensure the receipt is well-lit and legible.';
     render();
   }
 }
@@ -306,6 +375,8 @@ export function renderScannerTab(state) {
   const {
     scanText,
     scanAnalysis,
+    scannedReceiptAudit,
+    scanError,
     ocrStatus,
     ocrProgress,
     aiAnalysis,
@@ -313,6 +384,8 @@ export function renderScannerTab(state) {
     imagePreviewUrl,
     cloudinaryUrl,
     inputMode = 'camera', // 'camera' or 'text'
+    scanTarget = 'receipt', // 'receipt' or 'label'
+    activeDiet = 'lid',
     scanHistory = [],
     selectedScanItem = null
   } = state;
@@ -328,18 +401,25 @@ export function renderScannerTab(state) {
           </svg>
         </div>
 
-        <h2 class="text-xl font-bold text-white mb-2">Label & Packaging Scanner</h2>
+        <h2 class="text-xl font-bold text-white mb-2">
+          ${scanTarget === 'receipt' ? 'Supermarket Receipt Scanner' : 'Label & Packaging Scanner'}
+        </h2>
         <p class="text-xs text-slate-300 mb-6">
-          Capture food nutrition labels with your camera for instant diet compliance auditing.
+          ${scanTarget === 'receipt'
+            ? 'Scan supermarket receipts (SM, Puregold, Robinsons) to audit items and find Pinoy Smart Swaps.'
+            : 'Capture food nutrition labels with your camera for instant diet compliance auditing.'}
         </p>
 
-        <!-- Mode Toggle -->
-        <div style="display: flex; justify-content: center; gap: 8px; margin-bottom: 16px;">
-          <button id="toggle-camera-mode" class="filter-btn ${inputMode === 'camera' ? 'active' : ''}">
-            📸 Photo / Camera
+        <!-- Mode Toggles: Scan Target (Receipt vs Label) & Input Mode -->
+        <div style="display: flex; justify-content: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+          <button id="toggle-receipt-mode" class="filter-btn ${scanTarget === 'receipt' ? 'active' : ''}">
+            🧾 Grocery Receipt
+          </button>
+          <button id="toggle-label-mode" class="filter-btn ${scanTarget === 'label' ? 'active' : ''}">
+            🏷️ Food Label
           </button>
           <button id="toggle-text-mode" class="filter-btn ${inputMode === 'text' ? 'active' : ''}">
-            ✏️ Paste Ingredients
+            ✏️ Paste Text
           </button>
         </div>
 
@@ -348,13 +428,13 @@ export function renderScannerTab(state) {
           <div class="scanner-actions">
             <label class="btn-primary" style="cursor: pointer;">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-              <span>Take Photo with Camera</span>
+              <span>${scanTarget === 'receipt' ? 'Take Photo of Receipt' : 'Take Photo with Camera'}</span>
               <input type="file" id="camera-file-input" accept="image/*" capture="environment" style="display: none;" />
             </label>
 
             <label class="btn-secondary" style="cursor: pointer;">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-              <span>Upload Gallery Image</span>
+              <span>${scanTarget === 'receipt' ? 'Upload Receipt Photo' : 'Upload Gallery Image'}</span>
               <input type="file" id="gallery-file-input" accept="image/*" style="display: none;" />
             </label>
           </div>
@@ -364,26 +444,48 @@ export function renderScannerTab(state) {
             <textarea 
               id="scanner-manual-textarea" 
               class="ingredients-textarea" 
-              placeholder="Paste ingredient list here (e.g. Enriched flour, water, salt, carrageenan, soy lecithin)..."
+              placeholder="Paste grocery receipt items (e.g. SIL LABUYO, CKN BRST, MG BRTH CB, PTIS REF) or ingredient text here..."
             >${escapeHtml(scanText || '')}</textarea>
             
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
               <button id="scanner-clear-text-btn" class="btn-secondary" style="padding: 8px 16px;">Clear</button>
-              <button id="scanner-analyze-btn" class="btn-primary" style="padding: 8px 20px;">Analyze Ingredients</button>
+              <button id="scanner-analyze-btn" class="btn-primary" style="padding: 8px 20px;">
+                ${scanTarget === 'receipt' ? 'Audit Receipt Items' : 'Analyze Ingredients'}
+              </button>
             </div>
           </div>
         `}
       </div>
 
+      <!-- Actionable Error Banner -->
+      ${scanError ? `
+        <div class="scan-error-banner" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.45); border-radius: 14px; padding: 14px 18px; margin: 16px 0; color: #fca5a5; display: flex; align-items: flex-start; gap: 12px;">
+          <div style="font-size: 1.35rem; line-height: 1;">⚠️</div>
+          <div style="flex: 1;">
+            <div style="font-weight: 700; color: #ef4444; font-size: 0.95rem; margin-bottom: 4px;">Receipt Scanning Failure</div>
+            <div style="font-size: 0.88rem; line-height: 1.45; color: #fecaca;">${escapeHtml(scanError)}</div>
+            <div style="font-size: 0.78rem; color: #f87171; margin-top: 8px; line-height: 1.4;">
+              💡 <strong>Troubleshooting Tips:</strong>
+              <ul style="margin: 4px 0 0 16px; list-style-type: disc;">
+                <li>Ensure the printed receipt is well-lit, laid flat, and in focus.</li>
+                <li>Verify your <code>GEMINI_API_KEY</code> is configured in Settings or Vercel Environment Variables.</li>
+                <li>You can also click <strong>✏️ Paste Text</strong> or try a <strong>⚡ One-Tap Clinical Sample</strong> below.</li>
+              </ul>
+            </div>
+          </div>
+          <button id="dismiss-scan-error-btn" style="background: transparent; border: none; color: #fca5a5; cursor: pointer; font-size: 1.25rem; line-height: 1; padding: 2px 6px;">✕</button>
+        </div>
+      ` : ''}
+
       <!-- Preset Test Samples for Immediate Demonstration -->
       <div class="presets-section">
         <div class="section-label">
-          <span>⚡ One-Tap Clinical Sample Labels:</span>
+          <span>⚡ One-Tap Clinical Sample Labels & Receipts:</span>
         </div>
         <div class="preset-pills-grid">
           ${SAMPLE_LABELS.map((sample, idx) => `
             <button class="preset-chip" data-sample-index="${idx}">
-              <span>${sample.badge.includes('Safe') ? '🟢' : sample.badge.includes('Caution') ? '🟡' : '🔴'}</span>
+              <span>${sample.badge.includes('Safe') ? '🟢' : sample.badge.includes('Receipt') ? '🧾' : sample.badge.includes('Caution') ? '🟡' : '🔴'}</span>
               <span>${escapeHtml(sample.title)}</span>
             </button>
           `).join('')}
@@ -400,7 +502,7 @@ export function renderScannerTab(state) {
             <div class="progress-bar-fill" style="width: ${Math.round((ocrProgress || 0.3) * 100)}%;"></div>
           </div>
           <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
-            Extracting text & running clinical verification
+            Extracting line items & auditing clinical compliance
           </div>
         </div>
       ` : ''}
@@ -408,7 +510,7 @@ export function renderScannerTab(state) {
       <!-- Scanned Image Thumbnail Preview -->
       ${imagePreviewUrl ? `
         <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 10px;">
-          <img src="${imagePreviewUrl}" alt="Scanned Label" style="max-height: 180px; border-radius: 12px; border: 1px solid var(--border-color); object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.4);" />
+          <img src="${imagePreviewUrl}" alt="Scanned Receipt or Label" style="max-height: 180px; border-radius: 12px; border: 1px solid var(--border-color); object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.4);" />
           ${(cloudinaryUrl || scanAnalysis?.cloudinaryUrl) ? `
             <a href="${escapeHtml(cloudinaryUrl || scanAnalysis?.cloudinaryUrl)}" target="_blank" rel="noopener" style="font-size: 0.78rem; color: var(--accent-cyan); display: inline-flex; align-items: center; gap: 4px;">
               <span>☁️ Saved to Cloudinary Archive</span>
@@ -418,14 +520,127 @@ export function renderScannerTab(state) {
         </div>
       ` : ''}
 
-      <!-- Scan Analysis Result (Color-coded result cards) -->
-      ${scanAnalysis ? renderAnalysisResult(scanAnalysis, scanText, aiAnalysis, aiLoading, cloudinaryUrl) : ''}
+      <!-- Scan Result: Receipt Audit View or Single Label Result -->
+      ${scannedReceiptAudit 
+        ? renderReceiptAuditResult(scannedReceiptAudit, activeDiet, cloudinaryUrl)
+        : (scanAnalysis ? renderAnalysisResult(scanAnalysis, scanText, aiAnalysis, aiLoading, cloudinaryUrl) : '')
+      }
 
       <!-- Scan History -->
       ${scanHistory.length > 0 ? renderScanHistory(scanHistory) : ''}
 
       <!-- Detail Preview / Inspection Modal -->
       ${selectedScanItem ? renderScanDetailModal(selectedScanItem) : ''}
+    </div>
+  `;
+}
+
+function renderReceiptAuditResult(audit, activeDiet = 'lid', cloudinaryUrl = null) {
+  const items = Array.isArray(audit.items) ? audit.items : [];
+  const safeCount = items.filter(i => i.status === 'SAFE').length;
+  const avoidCount = items.filter(i => i.status === 'AVOID').length;
+  const cautionCount = items.filter(i => i.status === 'CAUTION').length;
+
+  const dietLabels = {
+    lid: 'Low-Iodine Diet (LID)',
+    low_purine: 'Low-Purine (Gout)',
+    low_sodium: 'Low-Sodium / Heart Care',
+    diabetic: 'Diabetic / Low-GI',
+    pinoy_keto: 'Pinoy Keto'
+  };
+  const activeDietName = dietLabels[activeDiet] || activeDiet.toUpperCase();
+
+  return `
+    <div class="scan-result-card">
+      <!-- Receipt Header Banner -->
+      <div class="result-banner banner-safe" style="background: #0f172a; border: 1px solid rgba(45, 212, 191, 0.4); border-radius: 14px; padding: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 1.3rem;">🧾</span>
+              <span style="font-size: 1.1rem; font-weight: 800; color: #fff;">${escapeHtml(audit.storeName || 'Supermarket Receipt')}</span>
+              <span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px; border: 1px solid rgba(45, 212, 191, 0.6); background: rgba(45, 212, 191, 0.1); color: #5eead4; font-weight: 700;">
+                ${escapeHtml(activeDietName)}
+              </span>
+            </div>
+            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 4px;">
+              ${escapeHtml(audit.detectedItemsCount || items.length)} Grocery Food Items Audited
+            </div>
+          </div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <span style="font-size: 0.75rem; padding: 3px 8px; border-radius: 6px; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-weight: 700;">
+              🟢 ${safeCount} Safe
+            </span>
+            ${avoidCount > 0 ? `
+              <span style="font-size: 0.75rem; padding: 3px 8px; border-radius: 6px; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 700;">
+                🔴 ${avoidCount} Avoid
+              </span>
+            ` : ''}
+            ${cautionCount > 0 ? `
+              <span style="font-size: 0.75rem; padding: 3px 8px; border-radius: 6px; background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); font-weight: 700;">
+                🟡 ${cautionCount} Caution
+              </span>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+
+      <!-- Verification Source Badge -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin: 12px 0; font-size: 0.78rem;">
+        <span class="engine-badge badge-gemini" style="font-weight: 700;">
+          ${audit.source === 'OFFLINE_PADDLE_OCR' ? '⚡ Evaluated by On-Device OCR & Clinical Rule Engine' : '🤖 Verified by Gemini AI Vision Receipt Auditor'}
+        </span>
+        ${(cloudinaryUrl || audit.cloudinaryUrl) ? `
+          <span style="color: #67e8f9; font-weight: 600;">☁️ Cloudinary Synced</span>
+        ` : ''}
+      </div>
+
+      <!-- Audited Items List -->
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        ${items.map(item => {
+          const isSafe = item.status === 'SAFE';
+          const isAvoid = item.status === 'AVOID';
+          const borderColor = isSafe ? 'rgba(16, 185, 129, 0.35)' : isAvoid ? 'rgba(239, 68, 68, 0.45)' : 'rgba(245, 158, 11, 0.4)';
+          const bgCard = isSafe ? 'rgba(6, 78, 59, 0.2)' : isAvoid ? 'rgba(127, 29, 29, 0.2)' : 'rgba(120, 53, 15, 0.2)';
+          const pillBg = isSafe ? 'rgba(16, 185, 129, 0.2)' : isAvoid ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)';
+          const pillColor = isSafe ? '#34d399' : isAvoid ? '#f87171' : '#fbbf24';
+
+          return `
+            <div style="border: 1px solid ${borderColor}; background: ${bgCard}; border-radius: 12px; padding: 12px 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                <div>
+                  <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">${escapeHtml(item.cleanName)}</div>
+                  ${item.rawText && item.rawText !== item.cleanName ? `
+                    <div style="font-family: var(--font-mono, monospace); font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">
+                      Receipt Line: "${escapeHtml(item.rawText)}"
+                    </div>
+                  ` : ''}
+                </div>
+                <span style="font-size: 0.75rem; font-weight: 800; padding: 2px 10px; border-radius: 9999px; background: ${pillBg}; color: ${pillColor}; border: 1px solid ${borderColor}; white-space: nowrap;">
+                  ${isSafe ? '🟢 SAFE' : isAvoid ? '🔴 AVOID' : '🟡 CAUTION'}
+                </span>
+              </div>
+
+              ${item.clinicalReason ? `
+                <div style="font-size: 0.82rem; color: #cbd5e1; margin-top: 8px; line-height: 1.45;">
+                  ${escapeHtml(item.clinicalReason)}
+                </div>
+              ` : ''}
+
+              ${(isAvoid || item.suggestedSwap) && item.suggestedSwap ? `
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.1); font-size: 0.82rem; color: #6ee7b7; display: flex; align-items: flex-start; gap: 6px;">
+                  <span style="font-weight: 700; color: #34d399;">💡 Pinoy Smart Swap:</span>
+                  <span>${escapeHtml(item.suggestedSwap)}</span>
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="rescan-btn" class="btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">Scan Another Receipt</button>
+      </div>
     </div>
   `;
 }

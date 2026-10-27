@@ -14,7 +14,7 @@ import { renderItemDetailModal } from './components/ItemDetailModal.js';
 import { renderCourseProjectView } from './components/CourseProjectView.js';
 
 import { searchDatabase, analyzeIngredients, analyzeRecipe } from './services/ruleEngine.js';
-import { compressImage, runClientOCR, verifyWithGeminiAI, scanSupermarketReceipt, scanReceiptWithPaddleOCR } from './services/aiVerification.js';
+import { compressImage, compressImageForOCR, runClientOCR, verifyWithGeminiAI, scanSupermarketReceipt, scanReceiptWithPaddleOCR, auditReceiptItemOffline } from './services/aiVerification.js';
 import {
   getSettings,
   saveSettings,
@@ -92,6 +92,9 @@ const state = {
 
   // Scanner Tab
   inputMode: 'camera', // 'camera' | 'text'
+  scanTarget: 'receipt', // 'receipt' | 'label'
+  scannedReceiptAudit: null,
+  scanError: null,
   scanText: '',
   scanAnalysis: null,
   ocrStatus: null,
@@ -494,6 +497,28 @@ function attachEventHandlers() {
   // ==================== SCANNER TAB EVENTS ====================
   const toggleCameraModeBtn = document.querySelector('#toggle-camera-mode');
   const toggleTextModeBtn = document.querySelector('#toggle-text-mode');
+  const toggleReceiptModeBtn = document.querySelector('#toggle-receipt-mode');
+  const toggleLabelModeBtn = document.querySelector('#toggle-label-mode');
+  const dismissScanErrorBtn = document.querySelector('#dismiss-scan-error-btn');
+
+  if (toggleReceiptModeBtn) {
+    toggleReceiptModeBtn.addEventListener('click', () => {
+      state.scanTarget = 'receipt';
+      render();
+    });
+  }
+  if (toggleLabelModeBtn) {
+    toggleLabelModeBtn.addEventListener('click', () => {
+      state.scanTarget = 'label';
+      render();
+    });
+  }
+  if (dismissScanErrorBtn) {
+    dismissScanErrorBtn.addEventListener('click', () => {
+      state.scanError = null;
+      render();
+    });
+  }
 
   if (toggleCameraModeBtn) {
     toggleCameraModeBtn.addEventListener('click', () => {
@@ -542,7 +567,10 @@ function attachEventHandlers() {
       if (sample) {
         state.scanText = sample.text;
         state.imagePreviewUrl = null;
-        processScanText(sample.text, sample.title);
+        if (sample.isReceipt) {
+          state.scanTarget = 'receipt';
+        }
+        processScanText(sample.text, sample.title, sample.isReceipt);
       }
     });
   });
@@ -565,6 +593,8 @@ function attachEventHandlers() {
     clearTextBtn.addEventListener('click', () => {
       state.scanText = '';
       state.scanAnalysis = null;
+      state.scannedReceiptAudit = null;
+      state.scanError = null;
       state.aiAnalysis = null;
       render();
     });
@@ -575,6 +605,8 @@ function attachEventHandlers() {
   if (rescanBtn) {
     rescanBtn.addEventListener('click', () => {
       state.scanAnalysis = null;
+      state.scannedReceiptAudit = null;
+      state.scanError = null;
       state.aiAnalysis = null;
       state.imagePreviewUrl = null;
       state.scanText = '';
@@ -1034,7 +1066,7 @@ Cracked black pepper`;
         state.receiptStatusMsg = 'Uploading receipt image...';
         render();
 
-        const { dataUrl } = await compressImage(file, 1400);
+        const dataUrl = await compressImageForOCR(file, 1600, 0.8);
         state.receiptPreviewUrl = dataUrl;
         state.receiptProgress = 0.15;
         state.receiptStatusMsg = 'Uploading receipt image...';
@@ -1457,11 +1489,58 @@ Cracked black pepper`;
 }
 
 // Helper: Processes scanned/entered text with Gemini AI (if key present) or offline rule engine
-async function processScanText(text, title = 'Food Label') {
+async function processScanText(text, title = 'Food Label', isReceipt = false) {
   if (!text || !text.trim()) return;
   const settings = getSettings();
   console.log(`[Scanner] Gemini Key present: ${Boolean(settings.geminiApiKey)}`);
   console.log(`[Scanner] Cloudinary configured: ${Boolean(settings.cloudinaryCloudName && settings.cloudinaryPreset)}`);
+
+  const isReceiptScan = isReceipt || state.scanTarget === 'receipt' || /SIL LABUYO|CKN BRST|MG BRTH|PTIS REF|SM SUPERMARKET|PUREGOLD|ROBINSONS/i.test(text);
+  if (isReceiptScan) {
+    const rawLines = text.split('\n').map(l => l.trim()).filter(l => l && !l.toUpperCase().startsWith('TOTAL') && !l.toUpperCase().includes('CHANGE') && !l.toUpperCase().includes('CASHIER'));
+    const storeMatch = text.match(/(SM SUPERMARKET|PUREGOLD|ROBINSONS|SAVEMORE|WALTERMART|SUPERMARKET)/i);
+    const storeName = storeMatch ? storeMatch[0].toUpperCase() : 'Supermarket';
+    const auditedItems = rawLines
+      .filter(l => !l.toUpperCase().includes('SUPERMARKET') && !l.toUpperCase().includes('MEGAMALL'))
+      .map(l => auditReceiptItemOffline(l, state.activeDiet || 'lid'));
+
+    state.scannedReceiptAudit = {
+      storeName,
+      detectedItemsCount: auditedItems.length,
+      items: auditedItems
+    };
+
+    const hasAvoid = auditedItems.some(i => i.status === 'AVOID');
+    const hasCaution = auditedItems.some(i => i.status === 'CAUTION');
+    const overallStatus = hasAvoid ? 'AVOID' : hasCaution ? 'CAUTION' : 'SAFE';
+
+    state.scanAnalysis = {
+      isReceipt: true,
+      storeName,
+      detectedItemsCount: auditedItems.length,
+      status: overallStatus,
+      overallBadge: `${storeName} Receipt`,
+      reasons: [`Audited ${auditedItems.length} grocery line items under ${(state.activeDiet || 'lid').toUpperCase()} protocol.`],
+      items: auditedItems,
+      source: 'OFFLINE_RULE_ENGINE'
+    };
+
+    state.scanHistory = saveScanResult({
+      title: title || `${storeName} Receipt Audit`,
+      rawText: text,
+      status: overallStatus,
+      reason: `Audited ${auditedItems.length} items under ${(state.activeDiet || 'lid').toUpperCase()}`,
+      flaggedIngredients: auditedItems.filter(i => i.status === 'AVOID').map(i => i.cleanName),
+      imageUrl: state.imagePreviewUrl || null,
+      cloudinaryUrl: state.cloudinaryUrl || null,
+      analysis: state.scanAnalysis,
+      aiAnalysis: null
+    });
+
+    render();
+    refreshScanHistory();
+    return;
+  }
 
   let analysis = null;
   let aiResult = null;

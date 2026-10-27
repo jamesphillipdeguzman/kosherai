@@ -2,10 +2,104 @@
 import { runPaddleOCR, parseReceiptAmount, parseStructuredReceiptText } from './paddleOcrService.js';
 
 /**
+ * Client-side canvas downscaling for OCR before dispatching to Cloudinary or API.
+ * Prevents HTTP 413 Payload Too Large on serverless routes and avoids base64 encoder crashes.
+ *
+ * @param {File|Blob|string} file
+ * @param {number} maxWidth
+ * @param {number} quality
+ * @returns {Promise<string>} dataUrl
+ */
+export const compressImageForOCR = (file, maxWidth = 1600, quality = 0.8) => {
+  return new Promise((resolve, reject) => {
+    if (typeof file === 'string' && file.startsWith('data:')) {
+      const img = new Image();
+      img.onerror = () => resolve(file);
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = file;
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
+/**
  * Compresses an image file client-side before OCR or upload
  */
-export async function compressImage(file, maxWidth = 1200, quality = 0.82) {
+export async function compressImage(file, maxWidth = 1600, quality = 0.8) {
   return new Promise((resolve, reject) => {
+    if (typeof file === 'string' && file.startsWith('data:')) {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        canvas.toBlob(
+          (blob) => {
+            resolve({ blob, dataUrl, width, height });
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+      img.src = file;
+      return;
+    }
+
     const reader = new FileReader();
     reader.onerror = reject;
     reader.onload = (e) => {
@@ -57,28 +151,31 @@ export async function runClientOCR(imageSource, onProgress = () => { }) {
 export { runPaddleOCR, parseReceiptAmount, parseStructuredReceiptText };
 
 /**
- * Safe parser that handles markdown backtick wraps (e.g. ```json ... ```)
+ * Safe parser that strips markdown wrappers and handles JSON parsing gracefully
  */
 export function parseGeminiJson(rawText) {
   if (!rawText || typeof rawText !== 'string') return null;
-  let text = rawText.trim();
+  let text = String(rawText).trim();
 
-  // Extract markdown fenced code block if present
-  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (codeBlockMatch) {
-    text = codeBlockMatch[1].trim();
-  } else if (text.startsWith('```')) {
-    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-  } else {
+  // Strip markdown code block wrappers if present
+  text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+  try {
+    return JSON.parse(text);
+  } catch (err) {
     // Look for outermost JSON object brackets
     const firstBrace = text.indexOf('{');
     const lastBrace = text.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      text = text.slice(firstBrace, lastBrace + 1);
+      try {
+        return JSON.parse(text.slice(firstBrace, lastBrace + 1));
+      } catch {
+        // Fall through
+      }
     }
+    console.error("Failed to parse receipt scanner JSON:", rawText);
+    throw new Error("Could not parse receipt contents. Please ensure the receipt is well-lit and legible.");
   }
-
-  return JSON.parse(text);
 }
 
 /**
@@ -379,7 +476,8 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, cli
       body: JSON.stringify({
         imageBase64: dataUrl,
         mimeType: 'image/jpeg',
-        activeDiet: activeDiet || 'lid'
+        activeDiet: activeDiet || 'lid',
+        apiKey: clientApiKey || ''
       }),
       signal: controller.signal
     });
@@ -428,48 +526,40 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => {}, cli
   const activeKey = (clientApiKey || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) || '').trim();
   if (shouldTriggerOcrFallback && !controller.signal.aborted && activeKey && isOnline) {
     try {
+      const activeDietProtocol = activeDiet || 'lid';
       const prompt = `
-You are an expert document understanding and supermarket receipt OCR specialist for a household food cost and waste research project in the Philippines.
-Extract supermarket receipt data from this image with high precision:
+You are an expert clinical nutrition auditor and optical character recognition (OCR) engine specialized in Philippine supermarket and grocery receipts (e.g., SM Supermarket, Puregold, Robinson's, Robinsons Easymart, Mercury Drug, WalterMart, The Landmark).
+Analyze this grocery receipt image for dietary compliance under the active protocol: "${activeDietProtocol}".
 
-CRITICAL PHILIPPINE RECEIPT CONVENTIONS & RULES:
-1. Currency: Philippine Peso ('P', '₱', 'PHP'). Never confuse leading 'P' with a digit (e.g. "P1,757.50" -> 1757.50).
-2. Thousands Commas: Amounts frequently use commas (e.g. "1,757.50"). Normalize all amounts into clean numbers/floats in JSON (e.g. 1757.50, never strings with commas).
-3. VAT & Tax Suffixes: Disregard trailing tax letters (e.g. "1,757.50 V" -> 1757.50).
-4. Line Items: For items like "NIDO JR MILK POWDER", map name/description: "NIDO JR MILK POWDER", qty: 1.0, unitPrice: 1757.50, lineTotal: 1757.50.
-5. Total Amount Paid: Look for rows labeled TOTAL, CASH, or card/e-wallet names (e.g. BDO, GCash, MASTERCARD) to confirm final amount paid as a clean float.
+INSTRUCTIONS:
+1. Extract line-item food purchases, ignoring cashier metadata, totals, change, timestamps, and store headers.
+2. Clean and expand abbreviated Pinoy grocery terms (e.g., "SIL LABUYO" -> "Siling Labuyo", "CKN BRST" -> "Chicken Breast", "MG BRTH CB" -> "Bouillon Cubes", "PTIS REF" -> "Patis / Fish Sauce", "BGNG ALMNG" -> "Bagoong Alamang", "SAYOTE FRESH" -> "Sayote").
+3. Audit each identified item against the active protocol guidelines. Mark as "SAFE", "CAUTION", or "AVOID".
+4. For any item marked "AVOID", provide a direct "Pinoy Smart Swap" and a brief clinical reason.
+5. Currency and numbers: Philippine Peso ('P', '₱', 'PHP'). Normalize all amounts into clean numbers/floats in JSON.
 
-Return strict JSON:
+RETURN ONLY VALID JSON (no markdown fences, no explanatory text):
 {
-  "storeName": "string",
-  "purchaseDate": "YYYY-MM-DD" | null,
-  "date": "YYYY-MM-DD" | null,
-  "tripType": "Supermarket" | "Wet Market / Palengke" | "Specialty Grocery" | "Convenience Store",
+  "storeName": "Detected Store Name or Unknown",
+  "purchaseDate": "YYYY-MM-DD or null",
+  "detectedItemsCount": 0,
   "items": [
     {
-      "name": "string",
-      "description": "string",
-      "rawReceiptText": "string",
+      "rawText": "Original line text from receipt",
+      "cleanName": "Standardized Ingredient Name",
+      "status": "SAFE" | "CAUTION" | "AVOID",
+      "clinicalReason": "Brief explanation under protocol",
+      "suggestedSwap": "Safe Pinoy alternative or null",
       "qty": 1.0,
-      "quantity": 1.0,
-      "unit": "string",
       "price": 0.0,
-      "unitPrice": 0.0,
-      "total": 0.0,
-      "totalPrice": 0.0,
-      "lineTotal": 0.0,
-      "weightGrams": null,
-      "discount": 0.0
+      "total": 0.0
     }
   ],
   "subtotal": 0.0,
   "discounts": 0.0,
   "tax": 0.0,
   "totalAmountPaid": 0.0,
-  "uncertainFields": [],
-  "mathValid": true,
-  "discrepancyNote": "",
-  "rawText": ""
+  "paymentMethod": "CASH"
 }
 `;
       const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
@@ -517,12 +607,130 @@ Return strict JSON:
   throw new Error('Could not scan receipt. Please enter items manually.');
 }
 
+export const PINOY_GROCERY_ABBREVIATIONS = {
+  'SIL LABUYO': 'Siling Labuyo',
+  'CKN BRST': 'Chicken Breast',
+  'MG BRTH CB': 'Bouillon Cubes',
+  'PTIS REF': 'Patis / Fish Sauce',
+  'PTIS': 'Patis / Fish Sauce',
+  'BGNG ALMNG': 'Bagoong Alamang',
+  'BGNG': 'Bagoong',
+  'KNORR CB': 'Bouillon Cubes',
+  'KNORR CUBE': 'Bouillon Cubes',
+  'MG CUBE': 'Bouillon Cubes',
+  'MG BRTH': 'Bouillon Cubes',
+  'CHK BRST': 'Chicken Breast',
+  'CHKN BRST': 'Chicken Breast',
+  'CHICKN BRST': 'Chicken Breast',
+  'PRK BELLY': 'Pork Belly (Liempo)',
+  'PRK CHOP': 'Pork Chop',
+  'BF SIRLOIN': 'Beef Sirloin',
+  'SAYOTE FRESH': 'Sayote',
+  'SAYOTE': 'Sayote',
+  'KALABASA': 'Kalabasa',
+  'KLBSA': 'Kalabasa',
+  'KAMOTE': 'Sweet Potato (Kamote)',
+  'BIGAS': 'White Rice',
+  'RICE': 'White Rice',
+  'MUNGGO': 'Mung Beans / Munggo',
+  'BALATONG': 'Mung Beans / Munggo',
+  'TOYO': 'Soy Sauce / Toyo',
+  'TOFU': 'Tokwa / Tofu',
+  'TKWA': 'Tokwa / Tofu',
+  'ITLOG': 'Eggs',
+  'ISAW': 'Isaw / Pork Intestines',
+  'ATAY': 'Pork / Chicken Liver',
+  'BANANA KETCHUP': 'Banana Ketchup',
+  'UFC KETCHUP': 'Banana Ketchup'
+};
+
+export function cleanPinoyGroceryTerm(rawText) {
+  if (!rawText || typeof rawText !== 'string') return rawText || '';
+  const trimmed = rawText.trim();
+  const upper = trimmed.toUpperCase();
+
+  for (const [abbr, clean] of Object.entries(PINOY_GROCERY_ABBREVIATIONS)) {
+    if (upper.includes(abbr)) {
+      return clean;
+    }
+  }
+  return trimmed
+    .replace(/\b(?:P|₱)?\d+(?:\.\d+)?\b/g, '')
+    .replace(/\b\d+(?:g|kg|pcs|pc|ml|l)\b/gi, '')
+    .trim();
+}
+
+export function auditReceiptItemOffline(rawName, activeDiet = 'lid') {
+  const cleanName = cleanPinoyGroceryTerm(rawName);
+  const lower = cleanName.toLowerCase();
+  let status = 'SAFE';
+  let clinicalReason = `Compliant under ${activeDiet.toUpperCase()} guidelines.`;
+  let suggestedSwap = null;
+
+  if (activeDiet === 'lid') {
+    if (lower.includes('patis') || lower.includes('bagoong') || lower.includes('tuna') || lower.includes('fish') || lower.includes('shrimp') || lower.includes('seafood')) {
+      status = 'AVOID';
+      clinicalReason = 'Marine seafood and fish sauces contain high iodine levels contraindicated for RAI.';
+      suggestedSwap = 'Pure non-iodized kosher salt + fresh calamansi juice';
+    } else if (lower.includes('cube') || lower.includes('bouillon') || lower.includes('msg') || lower.includes('knorr') || lower.includes('maggi')) {
+      status = 'AVOID';
+      clinicalReason = 'Commercial broth cubes contain iodized salt and artificial flavorings.';
+      suggestedSwap = 'Homemade chicken broth with pure kosher salt';
+    } else if (lower.includes('dairy') || lower.includes('milk') || lower.includes('cheese') || lower.includes('butter') || lower.includes('whey')) {
+      status = 'AVOID';
+      clinicalReason = 'Commercial dairy contains elevated milk iodine.';
+      suggestedSwap = 'Pure vegetable oil or pure coconut cream';
+    } else if (lower.includes('toyo') || lower.includes('soy') || lower.includes('tofu')) {
+      status = 'AVOID';
+      clinicalReason = 'Soy products interfere with thyroid hormone pathways.';
+      suggestedSwap = 'Pure kosher salt with fresh garlic & ginger';
+    } else {
+      clinicalReason = 'Fresh ingredient permitted on strict low-iodine preparation.';
+    }
+  } else if (activeDiet === 'low_purine') {
+    if (lower.includes('isaw') || lower.includes('atay') || lower.includes('liver') || lower.includes('organ') || lower.includes('dinuguan')) {
+      status = 'AVOID';
+      clinicalReason = 'Internal organs are extremely rich in purines and trigger acute gout flares.';
+      suggestedSwap = 'Lean skinless chicken breast';
+    } else if (lower.includes('sardines') || lower.includes('anchov') || lower.includes('dilis') || lower.includes('munggo')) {
+      status = 'AVOID';
+      clinicalReason = 'High-purine legumes and small fish elevate serum uric acid.';
+      suggestedSwap = 'Sayote cubes or fresh white meat';
+    }
+  } else if (activeDiet === 'low_sodium') {
+    if (lower.includes('patis') || lower.includes('bagoong') || lower.includes('toyo') || lower.includes('cube') || lower.includes('bouillon')) {
+      status = 'AVOID';
+      clinicalReason = 'High sodium condiment exceeds DASH daily target (<1,500mg/day).';
+      suggestedSwap = 'Fresh calamansi juice + crushed garlic + siling labuyo';
+    }
+  } else if (activeDiet === 'diabetic') {
+    if (lower.includes('banana ketchup') || lower.includes('sugar') || lower.includes('condensed') || lower.includes('syrup')) {
+      status = 'AVOID';
+      clinicalReason = 'High glycemic load and simple sugars trigger rapid glucose spikes.';
+      suggestedSwap = 'Fresh tomato salsa with calamansi';
+    }
+  } else if (activeDiet === 'pinoy_keto') {
+    if (lower.includes('rice') || lower.includes('bigas') || lower.includes('potato') || lower.includes('kamote') || lower.includes('sugar')) {
+      status = 'AVOID';
+      clinicalReason = 'High net carb content inhibits nutritional ketosis.';
+      suggestedSwap = 'Riced cauliflower or shirataki';
+    }
+  }
+
+  return {
+    rawText: rawName,
+    cleanName,
+    status,
+    clinicalReason,
+    suggestedSwap
+  };
+}
+
 /**
- * Executes local on-device PaddleOCR fallback
+ * Executes local on-device PaddleOCR fallback with Pinoy receipt term cleaning & clinical auditing
  */
 async function executeLocalOcrFallback(dataUrl, onProgress, statusMessage, activeDiet = 'lid') {
   try {
-    // If and only if it truly fails or times out after 30s, display status message before initializing OCR
     onProgress({
       status: 'ocr_fallback',
       progress: 0.65,
@@ -538,6 +746,21 @@ async function executeLocalOcrFallback(dataUrl, onProgress, statusMessage, activ
     });
 
     const parsedOffline = parseStructuredReceiptText(ocrResult);
+    if (Array.isArray(parsedOffline.items)) {
+      parsedOffline.items = parsedOffline.items.map(it => {
+        const audited = auditReceiptItemOffline(it.name || it.rawReceiptText || '', activeDiet);
+        return {
+          ...it,
+          cleanName: audited.cleanName,
+          status: audited.status,
+          dietStatus: audited.status,
+          isSafeForDiet: audited.status === 'SAFE',
+          clinicalReason: audited.clinicalReason,
+          suggestedSwap: audited.suggestedSwap
+        };
+      });
+    }
+
     onProgress({ status: 'populating', progress: 0.95, message: 'Populating receipt items...' });
 
     return normalizeReceiptData({
@@ -546,12 +769,23 @@ async function executeLocalOcrFallback(dataUrl, onProgress, statusMessage, activ
     }, 'OFFLINE_PADDLE_OCR');
   } catch (ocrErr) {
     console.error('[ReceiptScan] Local PaddleOCR fallback failed:', ocrErr);
-    throw new Error('Could not scan receipt. Please enter items manually.');
+    throw new Error('Could not parse receipt contents. Please ensure the receipt is well-lit and legible.');
   }
 }
 
 // Convenient alias for receipt scanning orchestration
 export const scanReceipt = scanSupermarketReceipt;
+
+/**
+ * High-level receipt audit function for Scanner tab & Course Project
+ */
+export async function auditGroceryReceipt(imageSource, onProgress = () => {}, clientApiKey = '', activeDiet = 'lid') {
+  let dataUrl = imageSource;
+  if (typeof imageSource !== 'string' || !imageSource.startsWith('data:')) {
+    dataUrl = await compressImageForOCR(imageSource, 1600, 0.8);
+  }
+  return await scanSupermarketReceipt(dataUrl, onProgress, clientApiKey, activeDiet);
+}
 
 /**
  * Manually trigger direct on-device PaddleOCR processing flow without calling /api/receipt-scan.
@@ -561,7 +795,7 @@ export const scanReceipt = scanSupermarketReceipt;
  * @param {Function} onProgress
  * @returns {Promise<Object>}
  */
-export async function scanReceiptWithPaddleOCR(imageSource, onProgress = () => {}) {
+export async function scanReceiptWithPaddleOCR(imageSource, onProgress = () => {}, activeDiet = 'lid') {
   onProgress({
     status: 'paddle_manual',
     progress: 0.15,
@@ -578,6 +812,21 @@ export async function scanReceiptWithPaddleOCR(imageSource, onProgress = () => {
     });
 
     const parsedOffline = parseStructuredReceiptText(ocrResult);
+    if (Array.isArray(parsedOffline.items)) {
+      parsedOffline.items = parsedOffline.items.map(it => {
+        const audited = auditReceiptItemOffline(it.name || it.rawReceiptText || '', activeDiet);
+        return {
+          ...it,
+          cleanName: audited.cleanName,
+          status: audited.status,
+          dietStatus: audited.status,
+          isSafeForDiet: audited.status === 'SAFE',
+          clinicalReason: audited.clinicalReason,
+          suggestedSwap: audited.suggestedSwap
+        };
+      });
+    }
+
     onProgress({ status: 'populating', progress: 0.95, message: 'Populating receipt items...' });
 
     return normalizeReceiptData({
@@ -586,10 +835,9 @@ export async function scanReceiptWithPaddleOCR(imageSource, onProgress = () => {
     }, 'OFFLINE_PADDLE_OCR');
   } catch (err) {
     console.error('[ReceiptScan] Direct PaddleOCR invocation failed:', err);
-    throw new Error('On-device OCR failed to read receipt. Please enter items manually.');
+    throw new Error('On-device OCR failed to read receipt. Please ensure the receipt is well-lit and legible.');
   }
 }
-
 
 /**
  * Sanitizes currency values for Philippine receipts.
@@ -626,21 +874,40 @@ export function sanitizeCurrency(val) {
 }
 
 /**
- * Standardizes extracted receipt data into consistent schema with full number sanitization
+ * Standardizes extracted receipt data into consistent schema with full number sanitization & diet auditing
  */
 export function normalizeReceiptData(data, source = 'GEMINI_VISION') {
   const purchaseDate = data.date || data.purchaseDate || new Date().toISOString().split('T')[0];
+  let safeCount = 0;
+  let flaggedCount = 0;
+
   const items = Array.isArray(data.items) ? data.items.map((item, idx) => {
     const qty = sanitizeCurrency(item.qty ?? item.quantity ?? 1) || 1;
     const unitPrice = sanitizeCurrency(item.unitPrice ?? item.price ?? 0);
     const lineTotal = sanitizeCurrency(item.lineTotal ?? item.totalPrice ?? item.total ?? (qty * unitPrice));
-    const name = item.name || item.description || `Grocery Item #${idx + 1}`;
+    const cleanName = item.cleanName || item.name || item.description || `Grocery Item #${idx + 1}`;
+    const name = cleanName;
+    const rawText = item.rawText || item.rawReceiptText || name;
+
+    const rawStatus = String(item.status || item.dietStatus || (item.isSafeForDiet === false ? 'AVOID' : 'SAFE')).toUpperCase().trim();
+    const status = ['SAFE', 'CAUTION', 'AVOID'].includes(rawStatus) ? rawStatus : 'SAFE';
+    const isSafeForDiet = status === 'SAFE';
+    const clinicalReason = item.clinicalReason || item.dietFlagReason || item.flagReason || '';
+    const suggestedSwap = item.suggestedSwap || item.swap || null;
+
+    if (status === 'SAFE') {
+      safeCount += 1;
+    } else {
+      flaggedCount += 1;
+    }
 
     return {
       id: item.id || idx + 1,
       name,
-      description: name,
-      rawReceiptText: item.rawReceiptText || name,
+      cleanName,
+      description: cleanName,
+      rawText,
+      rawReceiptText: rawText,
       qty,
       quantity: qty,
       unit: item.unit || 'pcs',
@@ -650,7 +917,13 @@ export function normalizeReceiptData(data, source = 'GEMINI_VISION') {
       totalPrice: lineTotal,
       lineTotal,
       weightGrams: item.weightGrams !== undefined && item.weightGrams !== null ? sanitizeCurrency(item.weightGrams) : null,
-      discount: sanitizeCurrency(item.discount || 0)
+      discount: sanitizeCurrency(item.discount || 0),
+      status,
+      dietStatus: status,
+      isSafeForDiet,
+      clinicalReason,
+      dietFlagReason: clinicalReason,
+      suggestedSwap
     };
   }) : [];
 
@@ -662,6 +935,12 @@ export function normalizeReceiptData(data, source = 'GEMINI_VISION') {
     date: purchaseDate,
     tripType: data.tripType || 'Supermarket',
     items,
+    detectedItemsCount: data.detectedItemsCount || items.length,
+    activeDiet: data.activeDiet || 'lid',
+    activeDietName: data.activeDietName || 'LID Protocol (Default)',
+    safeItemCount: data.safeItemCount ?? safeCount,
+    flaggedItemCount: data.flaggedItemCount ?? flaggedCount,
+    complianceSummary: data.complianceSummary || `${safeCount} Safe, ${flaggedCount} Flagged`,
     totalAmountPaid,
     totalScaleWeightKg: sanitizeCurrency(data.totalScaleWeightKg || 0),
     subtotal: sanitizeCurrency(data.subtotal || totalAmountPaid),

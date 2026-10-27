@@ -251,9 +251,8 @@ export default function ReceiptScannerModal({
 
       let dataUrl = targetSource;
       if (typeof targetSource !== 'string') {
-        const { compressImage } = await import('../services/aiVerification.js');
-        const compressed = await compressImage(targetSource, 1400);
-        dataUrl = compressed.dataUrl;
+        const { compressImageForOCR } = await import('../services/aiVerification.js');
+        dataUrl = await compressImageForOCR(targetSource, 1600, 0.8);
       }
 
       const { scanSupermarketReceipt } = await import('../services/aiVerification.js');
