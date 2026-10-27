@@ -27,37 +27,50 @@ export function SearchPage({ foodItems = LID_DATABASE, activeDiet = 'lid', onSel
     setStatusFilter('all');
   };
 
-  // 2. Controlled Multi-Diet Filtering Pipeline
+  // 2. Controlled Multi-Diet Filtering Pipeline with Stricter Field Prioritization
   const filteredFoods = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
-    return foodItems.filter((item) => {
-      // 1. Text Search Filter (name, tag, category, notes, aliases, swaps)
-      const matchesQuery = !query ||
-        (item.name && item.name.toLowerCase().includes(query)) ||
-        (item.category && item.category.toLowerCase().includes(query)) ||
-        (item.notes && item.notes.toLowerCase().includes(query)) ||
-        (item.clinicalNotes && item.clinicalNotes.toLowerCase().includes(query)) ||
-        (item.description && item.description.toLowerCase().includes(query)) ||
-        (item.aliases && item.aliases.some(a => a && a.toLowerCase().includes(query))) ||
-        (item.substitutes && item.substitutes.some(s => s && s.toLowerCase().includes(query))) ||
-        (item.dietaryStatus?.[activeDiet]?.substitutes && item.dietaryStatus[activeDiet].substitutes.some(s => s && s.toLowerCase().includes(query))) ||
-        (item.dietaryStatus?.[activeDiet]?.note && item.dietaryStatus[activeDiet].note.toLowerCase().includes(query)) ||
-        (item.swap && item.swap.toLowerCase().includes(query));
+    if (!query) {
+      return foodItems.filter(item => {
+        const itemStatus = (getItemStatus(item, activeDiet) || item.status || item.compliance || '').toLowerCase();
+        const matchesStatus = statusFilter === 'all' || itemStatus === statusFilter.toLowerCase();
+        const matchesCategory = categoryFilter === 'all' || 
+          (item.category && item.category.toLowerCase() === categoryFilter.toLowerCase());
+        return matchesStatus && matchesCategory;
+      });
+    }
 
-      // 2. Status Filter (All, Safe, Avoid, Caution)
-      const currentStatus = getItemStatus(item, activeDiet) || item.status || item.compliance || '';
-      const itemStatus = currentStatus.toLowerCase();
-      const matchesStatus =
-        statusFilter === 'all' ||
-        itemStatus === statusFilter.toLowerCase();
+    // 1. Primary Direct Matches (High Confidence: name, aliases, category, tag)
+    const directMatches = foodItems.filter((item) => {
+      const nameMatch = item.name && item.name.toLowerCase().includes(query);
+      const aliasMatch = Array.isArray(item.aliases) && 
+        item.aliases.some(a => a && a.toLowerCase().includes(query));
+      const categoryMatch = item.category && item.category.toLowerCase().includes(query);
+      const tagMatch = item.tag && item.tag.toLowerCase().includes(query);
 
-      // 3. Category Dropdown Filter
-      const matchesCategory =
-        categoryFilter === 'all' ||
+      return nameMatch || aliasMatch || categoryMatch || tagMatch;
+    });
+
+    // 2. Candidate Foods: If direct matches exist, use them. Otherwise, fall back to notes/description.
+    // Exclude swaps/substitutes from matching to avoid unrelated items pulling through.
+    const candidateFoods = directMatches.length > 0 
+      ? directMatches 
+      : foodItems.filter(item => {
+          const descMatch = (item.description || item.generalDescription || '').toLowerCase().includes(query);
+          const noteMatch = (item.clinicalNotes || item.notes || '').toLowerCase().includes(query);
+          const dietNoteMatch = (item.dietaryStatus?.[activeDiet]?.note || '').toLowerCase().includes(query);
+          return descMatch || noteMatch || dietNoteMatch;
+        });
+
+    return candidateFoods.filter((item) => {
+      // Status & Category Filters
+      const itemStatus = (getItemStatus(item, activeDiet) || item.status || item.compliance || '').toLowerCase();
+      const matchesStatus = statusFilter === 'all' || itemStatus === statusFilter.toLowerCase();
+      const matchesCategory = categoryFilter === 'all' || 
         (item.category && item.category.toLowerCase() === categoryFilter.toLowerCase());
 
-      return matchesQuery && matchesStatus && matchesCategory;
+      return matchesStatus && matchesCategory;
     });
   }, [foodItems, searchQuery, statusFilter, categoryFilter, activeDiet]);
 

@@ -137,7 +137,8 @@ const CAUTION_RULES = [
 ];
 
 // Clean text for matching
-function cleanToken(text) {
+export function cleanToken(text) {
+  if (!text) return '';
   return text.replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, ' ').replace(/\s{2,}/g, ' ').trim().toLowerCase();
 }
 
@@ -369,17 +370,27 @@ export function searchDatabase(query, filterStatus = 'ALL', filterCategory = 'AL
   if (query && query.trim()) {
     const cleanQ = cleanToken(query);
 
-    results = results.filter(item => {
+    // 1. Primary Direct Matches (High Confidence: name, aliases, category, tag)
+    const directMatches = results.filter(item => {
       const nameMatch = cleanToken(item.name || '').includes(cleanQ);
       const aliasMatch = (item.aliases || []).some(a => cleanToken(a || '').includes(cleanQ));
-      const descMatch = cleanToken(item.description || item.generalDescription || '').includes(cleanQ);
       const catMatch = cleanToken(item.category || '').includes(cleanQ);
-      const noteMatch = cleanToken(item.clinicalNotes || item.notes || '').includes(cleanQ);
-      const dietNoteMatch = cleanToken(item.dietaryStatus?.[activeDiet]?.note || '').includes(cleanQ);
-      const swapMatch = (item.dietaryStatus?.[activeDiet]?.substitutes || item.substitutes || []).some(s => cleanToken(s || '').includes(cleanQ));
-
-      return nameMatch || aliasMatch || descMatch || catMatch || noteMatch || dietNoteMatch || swapMatch;
+      const tagMatch = cleanToken(item.tag || '').includes(cleanQ);
+      return nameMatch || aliasMatch || catMatch || tagMatch;
     });
+
+    if (directMatches.length > 0) {
+      results = directMatches;
+    } else {
+      // 2. Secondary Matches: Only search description/clinical notes if no direct matches exist.
+      // Strictly avoid matching on item.swap or substitutes to prevent unrelated items from being returned.
+      results = results.filter(item => {
+        const descMatch = cleanToken(item.description || item.generalDescription || '').includes(cleanQ);
+        const noteMatch = cleanToken(item.clinicalNotes || item.notes || '').includes(cleanQ);
+        const dietNoteMatch = cleanToken(item.dietaryStatus?.[activeDiet]?.note || '').includes(cleanQ);
+        return descMatch || noteMatch || dietNoteMatch;
+      });
+    }
 
     // Sort: Exact name matches first, then prefix/word matches, then alias matches, then description
     results.sort((a, b) => {

@@ -2,6 +2,7 @@ import assert from 'node:assert';
 import { searchDatabase } from '../src/services/ruleEngine.js';
 import { renderCheckerTab } from '../src/components/CheckerTab.js';
 import { LID_DATABASE, STATUS, getItemStatus } from '../src/data/lidDatabase.js';
+import { filterFoods } from '../src/utils/searchUtils.js';
 
 console.log('🧪 Starting Search Tab & Quick Lookup Filtering Tests...\n');
 
@@ -33,8 +34,23 @@ assert.ok(bananaHtml.includes('data-item-id="banana-ketchup"'), 'Must render Ban
 assert.ok(!bananaHtml.includes('data-item-id="pure-kosher-salt"'), 'Must NOT render Kosher Salt card');
 assert.ok(!bananaHtml.includes('data-item-id="iodized-table-salt"'), 'Must NOT render Iodized Salt card');
 
-// 3. Test Quick Lookup Tags
-console.log('Test 3: Verify all primary Quick Lookup pills filter accurately');
+// 3. Test Quick Lookup Tags & Stricter Field Prioritization
+console.log('Test 3: Verify all primary Quick Lookup pills filter accurately with strict field prioritization');
+
+// Specific test for "Sayote": searching "sayote" must return ONLY Sayote, and NOT Mung Beans or Potatoes whose swaps mention sayote
+const sayoteResults = searchDatabase('Sayote', 'ALL', 'ALL', 'lid');
+assert.strictEqual(sayoteResults.length, 1, `Searching "Sayote" must return exactly 1 item, got ${sayoteResults.length}`);
+assert.strictEqual(sayoteResults[0].id, 'sayote-chayote', 'Sayote search result must be sayote-chayote');
+assert.ok(!sayoteResults.some(r => r.id === 'mung-beans'), 'Must NOT return Mung Beans when searching Sayote');
+assert.ok(!sayoteResults.some(r => r.id === 'potatoes'), 'Must NOT return Potatoes when searching Sayote');
+assert.ok(!sayoteResults.some(r => r.id === 'cruciferous-greens'), 'Must NOT return Cruciferous Greens when searching Sayote');
+
+// Test standalone filterFoods function
+const filteredSayote = filterFoods(LID_DATABASE, 'sayote', 'all', 'all', 'lid');
+assert.strictEqual(filteredSayote.length, 1, `filterFoods must return exactly 1 item for sayote, got ${filteredSayote.length}`);
+assert.strictEqual(filteredSayote[0].id, 'sayote-chayote');
+assert.ok(!filteredSayote.some(r => r.id === 'mung-beans'));
+
 const quickLookups = ['Sayote', 'Patis', 'Isaw', 'Munggo', 'Banana Ketchup'];
 
 for (const pill of quickLookups) {
@@ -42,12 +58,11 @@ for (const pill of quickLookups) {
   assert.ok(pillResults.length > 0, `Quick lookup "${pill}" must return matching items`);
   assert.ok(pillResults.length < LID_DATABASE.length, `Quick lookup "${pill}" must filter list (returned ${pillResults.length})`);
 
-  // Verify top result matches or strongly relates to the pill
+  // Verify top result directly matches the pill name or alias
   const topItem = pillResults[0];
   const matchesName = topItem.name.toLowerCase().includes(pill.toLowerCase());
   const matchesAlias = (topItem.aliases || []).some(a => a.toLowerCase().includes(pill.toLowerCase()));
-  const matchesSwap = (topItem.substitutes || []).some(s => s.toLowerCase().includes(pill.toLowerCase()));
-  assert.ok(matchesName || matchesAlias || matchesSwap, `Top result for "${pill}" (${topItem.name}) must be relevant`);
+  assert.ok(matchesName || matchesAlias, `Top result for "${pill}" (${topItem.name}) must be a direct match`);
 
   const pillHtml = renderCheckerTab({
     searchQuery: pill,

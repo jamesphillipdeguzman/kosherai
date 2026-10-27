@@ -7,3 +7,7 @@ export {
 export { 
   searchDatabase 
 } from '../services/ruleEngine.js';
+
+export { 
+  filterFoods 
+} from '../utils/searchUtils.js';
