@@ -4,6 +4,7 @@ import { analyzeRecipe } from '../services/ruleEngine.js';
 import { DIET_RECIPES } from '../data/dietRecipes.js';
 import { getCategoryIcon } from '../data/lidDatabase.js';
 import { getRecipeImageUrl } from '../utils/cloudinary.js';
+import { getCachedRecipeInteraction, isRecipeLiked } from '../services/recipeInteractionsStorage.js';
 import lidRecipes from '../data/lidRecipes.json' with { type: 'json' };
 import generatedImages from '../data/generatedImages.json' with { type: 'json' };
 
@@ -187,17 +188,22 @@ export function renderCookModeTab(state) {
 
         <!-- Recipe Cards Grid -->
         <div class="recipes-grid">
-          ${filteredRecipes.map(recipe => renderRecipeCard(recipe)).join('')}
+          ${filteredRecipes.map(recipe => renderRecipeCard(recipe, state)).join('')}
         </div>
       </section>
+
+      <!-- Recipe Comments Drawer / Modal -->
+      ${state?.activeCommentDrawerRecipe ? renderRecipeCommentsDrawer(state.activeCommentDrawerRecipe, state) : ''}
     </div>
   `;
 }
 
-function renderRecipeCard(recipe) {
+function renderRecipeCard(recipe, state = {}) {
   const title = recipe.name || recipe.title || 'Curated Meal';
   const category = recipe.type || recipe.category || 'Mains';
   const tag = recipe.tag || recipe.clinicalBadge || 'Protocol Compliant';
+  const interactions = getCachedRecipeInteraction(recipe.id);
+  const isLiked = isRecipeLiked(recipe.id);
   const instructions = recipe.instructions || [
     'Prepare fresh ingredients according to dietary guidelines.',
     'Cook gently over medium heat until tender.',
@@ -290,8 +296,47 @@ function renderRecipeCard(recipe) {
         </div>
       </div>
 
-      <!-- Action Button -->
+      <!-- Action Button & Interactions Bar -->
       <div class="recipe-card-footer">
+        <div class="recipe-interactions-bar">
+          <!-- Views Indicator -->
+          <div class="interaction-pill view-pill" title="${interactions.views || 0} views" aria-label="${interactions.views || 0} views">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <span class="interaction-count">${interactions.views || 0}</span>
+          </div>
+
+          <!-- Like Button -->
+          <button 
+            type="button"
+            class="interaction-pill like-pill ${isLiked ? 'liked active' : ''}" 
+            data-like-recipe-id="${recipe.id}" 
+            title="${isLiked ? 'Unlike dish' : 'Like dish'}" 
+            aria-label="${isLiked ? 'Unlike dish' : 'Like dish'}"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="${isLiked ? '#ef4444' : 'none'}" stroke="${isLiked ? '#ef4444' : 'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+            </svg>
+            <span class="interaction-count">${interactions.likes || 0}</span>
+          </button>
+
+          <!-- Comments Trigger -->
+          <button 
+            type="button"
+            class="interaction-pill comment-pill" 
+            data-comments-recipe-id="${recipe.id}" 
+            title="Community compliance tips and reviews" 
+            aria-label="Community compliance tips and reviews"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span class="interaction-count">${interactions.commentsCount || (interactions.comments?.length || 0)}</span>
+          </button>
+        </div>
+
         <button class="btn-primary load-recipe-btn" data-recipe-id="${recipe.id}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M6 18h12"></path>
@@ -365,3 +410,133 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+
+export function renderRecipeCommentsDrawer(recipe, state = {}) {
+  const interactions = getCachedRecipeInteraction(recipe.id);
+  const comments = Array.isArray(interactions.comments) ? interactions.comments : [];
+  const currentName = state.commentUserName || (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_user_name') : '') || '';
+
+  return `
+    <div class="comments-drawer-overlay" id="comments-drawer-backdrop" data-close-comments-drawer="true">
+      <div class="comments-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="comments-drawer-title">
+        <!-- Drawer Header -->
+        <div class="comments-drawer-header">
+          <div style="min-width: 0;">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25">
+                ${escapeHtml(recipe.category || recipe.type || 'Recipe')}
+              </span>
+              <span class="text-xs text-slate-500 dark:text-slate-400">
+                Prep: ${escapeHtml(recipe.prepTime || '10m')} • Cook: ${escapeHtml(recipe.cookTime || '20m')}
+              </span>
+            </div>
+            <h2 id="comments-drawer-title" class="text-lg font-black text-slate-900 dark:text-white truncate">
+              ${escapeHtml(recipe.title || recipe.name)}
+            </h2>
+            <div class="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-1">
+              <span>👁️ ${interactions.views || 0} views</span>
+              <span>❤️ ${interactions.likes || 0} likes</span>
+              <span>💬 ${comments.length} community tips</span>
+            </div>
+          </div>
+          <button id="close-comments-drawer-btn" class="drawer-close-btn" aria-label="Close comments drawer">✕</button>
+        </div>
+
+        <!-- Scrollable Comments / Tips Feed -->
+        <div class="comments-drawer-body">
+          <div class="comments-section-title">
+            <span>💬 Community Compliance Tips & Substitution Reviews:</span>
+          </div>
+
+          ${comments.length === 0 ? `
+            <div class="comments-empty-state">
+              <span class="text-3xl mb-2">🧑‍🍳</span>
+              <p class="font-bold text-sm text-slate-800 dark:text-slate-200">No community tips posted yet!</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs text-center">
+                Be the first to share your ingredient swap, cooking technique, or protocol substitution for this dish.
+              </p>
+            </div>
+          ` : `
+            <div class="comments-feed-list">
+              ${comments.map(c => `
+                <div class="comment-card" id="comment-${escapeHtml(c.id)}">
+                  <div class="comment-card-header">
+                    <div class="flex items-center gap-2">
+                      <div class="comment-avatar">
+                        ${escapeHtml((c.userName || 'C')[0].toUpperCase())}
+                      </div>
+                      <span class="comment-author">${escapeHtml(c.userName || 'Caregiver / Cook')}</span>
+                    </div>
+                    <span class="comment-date">
+                      ${formatCommentDate(c.createdAt)}
+                    </span>
+                  </div>
+                  <div class="comment-content">
+                    ${escapeHtml(c.comment)}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+
+        <!-- Add Comment Form -->
+        <div class="comments-drawer-footer">
+          <form id="recipe-comment-form" data-recipe-id="${recipe.id}">
+            <div class="mb-2">
+              <label for="comment-author-input" class="sr-only">Your Name or Role</label>
+              <input 
+                type="text" 
+                id="comment-author-input" 
+                class="form-input text-xs w-full py-1.5 px-3 rounded-lg" 
+                placeholder="Your name or role (e.g. Caregiver, Nurse, Home Cook)" 
+                value="${escapeHtml(currentName)}"
+              />
+            </div>
+            <div class="mb-2">
+              <label for="comment-text-input" class="sr-only">Your Clinical Tip or Review</label>
+              <textarea 
+                id="comment-text-input" 
+                class="form-input text-xs w-full py-2 px-3 rounded-lg resize-none" 
+                rows="3" 
+                placeholder="Share a clinical compliance tip, brand recommendation, or substitution (e.g. 'Used non-iodized kosher salt and pure coconut oil')..."
+                required
+              ></textarea>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-[11px] text-slate-500 dark:text-slate-400">
+                🔒 Synced to Neon database & cached locally
+              </span>
+              <button 
+                type="submit" 
+                id="submit-comment-btn" 
+                class="btn-primary" 
+                style="padding: 7px 16px; font-size: 0.8rem;"
+              >
+                <span>Post Tip</span>
+                <span class="ml-1">↗</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function formatCommentDate(dateString) {
+  if (!dateString) return 'Recently';
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return 'Recently';
+    return d.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  } catch {
+    return 'Recently';
+  }
+}
+

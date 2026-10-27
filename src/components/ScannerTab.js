@@ -415,16 +415,15 @@ export function renderScannerTab(state) {
     cloudinaryUrl,
     scannerTab = 'food_label',
     inputMode = 'camera',
-    scanTarget = 'label',
     activeDiet = 'lid',
     scanHistory = [],
     selectedScanItem = null
   } = state;
 
   // Single source of truth for scanner active tab
-  const scanTarget = state.scanTarget || state.scannerTab || state.scannerMode;
+  const resolvedScanTarget = state.scanTarget || state.scannerTab || state.scannerMode || 'food_label';
   const scannerMode = state.scannerMode || state.scannerTab;
-  const activeTarget = scanTarget || scannerMode || 'food_label';
+  const activeTarget = resolvedScanTarget || scannerMode || 'food_label';
   const activeScannerTab = state.scannerTab || (inputMode === 'text' ? 'paste' : (activeTarget === 'receipt' ? 'receipt' : 'food_label'));
   const isPaste = activeScannerTab === 'paste';
   const isReceipt = activeScannerTab === 'receipt';

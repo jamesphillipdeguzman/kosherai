@@ -12,6 +12,14 @@ import { renderCookModeTab, lidRecipes, DIET_RECIPES } from './components/CookMo
 import { renderSettingsModal } from './components/SettingsModal.js';
 import { renderItemDetailModal } from './components/ItemDetailModal.js';
 import { renderCourseProjectView } from './components/CourseProjectView.js';
+import {
+  toggleRecipeLike,
+  recordRecipeView,
+  fetchRecipeDetails,
+  postRecipeComment,
+  fetchAllRecipeInteractions,
+  syncPendingRecipeInteractions
+} from './services/recipeInteractionsStorage.js';
 
 import { searchDatabase, analyzeIngredients, analyzeRecipe } from './services/ruleEngine.js';
 import { compressImage, compressImageForOCR, runClientOCR, verifyWithGeminiAI, scanSupermarketReceipt, scanReceiptWithPaddleOCR, auditReceiptItemOffline } from './services/aiVerification.js';
@@ -125,6 +133,8 @@ const state = {
   recipeText: '',
   recipeAnalysis: null,
   recipeCategoryFilter: 'ALL',
+  activeCommentDrawerRecipe: null,
+  commentUserName: (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_user_name') : '') || '',
 
   // Settings
   settings: getSettings(),
@@ -940,6 +950,7 @@ Cracked black pepper`;
       }
 
       if (recipe && recipe.ingredients) {
+        recordRecipeView(rid);
         state.recipeText = recipe.ingredients.join('\n');
         state.recipeAnalysis = analyzeRecipe(recipe.name || recipe.title, state.recipeText, activeDiet);
         render();
@@ -951,6 +962,106 @@ Cracked black pepper`;
       }
     });
   });
+
+  // Recipe Like Button Toggle
+  document.querySelectorAll('[data-like-recipe-id]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const rid = btn.getAttribute('data-like-recipe-id');
+      if (!rid) return;
+      await toggleRecipeLike(rid);
+      render();
+    });
+  });
+
+  // Recipe Comments Drawer Trigger
+  document.querySelectorAll('[data-comments-recipe-id]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const rid = btn.getAttribute('data-comments-recipe-id');
+      if (!rid) return;
+
+      const activeDiet = state.activeDiet || 'lid';
+      const currentDietData = DIET_RECIPES[activeDiet] || DIET_RECIPES.lid;
+
+      let recipe = currentDietData.meals?.find(r => r.id === rid);
+      if (!recipe) {
+        for (const d of Object.values(DIET_RECIPES)) {
+          recipe = d.meals?.find(r => r.id === rid);
+          if (recipe) break;
+        }
+      }
+      if (!recipe && Array.isArray(lidRecipes)) {
+        recipe = lidRecipes.find(r => r.id === rid);
+      }
+
+      if (recipe) {
+        state.activeCommentDrawerRecipe = recipe;
+        recordRecipeView(rid);
+        render();
+        fetchRecipeDetails(rid).then(() => {
+          if (state.activeCommentDrawerRecipe?.id === rid) {
+            render();
+          }
+        }).catch(() => {});
+      }
+    });
+  });
+
+  // Close Comments Drawer
+  const closeCommentsDrawerBtn = document.querySelector('#close-comments-drawer-btn');
+  if (closeCommentsDrawerBtn) {
+    closeCommentsDrawerBtn.addEventListener('click', () => {
+      state.activeCommentDrawerRecipe = null;
+      render();
+    });
+  }
+
+  const commentsDrawerBackdrop = document.querySelector('#comments-drawer-backdrop');
+  if (commentsDrawerBackdrop) {
+    commentsDrawerBackdrop.addEventListener('click', (e) => {
+      if (e.target.getAttribute('data-close-comments-drawer') === 'true') {
+        state.activeCommentDrawerRecipe = null;
+        render();
+      }
+    });
+  }
+
+  // Submit Recipe Comment / Tip
+  const recipeCommentForm = document.querySelector('#recipe-comment-form');
+  if (recipeCommentForm) {
+    recipeCommentForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const rid = recipeCommentForm.getAttribute('data-recipe-id');
+      const authorInput = document.querySelector('#comment-author-input');
+      const textInput = document.querySelector('#comment-text-input');
+      const submitBtn = document.querySelector('#submit-comment-btn');
+
+      const userName = (authorInput?.value || '').trim() || 'Caregiver / Cook';
+      const comment = (textInput?.value || '').trim();
+      if (!comment || !rid) return;
+
+      localStorage.setItem('kosherai_user_name', userName);
+      state.commentUserName = userName;
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>Posting...</span>';
+      }
+
+      try {
+        await postRecipeComment(rid, userName, comment);
+        if (textInput) textInput.value = '';
+        render();
+      } catch (err) {
+        console.error('Failed to post recipe comment:', err);
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span>Post Tip</span>';
+        }
+      }
+    });
+  }
 
   // ==================== SIX-WEEK COURSE PROJECT EVENTS ====================
 
@@ -1760,4 +1871,6 @@ render();
 refreshScanHistory();
 syncPendingTrips().then(() => render()).catch(() => {});
 syncPendingFoodWaste().then(() => render()).catch(() => {});
+fetchAllRecipeInteractions().then(() => render()).catch(() => {});
+syncPendingRecipeInteractions().catch(() => {});
 
