@@ -1,9 +1,11 @@
-// Comprehensive Test Suite for PaddleOCR Pipeline & Receipt Parsing
 import assert from 'node:assert';
 import {
   parseReceiptAmount,
   parseStructuredReceiptText,
   aggregateStructuredLines,
+  preprocessDetImage,
+  postprocessDbNet,
+  createReceiptItem,
   loadModelBuffer,
   loadModelBufferWithCache,
   OCR_MODELS,
@@ -34,10 +36,10 @@ console.log('  ✅ parseReceiptAmount verified successfully.');
 // ----------------------------------------------------
 console.log('\nTest 2: aggregateStructuredLines horizontal line alignment');
 const mockTokens = [
-  { text: 'CALSAN CHEW TAB 60S', x: 20, y: 120, w: 200, h: 18, centerY: 129, confidence: 0.96 },
-  { text: 'P1,757.50', x: 380, y: 121, w: 90, h: 18, centerY: 130, confidence: 0.95 },
-  { text: 'CHICKEN BREAST 1KG', x: 22, y: 160, w: 180, h: 18, centerY: 169, confidence: 0.94 },
-  { text: 'P466.07', x: 382, y: 162, w: 75, h: 18, centerY: 171, confidence: 0.97 }
+  { text: 'CALSAN CHEW TAB 60S', x: 20, y: 120, ymin: 120, w: 200, h: 18, centerY: 129, confidence: 0.96 },
+  { text: 'P1,757.50', x: 380, y: 121, ymin: 121, w: 90, h: 18, centerY: 130, confidence: 0.95 },
+  { text: 'CHICKEN BREAST 1KG', x: 22, y: 160, ymin: 160, w: 180, h: 18, centerY: 169, confidence: 0.94 },
+  { text: 'P466.07', x: 382, y: 162, ymin: 162, w: 75, h: 18, centerY: 171, confidence: 0.97 }
 ];
 
 const aggregated = aggregateStructuredLines(mockTokens);
@@ -139,8 +141,8 @@ assert.strictEqual(
   'Dictionary URL must match monkt/paddleocr-onnx languages/english/dict.txt'
 );
 
-assert.strictEqual(CACHE_NAME, 'kosherai-ocr-weights', 'Cache name must be kosherai-ocr-weights');
-console.log('  ✅ OCR_MODELS URLs and kosherai-ocr-weights cache name verified.');
+assert.strictEqual(CACHE_NAME, 'kosherai-ocr-v1', 'Cache name must be kosherai-ocr-v1');
+console.log('  ✅ OCR_MODELS URLs and kosherai-ocr-v1 cache name verified.');
 
 // ----------------------------------------------------
 // Test 6: Verify loadModelBuffer HTTP status checks & error handling
@@ -209,9 +211,9 @@ assert.strictEqual(validBuffer.byteLength, 10240, 'Should load full binary buffe
 console.log('  ✅ Valid binary ONNX buffer loaded successfully.');
 
 // ----------------------------------------------------
-// Test 7: Verify Browser Cache API Storage ('kosherai-ocr-weights')
+// Test 7: Verify Browser Cache API Storage ('kosherai-ocr-v1')
 // ----------------------------------------------------
-console.log('\nTest 7: Cache API storage for kosherai-ocr-weights');
+console.log('\nTest 7: Cache API storage for kosherai-ocr-v1');
 
 // Mock browser Cache API
 const mockCacheStorage = new Map();
@@ -232,7 +234,7 @@ const mockCache = {
 
 globalThis.caches = {
   open: async (name) => {
-    assert.strictEqual(name, 'kosherai-ocr-weights', 'Must open kosherai-ocr-weights cache');
+    assert.strictEqual(name, 'kosherai-ocr-v1', 'Must open kosherai-ocr-v1 cache');
     return mockCache;
   }
 };
@@ -254,7 +256,7 @@ globalThis.fetch = async (url) => {
 const firstBuffer = await loadModelBufferWithCache(OCR_MODELS.detUrl, () => {}, 'det model');
 assert.strictEqual(fetchCallCount, 1, 'Should fetch over network on cache miss');
 assert.strictEqual(firstBuffer.byteLength, 10240, 'Should return correct buffer');
-assert.ok(mockCacheStorage.has(OCR_MODELS.detUrl), 'Model buffer must be saved to kosherai-ocr-weights cache');
+assert.ok(mockCacheStorage.has(OCR_MODELS.detUrl), 'Model buffer must be saved to kosherai-ocr-v1 cache');
 
 // Second call: In cache -> Returns cached buffer without network fetch
 const secondBuffer = await loadModelBufferWithCache(OCR_MODELS.detUrl, () => {}, 'det model');
@@ -266,4 +268,119 @@ console.log('  ✅ Cache API prevents repeated downloads (~15MB saved after firs
 globalThis.fetch = originalFetch;
 delete globalThis.caches;
 
+// ----------------------------------------------------
+// Test 8: Preprocessing Aspect Ratio Preservation for Tall Receipts
+// ----------------------------------------------------
+console.log('\nTest 8: preprocessDetImage preserves vertical resolution for tall receipts');
+
+// Mock tall thermal receipt canvas (e.g. 800px wide, 3200px tall - 1:4 aspect ratio)
+const mockTallCanvas = { width: 800, height: 3200 };
+const pre = preprocessDetImage(mockTallCanvas, 960);
+
+assert.strictEqual(pre.targetW, 960, 'Target width must be scaled to 960px');
+assert.strictEqual(pre.targetH, 3840, 'Target height must preserve aspect ratio (3200 * 1.2 = 3840) and be a multiple of 32');
+assert.strictEqual(pre.targetH % 32, 0, 'Target height must be multiple of 32 for DBNet');
+assert.strictEqual(pre.targetW % 32, 0, 'Target width must be multiple of 32 for DBNet');
+console.log(`  ✅ Tall receipt scaled to ${pre.targetW}x${pre.targetH} preserving vertical clarity.`);
+
+// ----------------------------------------------------
+// Test 9: Binarization Thresholds for Faint Lines
+// ----------------------------------------------------
+console.log('\nTest 9: postprocessDbNet with db_thresh = 0.25 and box_thresh = 0.5');
+
+// 32x32 dummy map with a faint block having probability 0.28 (would fail old 0.3 threshold)
+const faintPredData = new Float32Array(32 * 32);
+for (let y = 10; y <= 20; y++) {
+  for (let x = 10; x <= 22; x++) {
+    faintPredData[y * 32 + x] = 0.55; // strong enough to average > 0.5 box threshold
+  }
+}
+const faintBoxes = postprocessDbNet(faintPredData, 32, 32, 1.0, 1.0, 0.25, 0.5);
+assert.strictEqual(faintBoxes.length, 1, 'Should extract bounding box for faint text block with db_thresh=0.25');
+assert.ok(faintBoxes[0].ymin !== undefined, 'Bounding box should include ymin for vertical sorting');
+console.log('  ✅ Faint lines detected successfully with adjusted thresholds.');
+
+// ----------------------------------------------------
+// Test 10: Multi-Line Regex Parsing: [Item Name] ... [Qty] [Unit Price] [Line Total]
+// ----------------------------------------------------
+console.log('\nTest 10: Multi-line grocery item extraction following [Item Name] ... [Qty] [Unit Price] [Line Total]');
+
+const tallReceiptOcrText = `
+PUREGOLD PRICE CLUB, INC.
+BRANCH 05 - CUBAO
+DATE: 2026-10-27
+
+CREAM CORNSTARCH 1 45.00 45.00
+HERSHEY'S COCOA 2 @ 150.00 300.00
+PUREGOLD SUGAR 1KG 2 X 65.00 130.00
+NESTLE ALL PURPOSE CREAM ... 3 PC @ 72.50 217.50
+ROYAL SPAGHETTI 900G 1 89.00 89.00 V
+
+SUBTOTAL: P781.50
+TOTAL AMOUNT DUE: P781.50
+CASH TENDERED: P1,000.00
+CHANGE: P218.50
+`;
+
+const parsedTall = parseStructuredReceiptText(tallReceiptOcrText);
+
+assert.strictEqual(parsedTall.items.length, 5, 'Must extract all 5 line items without dropping any');
+
+const cornstarch = parsedTall.items[0];
+assert.strictEqual(cornstarch.name, 'CREAM CORNSTARCH');
+assert.strictEqual(cornstarch.quantity, 1);
+assert.strictEqual(cornstarch.unitPrice, 45.00);
+assert.strictEqual(cornstarch.totalPrice, 45.00);
+
+const cocoa = parsedTall.items[1];
+assert.strictEqual(cocoa.name, "HERSHEY'S COCOA");
+assert.strictEqual(cocoa.quantity, 2);
+assert.strictEqual(cocoa.unitPrice, 150.00);
+assert.strictEqual(cocoa.totalPrice, 300.00);
+
+const sugar = parsedTall.items[2];
+assert.strictEqual(sugar.name, 'PUREGOLD SUGAR 1KG');
+assert.strictEqual(sugar.quantity, 2);
+assert.strictEqual(sugar.unitPrice, 65.00);
+assert.strictEqual(sugar.totalPrice, 130.00);
+
+const cream = parsedTall.items[3];
+assert.strictEqual(cream.name, 'NESTLE ALL PURPOSE CREAM');
+assert.strictEqual(cream.quantity, 3);
+assert.strictEqual(cream.unitPrice, 72.50);
+assert.strictEqual(cream.totalPrice, 217.50);
+
+const spaghetti = parsedTall.items[4];
+assert.strictEqual(spaghetti.name, 'ROYAL SPAGHETTI 900G');
+assert.strictEqual(spaghetti.quantity, 1);
+assert.strictEqual(spaghetti.unitPrice, 89.00);
+assert.strictEqual(spaghetti.totalPrice, 89.00);
+
+assert.strictEqual(parsedTall.totalAmountPaid, 781.50);
+console.log('  ✅ All multi-line grocery items extracted accurately with full qty, unit price, and total.');
+
+// ----------------------------------------------------
+// Test 11: Vertical Sorting by box.ymin before parsing
+// ----------------------------------------------------
+console.log('\nTest 11: Sort text lines vertically by box.ymin before parsing');
+
+// Pass out-of-order lines to simulate multi-threaded or random order OCR detection blocks
+const shuffledReceiptLines = {
+  lines: [
+    { text: 'TOTAL AMOUNT DUE: P195.00', box: [[10, 400], [200, 400], [200, 420], [10, 420]], ymin: 400 },
+    { text: "HERSHEY'S COCOA 1 150.00 150.00", box: [[10, 150], [250, 150], [250, 170], [10, 170]], ymin: 150 },
+    { text: 'SM SUPERMARKET', box: [[10, 20], [180, 20], [180, 40], [10, 40]], ymin: 20 },
+    { text: 'CREAM CORNSTARCH 1 45.00 45.00', box: [[10, 100], [250, 100], [250, 120], [10, 120]], ymin: 100 }
+  ]
+};
+
+const parsedShuffled = parseStructuredReceiptText(shuffledReceiptLines);
+assert.strictEqual(parsedShuffled.storeName, 'SM Supermarket');
+assert.strictEqual(parsedShuffled.items.length, 2);
+assert.strictEqual(parsedShuffled.items[0].name, 'CREAM CORNSTARCH', 'First item must be CREAM CORNSTARCH (ymin: 100)');
+assert.strictEqual(parsedShuffled.items[1].name, "HERSHEY'S COCOA", 'Second item must be HERSHEY\'S COCOA (ymin: 150)');
+assert.strictEqual(parsedShuffled.totalAmountPaid, 195.00);
+console.log('  ✅ Shuffled receipt lines sorted correctly by ymin.');
+
 console.log('\n🎉 ALL PADDLEOCR RECEIPT PARSING TESTS PASSED SUCCESSFULLY!');
+

@@ -32,7 +32,7 @@ export const OCR_MODELS = {
   dictUrl: `${HF_BASE}/languages/english/dict.txt`
 };
 
-export const CACHE_NAME = 'kosherai-ocr-weights';
+export const CACHE_NAME = 'kosherai-ocr-v1';
 
 let ortInstance = null;
 let detSession = null;
@@ -107,7 +107,7 @@ export async function loadModelBuffer(url) {
 
 /**
  * Browser Cache API storage for downloaded .onnx buffers.
- * Checks caches.open('kosherai-ocr-weights') first to prevent repeated ~15MB downloads.
+ * Checks caches.open('kosherai-ocr-v1') first to prevent repeated ~15MB downloads.
  * If not cached, fetches from Hugging Face and persists to cache.
  *
  * @param {string} url
@@ -154,7 +154,7 @@ export async function loadModelBufferWithCache(url, onProgress, modelName = 'mod
   });
   const buffer = await loadModelBuffer(url);
 
-  // 3. Put into cache ('kosherai-ocr-weights') for offline and future visits
+  // 3. Put into cache ('kosherai-ocr-v1') for offline and future visits
   if (cache) {
     try {
       const responseToCache = new Response(buffer.slice(0), {
@@ -355,16 +355,25 @@ export async function sourceToCanvas(imageSource) {
 }
 
 /**
- * Preprocesses an image canvas for DBNet text detection
+ * Preprocesses an image canvas for DBNet text detection.
+ * Preserves vertical resolution for tall receipts by scaling to target width
+ * (e.g. 960px) and calculating proportional height rounded to a multiple of 32.
+ *
+ * @param {HTMLCanvasElement} canvas
+ * @param {number} [targetWidth=960]
+ * @param {number} [maxHeight=4096]
+ * @returns {{ float32Array: Float32Array, targetW: number, targetH: number, scaleX: number, scaleY: number }}
  */
-function preprocessDetImage(canvas, maxSideLen = 960) {
-  const w = canvas.width;
-  const h = canvas.height;
+export function preprocessDetImage(canvas, targetWidth = 960, maxHeight = 4096) {
+  const w = canvas.width || 960;
+  const h = canvas.height || 960;
 
-  let ratio = 1.0;
-  const maxSide = Math.max(w, h);
-  if (maxSide > maxSideLen) {
-    ratio = maxSideLen / maxSide;
+  // Scale maintaining aspect ratio based on target width (e.g. 960px)
+  let ratio = targetWidth / Math.max(1, w);
+
+  // Guard against extreme canvas height allocation
+  if (h * ratio > maxHeight) {
+    ratio = maxHeight / Math.max(1, h);
   }
 
   let targetW = Math.round(w * ratio);
@@ -374,28 +383,35 @@ function preprocessDetImage(canvas, maxSideLen = 960) {
   targetW = Math.max(32, Math.round(targetW / 32) * 32);
   targetH = Math.max(32, Math.round(targetH / 32) * 32);
 
-  const resizeCanvas = document.createElement('canvas');
-  resizeCanvas.width = targetW;
-  resizeCanvas.height = targetH;
-  const ctx = resizeCanvas.getContext('2d');
-  ctx.drawImage(canvas, 0, 0, w, h, 0, 0, targetW, targetH);
+  let imgData = null;
+  if (typeof document !== 'undefined' && document.createElement) {
+    const resizeCanvas = document.createElement('canvas');
+    resizeCanvas.width = targetW;
+    resizeCanvas.height = targetH;
+    const ctx = resizeCanvas.getContext('2d');
+    if (ctx && canvas.getContext) {
+      ctx.drawImage(canvas, 0, 0, w, h, 0, 0, targetW, targetH);
+      imgData = ctx.getImageData(0, 0, targetW, targetH).data;
+    }
+  }
 
-  const imgData = ctx.getImageData(0, 0, targetW, targetH).data;
   const float32Array = new Float32Array(3 * targetH * targetW);
 
-  // Normalization parameters for detection
-  const mean = [0.485, 0.456, 0.406];
-  const std = [0.229, 0.224, 0.225];
+  if (imgData) {
+    // Normalization parameters for detection
+    const mean = [0.485, 0.456, 0.406];
+    const std = [0.229, 0.224, 0.225];
 
-  const channelSize = targetH * targetW;
-  for (let i = 0; i < channelSize; i++) {
-    const r = imgData[i * 4] / 255.0;
-    const g = imgData[i * 4 + 1] / 255.0;
-    const b = imgData[i * 4 + 2] / 255.0;
+    const channelSize = targetH * targetW;
+    for (let i = 0; i < channelSize; i++) {
+      const r = imgData[i * 4] / 255.0;
+      const g = imgData[i * 4 + 1] / 255.0;
+      const b = imgData[i * 4 + 2] / 255.0;
 
-    float32Array[i] = (r - mean[0]) / std[0];
-    float32Array[channelSize + i] = (g - mean[1]) / std[1];
-    float32Array[2 * channelSize + i] = (b - mean[2]) / std[2];
+      float32Array[i] = (r - mean[0]) / std[0];
+      float32Array[channelSize + i] = (g - mean[1]) / std[1];
+      float32Array[2 * channelSize + i] = (b - mean[2]) / std[2];
+    }
   }
 
   return {
@@ -408,12 +424,24 @@ function preprocessDetImage(canvas, maxSideLen = 960) {
 }
 
 /**
- * Post-processes DBNet probability map to extract bounding boxes
+ * Post-processes DBNet probability map to extract bounding boxes.
+ * Default db_thresh = 0.25 and box_thresh = 0.5 ensure fainter thermal lines
+ * (e.g. "CREAM CORNSTARCH", "HERSHEY'S COCOA") generate bounding boxes.
+ * Bounding boxes are sorted top-to-bottom by ymin.
  */
-function postprocessDbNet(predData, width, height, scaleX, scaleY, threshold = 0.3, boxThreshold = 0.5, unclipRatio = 1.6) {
+export function postprocessDbNet(
+  predData,
+  width,
+  height,
+  scaleX,
+  scaleY,
+  db_thresh = 0.25,
+  box_thresh = 0.5,
+  unclipRatio = 1.6
+) {
   const binaryMap = new Uint8Array(width * height);
   for (let i = 0; i < predData.length; i++) {
-    binaryMap[i] = predData[i] > threshold ? 1 : 0;
+    binaryMap[i] = predData[i] > db_thresh ? 1 : 0;
   }
 
   const boxes = [];
@@ -473,7 +501,7 @@ function postprocessDbNet(predData, width, height, scaleX, scaleY, threshold = 0
         const boxW = maxX - minX + 1;
         const boxH = maxY - minY + 1;
 
-        if (avgScore >= boxThreshold && boxW >= 6 && boxH >= 6) {
+        if (avgScore >= box_thresh && boxW >= 6 && boxH >= 6) {
           // Unclip bounding box
           const expandW = (boxW * (unclipRatio - 1.0)) / 2;
           const expandH = (boxH * (unclipRatio - 1.0)) / 2;
@@ -486,6 +514,7 @@ function postprocessDbNet(predData, width, height, scaleX, scaleY, threshold = 0
           boxes.push({
             x: realMinX,
             y: realMinY,
+            ymin: realMinY,
             w: realMaxX - realMinX,
             h: realMaxY - realMinY,
             score: avgScore,
@@ -496,8 +525,8 @@ function postprocessDbNet(predData, width, height, scaleX, scaleY, threshold = 0
     }
   }
 
-  // Sort boxes top-to-bottom
-  boxes.sort((a, b) => a.centerY - b.centerY);
+  // Sort boxes top-to-bottom by ymin
+  boxes.sort((a, b) => (a.ymin ?? a.y) - (b.ymin ?? b.y));
   return boxes;
 }
 
@@ -576,24 +605,29 @@ function decodeCtc(data, timeSteps, numClasses) {
 }
 
 /**
- * Aggregates horizontally aligned text tokens into structured receipt lines
+ * Aggregates horizontally aligned text tokens into structured receipt lines.
+ * Sorts tokens by ymin coordinate and returns lines sorted vertically.
  */
 export function aggregateStructuredLines(items, yTolerance = 14) {
   if (!items || items.length === 0) {
     return { rawText: '', lines: [] };
   }
 
-  // Sort tokens by Y coordinate first
-  const sorted = [...items].sort((a, b) => a.centerY - b.centerY);
+  // Sort tokens by Y coordinate first (using ymin)
+  const sorted = [...items].sort((a, b) => {
+    const aY = a.ymin !== undefined ? a.ymin : (a.centerY ?? a.y);
+    const bY = b.ymin !== undefined ? b.ymin : (b.centerY ?? b.y);
+    return aY - bY;
+  });
 
   const lines = [];
   let currentGroup = [sorted[0]];
 
   for (let i = 1; i < sorted.length; i++) {
     const item = sorted[i];
-    const groupAvgY = currentGroup.reduce((s, it) => s + it.centerY, 0) / currentGroup.length;
+    const groupAvgY = currentGroup.reduce((s, it) => s + (it.centerY ?? it.y), 0) / currentGroup.length;
 
-    if (Math.abs(item.centerY - groupAvgY) <= yTolerance) {
+    if (Math.abs((item.centerY ?? item.y) - groupAvgY) <= yTolerance) {
       currentGroup.push(item);
     } else {
       lines.push(buildLineObject(currentGroup));
@@ -605,7 +639,15 @@ export function aggregateStructuredLines(items, yTolerance = 14) {
     lines.push(buildLineObject(currentGroup));
   }
 
-  const cleanLines = lines.filter(l => l.text && l.text.length > 0);
+  // Ensure output lines are sorted vertically by ymin
+  const cleanLines = lines
+    .filter(l => l.text && l.text.length > 0)
+    .sort((a, b) => {
+      const aY = a.ymin ?? (a.box?.ymin ?? (Array.isArray(a.box) && a.box[0] ? a.box[0][1] : 0));
+      const bY = b.ymin ?? (b.box?.ymin ?? (Array.isArray(b.box) && b.box[0] ? b.box[0][1] : 0));
+      return aY - bY;
+    });
+
   const rawText = cleanLines.map(l => l.text).join('\n');
 
   return {
@@ -620,21 +662,25 @@ function buildLineObject(items) {
   const text = items.map(i => i.text.trim()).filter(Boolean).join('  ');
   const minX = Math.min(...items.map(i => i.x));
   const maxX = Math.max(...items.map(i => i.x + (i.w || 20)));
-  const minY = Math.min(...items.map(i => i.y));
-  const maxY = Math.max(...items.map(i => i.y + (i.h || 14)));
+  const minY = Math.min(...items.map(i => (i.ymin !== undefined ? i.ymin : i.y)));
+  const maxY = Math.max(...items.map(i => ((i.ymin !== undefined ? i.ymin : i.y) + (i.h || 14))));
 
   const totalConf = items.reduce((sum, i) => sum + (i.confidence || 0.85), 0);
   const confidence = Math.round((totalConf / items.length) * 100) / 100;
 
+  const box = [
+    [minX, minY],
+    [maxX, minY],
+    [maxX, maxY],
+    [minX, maxY]
+  ];
+  box.ymin = minY;
+
   return {
     text,
     confidence,
-    box: [
-      [minX, minY],
-      [maxX, minY],
-      [maxX, maxY],
-      [minX, maxY]
-    ]
+    ymin: minY,
+    box
   };
 }
 
@@ -677,19 +723,22 @@ export async function runPaddleOCR(imageSource, onProgress = () => {}, options =
     if (sessions && sessions.detSession && sessions.recSession) {
       onProgress({ status: 'detecting', progress: 0.55, message: 'Running text detection...' });
 
-      // 1. Text Detection (DBNet)
-      const detPre = preprocessDetImage(srcCanvas);
+      // 1. Text Detection (DBNet with tall receipt aspect-ratio preserving dimensions)
+      const detPre = preprocessDetImage(srcCanvas, 960);
       const detInputTensor = new ort.Tensor('float32', detPre.float32Array, [1, 3, detPre.targetH, detPre.targetW]);
       const detFeeds = { [sessions.detSession.inputNames[0]]: detInputTensor };
       const detResults = await sessions.detSession.run(detFeeds);
       const detOutput = detResults[sessions.detSession.outputNames[0]];
 
+      // DBNet postprocessing with db_thresh=0.25 and box_thresh=0.5 for faint thermal lines
       const boxes = postprocessDbNet(
         detOutput.data,
         detPre.targetW,
         detPre.targetH,
         detPre.scaleX,
-        detPre.scaleY
+        detPre.scaleY,
+        0.25, // db_thresh
+        0.5   // box_thresh
       );
 
       // 2. Text Recognition (CRNN)
@@ -727,6 +776,7 @@ export async function runPaddleOCR(imageSource, onProgress = () => {}, options =
             confidence,
             x: b.x,
             y: b.y,
+            ymin: b.ymin ?? b.y,
             w: b.w,
             h: b.h,
             centerY: b.centerY
@@ -873,7 +923,12 @@ export function cleanPinoyReceiptTerm(text) {
 }
 
 /**
- * Parses raw receipt OCR text into structured metadata and line items
+ * Parses raw receipt OCR text into structured metadata and line items.
+ * Bounding-box text lines are sorted vertically by box.ymin before parsing.
+ * Loops over ALL lines extracting every grocery item matching:
+ * [Item Name] ... [Qty] [Unit Price] [Line Total]
+ *
+ * @param {string|{ rawText?: string, lines?: Array<{ text: string, box?: number[][], ymin?: number }> }} rawText
  */
 export function parseStructuredReceiptText(rawText) {
   if (!rawText) {
@@ -890,12 +945,20 @@ export function parseStructuredReceiptText(rawText) {
     };
   }
 
-  const rawLines = typeof rawText === 'string'
-    ? rawText.split('\n')
-    : (Array.isArray(rawText.lines) ? rawText.lines.map(l => l.text) : []);
+  let lineObjects = [];
+  if (typeof rawText === 'string') {
+    lineObjects = rawText.split('\n').map((text, idx) => ({ text, ymin: idx }));
+  } else if (rawText && Array.isArray(rawText.lines)) {
+    // Ensure the bounding-box text sorter sorts text lines vertically by box.ymin before parsing
+    lineObjects = [...rawText.lines].sort((a, b) => {
+      const aY = a.ymin ?? (a.box?.ymin ?? (Array.isArray(a.box) && a.box[0] ? a.box[0][1] : 0));
+      const bY = b.ymin ?? (b.box?.ymin ?? (Array.isArray(b.box) && b.box[0] ? b.box[0][1] : 0));
+      return aY - bY;
+    });
+  }
 
-  const lines = rawLines
-    .map(l => cleanPinoyReceiptTerm(l.trim()))
+  const lines = lineObjects
+    .map(l => cleanPinoyReceiptTerm(typeof l === 'string' ? l.trim() : (l.text || '').trim()))
     .filter(Boolean);
 
   let storeName = 'Supermarket';
@@ -937,12 +1000,14 @@ export function parseStructuredReceiptText(rawText) {
     }
   }
 
-  // 3. Scan line items and totals
+  // 3. Scan line items and totals - loop over ALL text lines without exiting early
   let pendingItemName = null;
   const totalDueRegex = /(?:TOTAL\s*AMOUNT\s*DUE|TOTAL\s*DUE|AMOUNT\s*DUE|GRAND\s*TOTAL|NET\s*AMOUNT|TOTAL)[\s:]+(?:[₱P]\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})/i;
   const subtotalRegex = /(?:SUBTOTAL|SUB-TOTAL|GROSS\s*AMOUNT)[\s:]+(?:[₱P]\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})/i;
   const discountRegex = /(?:DISCOUNT|SC\s*DISCOUNT|PWD\s*DISCOUNT|SENIOR)[\s:]+(?:[₱P]\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})/i;
   const weightRegex = /(\d+(?:\.\d+)?)\s*(?:kg|kgs|g|grams)\b/i;
+
+  const skipKeywords = ['cash', 'tendered', 'change', 'subtotal', 'balance', 'mastercard', 'visa', 'card', 'vat', 'tax', 'total'];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -981,7 +1046,25 @@ export function parseStructuredReceiptText(rawText) {
       }
     }
 
-    // Multi-line pattern: Quantity and unit price row (e.g. "2 PC @ 878.75    P1,757.50")
+    // Pattern 1: Combined line [Item Name] ... [Qty] [Unit Price] [Line Total]
+    // e.g. "CREAM CORNSTARCH 1 45.00 45.00", "HERSHEY'S COCOA 2 @ 150.00 300.00", "CORNSTARCH ... 2 PC @ 45.00 90.00"
+    const matchCombined = line.match(/^([A-Za-z0-9\s\.\-\/\&\(\)\'\#]+?)\s+(?:[\.\-]{2,}\s*)?(\d+(?:\.\d+)?)\s*(?:[A-Za-z]+)?\s*(?:@|x|\*|\s)\s*(?:[₱P]\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})\s+(?:[₱P]\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?:\s*[VEZT]|\s*VAT)?$/i);
+    if (matchCombined) {
+      const candidateName = matchCombined[1].trim();
+      const q = parseFloat(matchCombined[2]) || 1;
+      const uPrice = parseReceiptAmount(matchCombined[3]);
+      const lTotal = parseReceiptAmount(matchCombined[4]);
+
+      const isSkip = skipKeywords.some(k => candidateName.toLowerCase().startsWith(k));
+
+      if (!isSkip && lTotal > 0 && candidateName.length >= 2) {
+        items.push(createReceiptItem(items.length + 1, candidateName, lTotal, line, q, uPrice));
+        pendingItemName = null;
+        continue;
+      }
+    }
+
+    // Pattern 2: Multi-line quantity and unit price row (e.g. "2 PC @ 878.75    P1,757.50")
     const matchQty = line.match(/^(\d+(?:\.\d+)?)\s*(?:[A-Za-z]+)?\s*(?:@|x|\*)\s*(?:[₱P]\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})\s*(?:[₱P]\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})?/i);
     if (matchQty) {
       const q = parseFloat(matchQty[1]) || 1;
@@ -989,39 +1072,21 @@ export function parseStructuredReceiptText(rawText) {
       const lTotal = matchQty[3] ? parseReceiptAmount(matchQty[3]) : (q * uPrice);
       const name = pendingItemName || 'Grocery Item';
 
-      items.push({
-        id: items.length + 1,
-        name,
-        description: name,
-        rawReceiptText: pendingItemName ? `${pendingItemName} \n ${line}` : line,
-        qty: q,
-        quantity: q,
-        unit: 'pcs',
-        price: uPrice,
-        unitPrice: uPrice,
-        total: lTotal,
-        totalPrice: lTotal,
-        lineTotal: lTotal,
-        weightGrams: null,
-        discount: 0
-      });
-
+      items.push(createReceiptItem(items.length + 1, name, lTotal, pendingItemName ? `${pendingItemName} \n ${line}` : line, q, uPrice));
       pendingItemName = null;
       continue;
     }
 
-    // Single-line pattern: Item description followed by amount (e.g. "CHICKEN BREAST FRESH   P466.07")
+    // Pattern 3: Single-line item description followed by amount (e.g. "CHICKEN BREAST FRESH   P466.07")
     const matchItemLine = line.match(/^([A-Za-z0-9\s\.\-\/\&\(\)\'\#]+?)\s+(?:[₱P]\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})\s*(?:[VEZT]|VAT)?$/i);
     if (matchItemLine) {
       const candidateName = matchItemLine[1].trim();
       const amount = parseReceiptAmount(matchItemLine[2]);
 
-      // Guard against footer summaries
-      const skipKeywords = ['cash', 'tendered', 'change', 'subtotal', 'balance', 'mastercard', 'visa', 'card', 'vat', 'tax', 'total'];
       const isSkip = skipKeywords.some(k => candidateName.toLowerCase().startsWith(k));
 
-      if (!isSkip && amount > 0 && candidateName.length >= 3) {
-        items.push(createReceiptItem(items.length + 1, candidateName, amount, line));
+      if (!isSkip && amount > 0 && candidateName.length >= 2) {
+        items.push(createReceiptItem(items.length + 1, candidateName, amount, line, 1, amount));
         pendingItemName = null;
         continue;
       }
@@ -1075,20 +1140,26 @@ export function parseStructuredReceiptText(rawText) {
   };
 }
 
-function createReceiptItem(id, name, price, rawReceiptText) {
+export function createReceiptItem(id, name, price, rawReceiptText, qty = 1, unitPrice = null) {
+  const parsedQty = parseFloat(qty) || 1;
+  const parsedUnitPrice = unitPrice !== null && unitPrice !== undefined
+    ? parseReceiptAmount(unitPrice)
+    : parseReceiptAmount(price);
+  const parsedTotal = parseReceiptAmount(price) || (parsedQty * parsedUnitPrice);
+
   return {
     id,
     name: name.replace(/^[0-9\*\#\-\.]+\s*/, '').trim(),
     description: name.trim(),
     rawReceiptText,
-    qty: 1,
-    quantity: 1,
+    qty: parsedQty,
+    quantity: parsedQty,
     unit: 'pcs',
-    price,
-    unitPrice: price,
-    total: price,
-    totalPrice: price,
-    lineTotal: price,
+    price: parsedUnitPrice,
+    unitPrice: parsedUnitPrice,
+    total: parsedTotal,
+    totalPrice: parsedTotal,
+    lineTotal: parsedTotal,
     weightGrams: null,
     discount: 0
   };
@@ -1105,8 +1176,11 @@ export default {
   runPaddleOCR,
   runClientOCR,
   sourceToCanvas,
+  preprocessDetImage,
+  postprocessDbNet,
   parseReceiptAmount,
   parseStructuredReceiptText,
   aggregateStructuredLines,
+  createReceiptItem,
   cleanPinoyReceiptTerm
 };
