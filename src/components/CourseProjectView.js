@@ -1036,7 +1036,7 @@ function renderReceiptScanModal(state) {
                       </thead>
                       <tbody id="receipt-items-tbody">
                         ${(scanData?.items && scanData.items.length > 0) ? scanData.items.map((item, idx) => `
-                          <tr data-row-idx="${idx}">
+                          <tr data-row-idx="${idx}" data-item-category="${escapeHtml(item.category || 'General Food')}" data-item-status="${escapeHtml(item.lidStatus || item.status || 'SAFE')}" data-item-reason="${escapeHtml(item.lidReason || item.clinicalReason || '')}">
                             <td>
                               <div style="display: flex; flex-direction: column; gap: 4px;">
                                 <input type="text" class="table-input item-name-val" value="${escapeHtml(item.name)}" required />

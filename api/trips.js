@@ -337,7 +337,17 @@ export default async function handler(req, res) {
       }
 
       const tripData = body.trip || body;
-      const rawItems = Array.isArray(body.items) ? body.items : (Array.isArray(tripData.items) ? tripData.items : []);
+      const rawItems = (
+        (Array.isArray(body.items) && body.items.length > 0 ? body.items : null) ||
+        (Array.isArray(body.rawItems) && body.rawItems.length > 0 ? body.rawItems : null) ||
+        (Array.isArray(body.extractedItems) && body.extractedItems.length > 0 ? body.extractedItems : null) ||
+        (Array.isArray(body.groceryItems) && body.groceryItems.length > 0 ? body.groceryItems : null) ||
+        (Array.isArray(tripData.items) && tripData.items.length > 0 ? tripData.items : null) ||
+        (Array.isArray(tripData.rawItems) && tripData.rawItems.length > 0 ? tripData.rawItems : null) ||
+        (Array.isArray(tripData.extractedItems) && tripData.extractedItems.length > 0 ? tripData.extractedItems : null) ||
+        (Array.isArray(tripData.groceryItems) && tripData.groceryItems.length > 0 ? tripData.groceryItems : null) ||
+        []
+      );
 
       const tripId = tripData.id || `trip_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const date = tripData.date || new Date().toISOString().split('T')[0];
@@ -386,13 +396,13 @@ export default async function handler(req, res) {
 
         for (let idx = 0; idx < rawItems.length; idx++) {
           const item = rawItems[idx];
-          const itemId = item.id || `item_${tripId}_${idx}_${Math.random().toString(36).slice(2, 5)}`;
-          const itemName = item.name || item.itemName || 'Grocery Item';
+          const itemId = item.id || `item_${tripId}_${idx}_${Math.random().toString(36).slice(2, 6)}`;
+          const itemName = item.name || item.itemName || item.description || 'Grocery Item';
           const itemRawText = item.rawReceiptText || item.name || '';
           const quantity = Number(item.quantity || item.qty || 1);
           const unit = item.unit || 'pcs';
           const unitPrice = Number(item.unitPrice || item.price || 0);
-          const totalPrice = Number(item.totalPrice || item.total || (quantity * unitPrice));
+          const totalPrice = Number(item.totalPrice || item.lineTotal || (quantity * unitPrice));
           const weightGrams = Number(item.weightGrams || item.weightG || 0);
           const category = item.category || 'General Food';
           const lidStatus = item.lidStatus || 'SAFE';
@@ -406,7 +416,7 @@ export default async function handler(req, res) {
             ) VALUES (
               ${itemId}, ${tripId}, ${date}, ${projectWeek}, ${itemName},
               ${itemRawText}, ${quantity}, ${unit}, ${unitPrice},
-              ${totalPrice}, ${weightGrams}, ${category}, ${lidStatus}, ${lidReason}, ${createdAt}
+              ${totalPrice}, ${weightGrams}, ${category}, ${lidStatus}, ${lidReason}, NOW()
             )
             ON CONFLICT (id) DO UPDATE SET
               name = EXCLUDED.name,

@@ -1259,20 +1259,29 @@ Cracked black pepper`;
       const tripType = document.querySelector('#edit-trip-type')?.value || 'Supermarket';
 
       const items = [];
-      document.querySelectorAll('#receipt-items-tbody tr').forEach(row => {
+      document.querySelectorAll('#receipt-items-tbody tr').forEach((row, idx) => {
         const name = row.querySelector('.item-name-val')?.value?.trim();
         const qty = parseFloat(row.querySelector('.item-qty-val')?.value || 1);
         const unit = row.querySelector('.item-unit-val')?.value?.trim() || 'pcs';
         const price = parseFloat(row.querySelector('.item-price-val')?.value || 0);
-        const total = parseFloat(row.querySelector('.item-total-val')?.value || price || 0);
+        const total = parseFloat(row.querySelector('.item-total-val')?.value || (qty * price) || price || 0);
+        const category = row.getAttribute('data-item-category') || 'General Food';
+        const lidStatus = row.getAttribute('data-item-status') || 'SAFE';
+        const lidReason = row.getAttribute('data-item-reason') || '';
 
         if (name) {
           items.push({
+            id: `item_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
             name,
+            rawReceiptText: name,
             quantity: qty,
             unit,
             unitPrice: price,
-            totalPrice: total
+            totalPrice: total,
+            weightGrams: 0,
+            category,
+            lidStatus,
+            lidReason
           });
         }
       });
@@ -1285,7 +1294,9 @@ Cracked black pepper`;
         totalAmountPaid: totalAmount,
         tripType,
         receiptImageUrl: state.receiptPreviewUrl || null,
-        notes: `Receipt scanned (${items.length} items verified)`
+        notes: `Receipt scanned (${items.length} items verified)`,
+        items,
+        rawItems: items
       }, items);
 
       state.receiptModalOpen = false;

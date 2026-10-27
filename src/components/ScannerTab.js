@@ -128,7 +128,7 @@ export async function executeScanWorkflow(file, context = {}) {
         });
     }
 
-    if (scanTarget === 'receipt') {
+    if (isReceipt) {
       // Step 2: Receipt Scanning & Audit
       state.ocrStatus = { message: 'Analyzing grocery receipt items...' };
       state.ocrProgress = 0.45;

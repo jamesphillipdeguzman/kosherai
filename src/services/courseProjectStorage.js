@@ -208,6 +208,37 @@ export async function saveShoppingTrip(tripData, items = []) {
     const totalAmount = Number(tripData.totalAmountPaid || 0);
     const scaleWeightKg = Number(tripData.totalScaleWeightKg || 0);
 
+    const candidateItems = (
+      (Array.isArray(items) && items.length > 0 ? items : null) ||
+      (Array.isArray(tripData.items) && tripData.items.length > 0 ? tripData.items : null) ||
+      (Array.isArray(tripData.rawItems) && tripData.rawItems.length > 0 ? tripData.rawItems : null) ||
+      (Array.isArray(tripData.extractedItems) && tripData.extractedItems.length > 0 ? tripData.extractedItems : null) ||
+      (Array.isArray(tripData.groceryItems) && tripData.groceryItems.length > 0 ? tripData.groceryItems : null) ||
+      getGroceryItems(tripId) ||
+      []
+    );
+
+    const cleanedItems = candidateItems.map((item, idx) => {
+      const lidEval = evaluateItemLidStatus(item.name || item.itemName);
+      return {
+        id: item.id || `item_${tripId}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+        tripId,
+        purchaseDate: date,
+        projectWeek,
+        name: item.name || item.itemName || item.description || 'Grocery Item',
+        rawReceiptText: item.rawReceiptText || item.name || '',
+        quantity: Number(item.quantity || item.qty || 1),
+        unit: item.unit || 'pcs',
+        unitPrice: Number(item.unitPrice || item.price || 0),
+        totalPrice: Number(item.totalPrice || item.lineTotal || (Number(item.quantity || item.qty || 1) * Number(item.unitPrice || item.price || 0))),
+        weightGrams: Number(item.weightGrams || item.weightG || 0),
+        category: item.category || 'General Food',
+        lidStatus: item.lidStatus || lidEval.status,
+        lidReason: item.lidReason || lidEval.reason || '',
+        synced: false
+      };
+    });
+
     const tripRecord = {
       id: tripId,
       date,
@@ -218,32 +249,11 @@ export async function saveShoppingTrip(tripData, items = []) {
       totalScaleWeightKg: scaleWeightKg, // Physical scale weight of whole grocery haul
       receiptImageUrl: tripData.receiptImageUrl || null,
       receiptRawText: tripData.receiptRawText || '',
-      itemsCount: items.length,
+      itemsCount: cleanedItems.length,
       notes: tripData.notes || '',
       createdAt: tripData.createdAt || new Date().toISOString(),
       synced: false
     };
-
-    const cleanedItems = items.map((item, idx) => {
-      const lidEval = evaluateItemLidStatus(item.name || item.itemName);
-      return {
-        id: item.id || `item_${tripId}_${idx}_${Math.random().toString(36).slice(2, 5)}`,
-        tripId,
-        purchaseDate: date,
-        projectWeek,
-        name: item.name || item.itemName || 'Grocery Item',
-        rawReceiptText: item.rawReceiptText || item.name || '',
-        quantity: Number(item.quantity || 1),
-        unit: item.unit || 'pcs',
-        unitPrice: Number(item.unitPrice || 0),
-        totalPrice: Number(item.totalPrice || item.unitPrice || 0),
-        weightGrams: Number(item.weightGrams || item.weightG || 0),
-        category: item.category || 'General Food',
-        lidStatus: item.lidStatus || lidEval.status,
-        lidReason: lidEval.reason || '',
-        synced: false
-      };
-    });
 
     // 1. POST to API route first when online
     let isSynced = false;
@@ -254,10 +264,17 @@ export async function saveShoppingTrip(tripData, items = []) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 6000);
 
+        const payload = {
+          ...tripRecord,
+          trip: tripRecord,
+          items: cleanedItems,
+          rawItems: cleanedItems
+        };
+
         const res = await fetch('/api/trips', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ trip: tripRecord, items: cleanedItems }),
+          body: JSON.stringify(payload),
           signal: controller.signal
         });
         clearTimeout(timeoutId);
@@ -327,8 +344,17 @@ export async function syncPendingTrips() {
   if (typeof fetch !== 'function') return { syncedCount: 0, pendingCount: 0 };
 
   try {
+    const allLocalTrips = getShoppingTrips();
+    const allLocalGroceryItems = getGroceryItems();
     const unsyncedFromDb = await getUnsyncedTripsFromIndexedDB();
-    const unsyncedFromLocal = getShoppingTrips().filter(t => t.synced === false);
+
+    // Check for unsynced trips AND backfill previously saved trips where itemsCount === 0 but local items exist
+    const unsyncedFromLocal = allLocalTrips.filter(t => {
+      if (t.synced === false) return true;
+      const matchingItems = allLocalGroceryItems.filter(i => i.tripId === t.id);
+      if ((!t.itemsCount || t.itemsCount === 0) && matchingItems.length > 0) return true;
+      return false;
+    });
 
     // Merge pending trips by ID
     const pendingMap = new Map();
@@ -342,19 +368,66 @@ export async function syncPendingTrips() {
 
     let syncedCount = 0;
     for (const trip of pendingTrips) {
-      const items = (await getGroceryItemsFromIndexedDB(trip.id)) || getGroceryItems(trip.id);
+      const idbItems = await getGroceryItemsFromIndexedDB(trip.id);
+      const localMatchedItems = allLocalGroceryItems.filter(i => i.tripId === trip.id);
+      
+      let candidateItems = (idbItems && idbItems.length > 0) ? idbItems : localMatchedItems;
+      if (!candidateItems || candidateItems.length === 0) {
+        if (Array.isArray(trip.items) && trip.items.length > 0) {
+          candidateItems = trip.items;
+        } else if (Array.isArray(trip.rawItems) && trip.rawItems.length > 0) {
+          candidateItems = trip.rawItems;
+        } else if (Array.isArray(trip.extractedItems) && trip.extractedItems.length > 0) {
+          candidateItems = trip.extractedItems;
+        } else if (Array.isArray(trip.groceryItems) && trip.groceryItems.length > 0) {
+          candidateItems = trip.groceryItems;
+        } else {
+          candidateItems = [];
+        }
+      }
+
+      const rawItems = candidateItems.map((item, idx) => ({
+        id: item.id || `item_${trip.id}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+        tripId: trip.id,
+        purchaseDate: trip.date,
+        projectWeek: Number(trip.projectWeek || 1),
+        name: item.name || item.itemName || item.description || 'Grocery Item',
+        rawReceiptText: item.rawReceiptText || item.name || '',
+        quantity: Number(item.quantity || item.qty || 1),
+        unit: item.unit || 'pcs',
+        unitPrice: Number(item.unitPrice || item.price || 0),
+        totalPrice: Number(item.totalPrice || item.lineTotal || (Number(item.quantity || 1) * Number(item.unitPrice || 0))),
+        weightGrams: Number(item.weightGrams || item.weightG || 0),
+        category: item.category || 'General Food',
+        lidStatus: item.lidStatus || 'SAFE',
+        lidReason: item.lidReason || ''
+      }));
+
+      const payload = {
+        ...trip,
+        itemsCount: rawItems.length,
+        trip: {
+          ...trip,
+          itemsCount: rawItems.length
+        },
+        items: rawItems,
+        rawItems: rawItems
+      };
+
       try {
         const res = await fetch('/api/trips', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ trip, items })
+          body: JSON.stringify(payload)
         });
 
         if (res && res.ok) {
           await markTripAsSyncedInIndexedDB(trip.id);
 
           // Update localStorage
-          const localTrips = getShoppingTrips().map(t => t.id === trip.id ? { ...t, synced: true } : t);
+          const localTrips = getShoppingTrips().map(t => 
+            t.id === trip.id ? { ...t, synced: true, itemsCount: rawItems.length } : t
+          );
           localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(localTrips));
 
           syncedCount++;

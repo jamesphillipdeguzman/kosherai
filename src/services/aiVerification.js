@@ -542,17 +542,27 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => { }, cl
   if (shouldTriggerOcrFallback && !controller.signal.aborted && resolvedApiKey && isOnline) {
     try {
       console.log('[ReceiptScan] Attempting direct client-side Gemini Vision fallback with resolved API key...');
-      const prompt = `Perform quick document OCR on this receipt image. Return strictly JSON:
+      const prompt = `Extract all purchased food line items and receipt details from this Philippine supermarket receipt image.
+Evaluate each item under the "${activeDiet.toUpperCase()}" dietary compliance protocol.
+Return strictly JSON:
 {
-  "storeName": string,
-  "purchaseDate": string,
-  "totalAmount": number,
+  "storeName": "Store or Supermarket Name",
+  "purchaseDate": "YYYY-MM-DD",
+  "totalAmountPaid": 0.00,
   "items": [
-    { "name": string, "quantity": number, "price": number, "total": number }
+    {
+      "name": "Clean Item Name",
+      "quantity": 1,
+      "unit": "pcs",
+      "unitPrice": 0.00,
+      "totalPrice": 0.00,
+      "category": "Produce | Meat | Dairy/Alt | Pantry | Bakery | Beverages | General Food",
+      "lidStatus": "SAFE | AVOID | CAUTION",
+      "lidReason": "Brief dietary compliance reason"
+    }
   ]
 }`;
-      // Cascade: Try gemini-3.8-flash first, fall back to gemini-2.0-flash
-      const models = ['gemini-3.8-flash', 'gemini-2.0-flash'];
+      const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
       const cleanBase64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
 
       for (const model of models) {
@@ -571,10 +581,7 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => { }, cl
             generationConfig: {
               responseMimeType: "application/json",
               temperature: 0.1,
-              maxOutputTokens: 1024,
-              thinkingConfig: {
-                thinkingBudget: 0 // Completely disables reasoning latency
-              }
+              maxOutputTokens: 4096
             }
           })
         });
