@@ -12,6 +12,7 @@ import { renderCookModeTab, lidRecipes, DIET_RECIPES } from './components/CookMo
 import { renderSettingsModal } from './components/SettingsModal.js';
 import { renderItemDetailModal } from './components/ItemDetailModal.js';
 import { renderCourseProjectView } from './components/CourseProjectView.js';
+import { parseQuantityAndUnit, createManualItemRowHtml } from './components/ManualTripModal.js';
 import {
   toggleRecipeLike,
   recordRecipeView,
@@ -1428,17 +1429,144 @@ Cracked black pepper`;
   if (closeManualTripBtn) closeManualTripBtn.addEventListener('click', () => { state.manualTripModalOpen = false; render(); });
   if (cancelManualTripBtn) cancelManualTripBtn.addEventListener('click', () => { state.manualTripModalOpen = false; render(); });
 
+  // Manual Trip Itemized Purchases Controls
+  function updateManualItemsSummary() {
+    const tbody = document.querySelector('#manual-items-tbody');
+    const emptyHint = document.querySelector('#manual-items-empty-hint');
+    const summary = document.querySelector('#manual-items-summary');
+    const countText = document.querySelector('#manual-items-count-text');
+    const sumBtn = document.querySelector('#manual-sum-to-total-btn');
+
+    if (!tbody) return;
+    const rows = tbody.querySelectorAll('tr');
+    let sum = 0;
+    let namedCount = 0;
+
+    rows.forEach(row => {
+      const name = row.querySelector('.manual-item-name')?.value?.trim();
+      const price = parseFloat(row.querySelector('.manual-item-price')?.value || 0);
+      if (name) namedCount++;
+      if (!isNaN(price) && price > 0) sum += price;
+    });
+
+    if (rows.length === 0) {
+      if (emptyHint) emptyHint.style.display = 'block';
+      if (summary) summary.style.display = 'none';
+    } else {
+      if (emptyHint) emptyHint.style.display = 'none';
+      if (summary) summary.style.display = 'flex';
+      if (countText) {
+        countText.textContent = `${namedCount} item${namedCount === 1 ? '' : 's'} recorded (Sum: ₱${sum.toFixed(2)})`;
+      }
+      if (sumBtn) {
+        sumBtn.textContent = `⚡ Apply Sum (₱${sum.toFixed(2)}) to Total`;
+      }
+    }
+  }
+
+  function attachManualRowRemoveListeners() {
+    document.querySelectorAll('.remove-manual-item-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        const row = e.target.closest('tr');
+        if (row) {
+          row.remove();
+          updateManualItemsSummary();
+        }
+      };
+    });
+  }
+
+  // Add Item Row in Manual Trip Modal
+  const addManualItemRowBtn = document.querySelector('#add-manual-item-row');
+  if (addManualItemRowBtn) {
+    addManualItemRowBtn.addEventListener('click', () => {
+      const tbody = document.querySelector('#manual-items-tbody');
+      if (tbody) {
+        const temp = document.createElement('tbody');
+        temp.innerHTML = createManualItemRowHtml('', '1 pcs', '');
+        const newRow = temp.firstElementChild;
+        if (newRow) {
+          tbody.appendChild(newRow);
+          attachManualRowRemoveListeners();
+
+          const nameInput = newRow.querySelector('.manual-item-name');
+          const priceInput = newRow.querySelector('.manual-item-price');
+          if (nameInput) {
+            nameInput.addEventListener('input', updateManualItemsSummary);
+            nameInput.focus();
+          }
+          if (priceInput) {
+            priceInput.addEventListener('input', updateManualItemsSummary);
+          }
+          updateManualItemsSummary();
+        }
+      }
+    });
+  }
+
+  // Apply Sum to Total Amount Paid
+  const manualSumToTotalBtn = document.querySelector('#manual-sum-to-total-btn');
+  if (manualSumToTotalBtn) {
+    manualSumToTotalBtn.addEventListener('click', () => {
+      let sum = 0;
+      document.querySelectorAll('#manual-items-tbody tr').forEach(row => {
+        const price = parseFloat(row.querySelector('.manual-item-price')?.value || 0);
+        if (!isNaN(price) && price > 0) sum += price;
+      });
+      const totalInput = document.querySelector('#manual-total-amount');
+      if (totalInput && sum > 0) {
+        totalInput.value = sum.toFixed(2);
+      }
+    });
+  }
+
+  // Attach live summary updates on initial row(s)
+  document.querySelectorAll('#manual-items-tbody .manual-item-name, #manual-items-tbody .manual-item-price').forEach(input => {
+    input.addEventListener('input', updateManualItemsSummary);
+  });
+  attachManualRowRemoveListeners();
+  updateManualItemsSummary();
+
   // Manual Trip Form Submit
   const manualTripForm = document.querySelector('#manual-trip-form');
   if (manualTripForm) {
     manualTripForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const storeName = document.querySelector('#manual-store-name')?.value || 'Wet Market';
+      const storeName = document.querySelector('#manual-store-name')?.value?.trim() || 'Wet Market / Palengke';
       const date = document.querySelector('#manual-trip-date')?.value || new Date().toISOString().split('T')[0];
       const tripType = document.querySelector('#manual-trip-type')?.value || 'Wet Market / Palengke';
       const scaleWeight = parseFloat(document.querySelector('#manual-scale-weight')?.value || 0);
       const totalAmount = parseFloat(document.querySelector('#manual-total-amount')?.value || 0);
-      const notes = document.querySelector('#manual-notes')?.value || '';
+      const notes = document.querySelector('#manual-notes')?.value?.trim() || '';
+
+      // Collect itemized purchases from manual rows
+      const items = [];
+      document.querySelectorAll('#manual-items-tbody tr').forEach((row, idx) => {
+        const name = row.querySelector('.manual-item-name')?.value?.trim();
+        const qtyUnitStr = row.querySelector('.manual-item-qty-unit')?.value?.trim() || '1 pcs';
+        const linePrice = parseFloat(row.querySelector('.manual-item-price')?.value || 0);
+
+        if (name) {
+          const { quantity, unit, weightGrams } = parseQuantityAndUnit(qtyUnitStr);
+          const unitPrice = quantity > 0 ? parseFloat((linePrice / quantity).toFixed(2)) : linePrice;
+
+          items.push({
+            id: `item_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+            name,
+            rawReceiptText: `${name} (${qtyUnitStr})`.trim(),
+            quantity,
+            unit,
+            unitPrice,
+            totalPrice: linePrice,
+            lineTotal: linePrice,
+            price: linePrice,
+            weightGrams,
+            category: tripType.includes('Wet') ? 'Wet Market Produce' : 'General Food'
+          });
+        }
+      });
+
+      const tripNotes = notes || (items.length > 0 ? `Manual trip (${items.length} item${items.length === 1 ? '' : 's'} recorded)` : '');
 
       await saveShoppingTrip({
         storeName,
@@ -1446,8 +1574,10 @@ Cracked black pepper`;
         tripType,
         totalScaleWeightKg: scaleWeight,
         totalAmountPaid: totalAmount,
-        notes
-      }, []);
+        notes: tripNotes,
+        items,
+        rawItems: items
+      }, items);
 
       state.manualTripModalOpen = false;
       render();

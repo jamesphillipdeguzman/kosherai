@@ -76,7 +76,7 @@ console.log('  ✅ Date-to-week boundary mappings are strictly verified.');
 console.log('\nTest 3: Whole-grocery scale weight recording');
 localStorage.clear();
 
-const trip1 = saveShoppingTrip({
+const trip1 = await saveShoppingTrip({
   storeName: 'SM Supermarket',
   date: '2026-10-31',
   tripType: 'Supermarket',
@@ -152,7 +152,7 @@ console.log('  ✅ Food waste cost is strictly isolated from household expense t
 console.log('\nTest 7: Six-week comparative analytics & baseline variance');
 
 // Add a Week 2 shopping trip (Intervention)
-saveShoppingTrip({
+await saveShoppingTrip({
   storeName: 'Puregold',
   date: '2026-11-08', // Week 2
   totalScaleWeightKg: 5.80,

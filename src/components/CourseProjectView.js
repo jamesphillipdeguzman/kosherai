@@ -30,7 +30,9 @@ import { compressImage, scanSupermarketReceipt } from '../services/aiVerificatio
 import { LID_DATABASE, STATUS } from '../data/lidDatabase.js';
 import { getDietProfile } from '../data/dietProfiles.js';
 import { DIET_RECIPES } from '../data/dietRecipes.js';
-import lidRecipes from '../data/lidRecipes.json';
+import lidRecipes from '../data/lidRecipes.json' with { type: 'json' };
+import { renderManualTripModal } from './ManualTripModal.js';
+export { renderManualTripModal };
 
 export function renderCourseProjectView(state) {
   const activeSubTab = state.courseSubTab || 'dashboard'; // 'dashboard' | 'trips' | 'groceries' | 'waste' | 'mealplan' | 'export'
@@ -1091,69 +1093,6 @@ function renderReceiptScanModal(state) {
   `;
 }
 
-/**
- * Manual Trip Entry Modal (for wet market without receipts)
- */
-function renderManualTripModal(state) {
-  return `
-    <div class="modal-overlay" id="manual-trip-overlay">
-      <div class="modal-content" role="dialog" aria-modal="true">
-        <div class="modal-header">
-          <h2 class="modal-title">Manual Shopping Trip Entry</h2>
-          <button class="btn-icon" id="close-manual-trip-btn">✕</button>
-        </div>
-
-        <form id="manual-trip-form">
-          <div class="form-group">
-            <label class="form-label" for="manual-store-name">Store or Market Name</label>
-            <input type="text" id="manual-store-name" class="form-input" placeholder="e.g. Local Wet Market / Palengke" required />
-          </div>
-
-          <div class="form-row-grid">
-            <div class="form-group">
-              <label class="form-label" for="manual-trip-date">Date</label>
-              <input type="date" id="manual-trip-date" class="form-input" value="${new Date().toISOString().split('T')[0]}" required />
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="manual-trip-type">Trip Type</label>
-              <select id="manual-trip-type" class="form-input">
-                <option value="Wet Market / Palengke">Wet Market / Palengke</option>
-                <option value="Supermarket">Supermarket</option>
-                <option value="Specialty Pantry">Specialty Pantry</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- 2. CRITICAL FIELD: Whole-Grocery Scale Weight Card -->
-          <div class="rounded-2xl p-4 bg-teal-50/70 border border-teal-200/80 dark:bg-slate-800/80 dark:border-teal-900/50 transition-colors w-full">
-            <label class="text-xs font-semibold text-teal-800 dark:text-teal-300 flex items-center gap-1.5 mb-2" for="manual-scale-weight">
-              ⚖️ Whole-Grocery Scale Weight (kg)
-            </label>
-            <input type="number" step="0.01" min="0" id="manual-scale-weight" class="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-teal-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-base focus:ring-2 focus:ring-teal-500 outline-none" placeholder="e.g. 4.25" required />
-            <div class="text-[11px] text-teal-700/80 dark:text-slate-400 mt-2 font-normal leading-relaxed">
-              Measured physical weight of food haul on your home scale before unpacking.
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="manual-total-amount">Total Amount Paid (₱ PHP)</label>
-            <input type="number" step="0.01" min="0" id="manual-total-amount" class="form-input" placeholder="e.g. 1500" required />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="manual-notes">Notes / Food Highlights</label>
-            <input type="text" id="manual-notes" class="form-input" placeholder="Fresh vegetables, pork loin, pure kosher salt" />
-          </div>
-
-          <div class="modal-footer-actions">
-            <button type="button" class="btn-secondary" id="cancel-manual-trip-btn">Cancel</button>
-            <button type="submit" class="btn-primary">Save Shopping Trip</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  `;
-}
 
 /**
  * Food Waste Logging Modal
