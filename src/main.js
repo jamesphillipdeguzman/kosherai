@@ -439,6 +439,10 @@ function attachEventHandlers() {
     clearBtn.addEventListener('click', () => {
       state.searchQuery = '';
       render();
+      const searchInput = document.querySelector('#checker-search-input');
+      if (searchInput) {
+        searchInput.focus();
+      }
     });
   }
 
@@ -449,6 +453,11 @@ function attachEventHandlers() {
       state.searchQuery = q;
       state.statusFilter = 'ALL';
       render();
+      const searchInput = document.querySelector('#checker-search-input');
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+      }
     });
   });
 

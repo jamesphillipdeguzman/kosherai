@@ -166,4 +166,92 @@ assert.ok(!filteredDiabeticHtml.includes('Refined Sugars'), 'Filter "rice" must 
 
 console.log('  ✅ Search filter responsiveness strictly verified.\n');
 
+// Test 6: Verify Food Additives & E-Numbers Reference is reactive to active diet protocol
+console.log('Test 6: Verify Food Additives & E-Numbers Reference Reactivity across all 5 Protocols');
+
+// Verify schema on PROTOCOL_GUIDELINES
+for (const diet of expectedDiets) {
+  const p = PROTOCOL_GUIDELINES[diet];
+  assert.ok(Array.isArray(p.additives) && p.additives.length >= 8, `Protocol ${diet} must have at least 8 additives defined`);
+  for (const add of p.additives) {
+    assert.ok(add.code, `Additive in ${diet} must have a code`);
+    assert.ok(add.name, `Additive in ${diet} must have a name`);
+    assert.ok(add.status, `Additive in ${diet} must have a status`);
+    assert.ok(add.reason, `Additive in ${diet} must have a clinical rationale / reason`);
+  }
+}
+
+// 1. Low-Purine Additives Verification
+const purineAdds = PROTOCOL_GUIDELINES.low_purine.additives;
+assert.ok(purineAdds.some(a => a.code === 'E627' || a.name.includes('Guanylate')), 'Low-Purine must include E627 Disodium Guanylate');
+assert.ok(purineAdds.some(a => a.code === 'E631' || a.name.includes('Inosinate')), 'Low-Purine must include E631 Disodium Inosinate');
+assert.ok(purineAdds.some(a => a.code.includes('621') || a.name.includes('MSG')), 'Low-Purine must include E621 MSG/Yeast extract');
+assert.ok(purineAdds.some(a => a.code === 'HFCS' || a.name.includes('High-Fructose')), 'Low-Purine must include High-Fructose Corn Syrup');
+
+const purineAddsHtml = renderProtocolTab({ activeDiet: 'low_purine' });
+assert.ok(purineAddsHtml.includes('Disodium Guanylate') && purineAddsHtml.includes('E627'), 'Low-Purine UI must render Disodium Guanylate');
+assert.ok(purineAddsHtml.includes('Disodium Inosinate') && purineAddsHtml.includes('E631'), 'Low-Purine UI must render Disodium Inosinate');
+assert.ok(purineAddsHtml.includes('High-Fructose Corn Syrup'), 'Low-Purine UI must render High-Fructose Corn Syrup');
+assert.ok(!purineAddsHtml.includes('Erythrosine / FD&C Red #3'), 'Low-Purine UI must NOT render Erythrosine');
+
+// 2. Diabetic / Low-GI Additives Verification
+const diabeticAdds = PROTOCOL_GUIDELINES.diabetic.additives;
+assert.ok(diabeticAdds.some(a => a.name.includes('Maltodextrin')), 'Diabetic must include Maltodextrin');
+assert.ok(diabeticAdds.some(a => a.name.includes('Dextrose')), 'Diabetic must include Dextrose');
+assert.ok(diabeticAdds.some(a => a.name.includes('Maltitol')), 'Diabetic must include Maltitol');
+assert.ok(diabeticAdds.some(a => a.name.includes('Glucose Syrups') || a.name.includes('Corn Syrup Solids')), 'Diabetic must include Glucose syrups');
+assert.ok(diabeticAdds.some(a => a.name.includes('Stevia') || a.code.includes('960')), 'Diabetic must include Stevia');
+assert.ok(diabeticAdds.some(a => a.name.includes('Erythritol') || a.code.includes('968')), 'Diabetic must include Erythritol');
+
+const diabeticAddsHtml = renderProtocolTab({ activeDiet: 'diabetic' });
+assert.ok(diabeticAddsHtml.includes('Maltodextrin'), 'Diabetic UI must render Maltodextrin');
+assert.ok(diabeticAddsHtml.includes('Dextrose / Pure D-Glucose'), 'Diabetic UI must render Dextrose');
+assert.ok(diabeticAddsHtml.includes('Maltitol') && diabeticAddsHtml.includes('Maltitol Syrup'), 'Diabetic UI must render Maltitol');
+assert.ok(diabeticAddsHtml.includes('Steviol Glycosides (Pure Stevia)'), 'Diabetic UI must render Stevia');
+assert.ok(diabeticAddsHtml.includes('Erythritol'), 'Diabetic UI must render Erythritol');
+assert.ok(!diabeticAddsHtml.includes('Carrageenan'), 'Diabetic UI must NOT render Carrageenan');
+
+// 3. Low-Sodium Additives Verification
+const sodiumAdds = PROTOCOL_GUIDELINES.low_sodium.additives;
+assert.ok(sodiumAdds.some(a => a.code === 'E211' || a.name.includes('Sodium Benzoate')), 'Low-Sodium must include Sodium Benzoate');
+assert.ok(sodiumAdds.some(a => a.code === 'E250' || a.name.includes('Sodium Nitrite')), 'Low-Sodium must include Sodium Nitrite');
+assert.ok(sodiumAdds.some(a => a.code.includes('621') || a.name.includes('MSG')), 'Low-Sodium must include E621 MSG');
+assert.ok(sodiumAdds.some(a => a.name.includes('Disodium Phosphate')), 'Low-Sodium must include Disodium Phosphate');
+
+const sodiumAddsHtml = renderProtocolTab({ activeDiet: 'low_sodium' });
+assert.ok(sodiumAddsHtml.includes('Sodium Benzoate') && sodiumAddsHtml.includes('E211'), 'Low-Sodium UI must render Sodium Benzoate');
+assert.ok(sodiumAddsHtml.includes('Sodium Nitrite') && sodiumAddsHtml.includes('E250'), 'Low-Sodium UI must render Sodium Nitrite');
+assert.ok(sodiumAddsHtml.includes('Monosodium Glutamate (MSG / Vetsin)'), 'Low-Sodium UI must render MSG');
+assert.ok(sodiumAddsHtml.includes('Disodium Phosphate'), 'Low-Sodium UI must render Disodium Phosphate');
+assert.ok(!sodiumAddsHtml.includes('Calcium Iodate'), 'Low-Sodium UI must NOT render Calcium Iodate');
+
+// 4. Pinoy Keto Additives Verification
+const ketoAdds = PROTOCOL_GUIDELINES.pinoy_keto.additives;
+assert.ok(ketoAdds.some(a => a.name.includes('Modified Food Starch')), 'Keto must include modified cornstarch / food starch');
+assert.ok(ketoAdds.some(a => a.name.includes('Tapioca')), 'Keto must include tapioca flour');
+assert.ok(ketoAdds.some(a => a.name.includes('Maltitol')), 'Keto must include maltitol');
+assert.ok(ketoAdds.some(a => a.name.includes('Erythritol')), 'Keto must include erythritol');
+
+const ketoAddsHtml = renderProtocolTab({ activeDiet: 'pinoy_keto' });
+assert.ok(ketoAddsHtml.includes('Modified Food Starch'), 'Keto UI must render Modified Food Starch');
+assert.ok(ketoAddsHtml.includes('Cassava / Tapioca Starch'), 'Keto UI must render Tapioca Starch');
+assert.ok(ketoAddsHtml.includes('Maltitol') && ketoAddsHtml.includes('Maltitol Syrup'), 'Keto UI must render Maltitol');
+assert.ok(ketoAddsHtml.includes('Erythritol'), 'Keto UI must render Erythritol');
+assert.ok(!ketoAddsHtml.includes('Agar-Agar (Gulaman)'), 'Keto UI must NOT render Agar-Agar');
+
+// 5. LID Additives Verification
+const lidAddsHtml = renderProtocolTab({ activeDiet: 'lid' });
+assert.ok(lidAddsHtml.includes('Erythrosine') && lidAddsHtml.includes('E127'), 'LID UI must render Erythrosine E127');
+assert.ok(lidAddsHtml.includes('Carrageenan') && lidAddsHtml.includes('E407'), 'LID UI must render Carrageenan E407');
+assert.ok(lidAddsHtml.includes('Agar-Agar (Gulaman)') && lidAddsHtml.includes('E406'), 'LID UI must render Agar-Agar E406');
+assert.ok(lidAddsHtml.includes('Calcium Iodate') && lidAddsHtml.includes('E916'), 'LID UI must render Calcium Iodate E916');
+assert.ok(lidAddsHtml.includes('Potassium Iodate') && lidAddsHtml.includes('E917'), 'LID UI must render Potassium Iodate E917');
+
+// 6. Search Filter inside Additives Table
+const searchedAdditivesHtml = renderProtocolTab({ activeDiet: 'diabetic', cheatSearch: 'Stevia' });
+assert.ok(searchedAdditivesHtml.includes('Steviol Glycosides (Pure Stevia)'), 'Searching Stevia must render Stevia in additives table');
+assert.ok(!searchedAdditivesHtml.includes('Dextrose / Pure D-Glucose'), 'Searching Stevia must NOT show Dextrose');
+
+console.log('  ✅ Food Additives reactivity and clinical rationale strictly verified across all 5 protocols.\n');
+
 console.log('🎉 ALL MULTI-DIET PROTOCOL & GUIDELINES TESTS PASSED SUCCESSFULLY!');

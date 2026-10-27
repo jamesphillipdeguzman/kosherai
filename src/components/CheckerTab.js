@@ -1,10 +1,10 @@
 // Quick Search & Multi-Diet Checker Tab Component (Offline First)
 import { LID_CATEGORIES, STATUS, getItemDietaryInfo, getItemStatus, getCategoryEmoji, getCategoryIcon } from '../data/lidDatabase.js';
 import { searchDatabase } from '../services/ruleEngine.js';
-import generatedImages from '../data/generatedImages.json';
+import generatedImages from '../data/generatedImages.json' with { type: 'json' };
 
 export function renderCheckerTab(state) {
-  const { searchQuery, statusFilter, categoryFilter, searchResults } = state;
+  const { searchQuery = '', statusFilter = 'ALL', categoryFilter = 'ALL', searchResults = [] } = state;
   const activeDiet = state.activeDiet || 'lid';
 
   const quickTags = [
@@ -31,6 +31,8 @@ export function renderCheckerTab(state) {
   const avoidCount = baseMatches.filter(r => getItemStatus(r, activeDiet) === STATUS.AVOID).length;
   const cautionCount = baseMatches.filter(r => getItemStatus(r, activeDiet) === STATUS.CAUTION).length;
 
+  const normStatus = (statusFilter || 'ALL').toUpperCase();
+
   return `
     <div class="checker-tab-view">
       <!-- Search Input -->
@@ -51,7 +53,7 @@ export function renderCheckerTab(state) {
         />
 
         ${searchQuery ? `
-          <button id="checker-clear-btn" class="search-clear-btn" title="Clear Search">
+          <button id="checker-clear-btn" type="button" class="search-clear-btn" title="Clear Search">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -64,22 +66,22 @@ export function renderCheckerTab(state) {
       <div class="quick-tags-wrapper">
         <span class="quick-tag-label">Quick Lookups:</span>
         ${quickTags.map(tag => `
-          <button class="quick-tag-chip" data-query="${escapeHtml(tag)}">${escapeHtml(tag)}</button>
+          <button class="quick-tag-chip" type="button" data-query="${escapeHtml(tag)}">${escapeHtml(tag)}</button>
         `).join('')}
       </div>
 
       <!-- Filters Row with Dynamic Multi-Diet Counts -->
       <div class="filters-bar">
-        <button class="filter-btn ${statusFilter === 'ALL' ? 'active' : ''}" data-status="ALL">
+        <button class="filter-btn ${normStatus === 'ALL' ? 'active' : ''}" type="button" data-status="ALL">
           All Items (${totalCount})
         </button>
-        <button class="filter-btn ${statusFilter === STATUS.SAFE ? 'active' : ''}" data-status="${STATUS.SAFE}">
+        <button class="filter-btn ${normStatus === STATUS.SAFE ? 'active' : ''}" type="button" data-status="${STATUS.SAFE}">
           🟢 Safe (${safeCount})
         </button>
-        <button class="filter-btn filter-avoid ${statusFilter === STATUS.AVOID ? 'active' : ''}" data-status="${STATUS.AVOID}">
+        <button class="filter-btn filter-avoid ${normStatus === STATUS.AVOID ? 'active' : ''}" type="button" data-status="${STATUS.AVOID}">
           🔴 Avoid (${avoidCount})
         </button>
-        <button class="filter-btn filter-caution ${statusFilter === STATUS.CAUTION ? 'active' : ''}" data-status="${STATUS.CAUTION}">
+        <button class="filter-btn filter-caution ${normStatus === STATUS.CAUTION ? 'active' : ''}" type="button" data-status="${STATUS.CAUTION}">
           🟡 Caution (${cautionCount})
         </button>
 
@@ -98,6 +100,8 @@ export function renderCheckerTab(state) {
     </div>
   `;
 }
+
+export const renderSearchTab = renderCheckerTab;
 
 function renderIngredientCard(item, activeDiet = 'lid') {
   const info = getItemDietaryInfo(item, activeDiet);
@@ -183,10 +187,12 @@ function renderIngredientCard(item, activeDiet = 'lid') {
 
 function renderEmptyState(query) {
   return `
-    <div class="empty-state">
-      <span class="empty-state-icon">🔍</span>
-      <h3 class="empty-state-title">No exact matches for "${escapeHtml(query)}"</h3>
-      <p class="empty-state-desc">
+    <div class="empty-state text-center py-12 text-slate-400">
+      <span class="empty-state-icon text-4xl block mb-2">🔍</span>
+      <h3 class="empty-state-title font-bold text-lg mb-1">
+        ${query ? `No items match "${escapeHtml(query)}" under the selected protocol.` : 'No items match the selected protocol filter.'}
+      </h3>
+      <p class="empty-state-desc text-sm">
         Try checking different Pinoy food terms (e.g., <em>sayote</em>, <em>patis</em>, <em>isaw</em>, <em>munggo</em>), or switch to the <strong>Scanner tab</strong> to read full package labels!
       </p>
     </div>

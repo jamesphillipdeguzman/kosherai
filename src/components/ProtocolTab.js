@@ -1,10 +1,10 @@
 // Protocol & Clinical Guidelines Component
 // Dynamically renders clinical targets, guidelines, prohibited foods, permitted guidelines, and search filters across all 5 protocols.
 
-import { PROTOCOL_GUIDELINES, getProtocolGuidelines, normalizeDietProtocolKey } from '../data/protocolGuidelines.js';
+import { PROTOCOL_GUIDELINES, getProtocolGuidelines, normalizeDietProtocolKey, DEFAULT_LID_ADDITIVES } from '../data/protocolGuidelines.js';
 import { ADDITIVES_REFERENCE } from '../data/protocolRules.js';
 
-export { PROTOCOL_GUIDELINES, getProtocolGuidelines, normalizeDietProtocolKey };
+export { PROTOCOL_GUIDELINES, getProtocolGuidelines, normalizeDietProtocolKey, DEFAULT_LID_ADDITIVES };
 
 export function renderProtocolTab(state = {}) {
   const { 
@@ -33,12 +33,13 @@ export function renderProtocolTab(state = {}) {
     return name.includes(cleanQ) || desc.includes(cleanQ);
   });
 
-  // Filter additives reference based on search input
-  const filteredAdditives = (ADDITIVES_REFERENCE || []).filter(add => {
+  // Filter additives reference reactively based on active diet protocol and search input
+  const currentAdditives = protocol.additives || DEFAULT_LID_ADDITIVES;
+  const filteredAdditives = currentAdditives.filter(add => {
     if (!cleanQ) return true;
     return (add.code || '').toLowerCase().includes(cleanQ) || 
            (add.name || '').toLowerCase().includes(cleanQ) || 
-           (add.reason || '').toLowerCase().includes(cleanQ);
+           (add.reason || add.rationale || '').toLowerCase().includes(cleanQ);
   });
 
   const diningWarning = protocol.diningWarning || {
@@ -172,18 +173,24 @@ export function renderProtocolTab(state = {}) {
               </tr>
             </thead>
             <tbody>
-              ${filteredAdditives.map(add => `
+              ${filteredAdditives.length > 0 ? filteredAdditives.map(add => `
                 <tr>
                   <td><span class="code-badge">${escapeHtml(add.code)}</span></td>
                   <td style="font-weight: 600; color: var(--text-primary);">${escapeHtml(add.name)}</td>
                   <td>
-                    <span class="badge-status ${add.status === 'SAFE' ? 'badge-safe' : 'badge-avoid'}">
-                      ${add.status === 'SAFE' ? '🟢 SAFE' : '🔴 AVOID'}
+                    <span class="badge-status ${add.status === 'SAFE' ? 'badge-safe' : add.status === 'CAUTION' ? 'badge-caution' : 'badge-avoid'}">
+                      ${add.status === 'SAFE' ? '🟢 SAFE' : add.status === 'CAUTION' ? '🟡 CAUTION' : '🔴 AVOID'}
                     </span>
                   </td>
-                  <td>${escapeHtml(add.reason)}</td>
+                  <td style="font-size: 0.85rem; color: var(--text-secondary);">${escapeHtml(add.reason || add.rationale || '')}</td>
                 </tr>
-              `).join('')}
+              `).join('') : `
+                <tr>
+                  <td colspan="4" style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+                    No additives match "${escapeHtml(cheatSearch)}".
+                  </td>
+                </tr>
+              `}
             </tbody>
           </table>
         </div>

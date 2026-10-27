@@ -370,31 +370,55 @@ export function searchDatabase(query, filterStatus = 'ALL', filterCategory = 'AL
     const cleanQ = cleanToken(query);
 
     results = results.filter(item => {
-      const nameMatch = cleanToken(item.name).includes(cleanQ);
-      const aliasMatch = (item.aliases || []).some(a => cleanToken(a).includes(cleanQ));
-      const descMatch = cleanToken(item.description || '').includes(cleanQ);
+      const nameMatch = cleanToken(item.name || '').includes(cleanQ);
+      const aliasMatch = (item.aliases || []).some(a => cleanToken(a || '').includes(cleanQ));
+      const descMatch = cleanToken(item.description || item.generalDescription || '').includes(cleanQ);
       const catMatch = cleanToken(item.category || '').includes(cleanQ);
-      const noteMatch = cleanToken(item.clinicalNotes || '').includes(cleanQ);
-      const dietNote = cleanToken(item.dietaryStatus?.[activeDiet]?.note || '');
+      const noteMatch = cleanToken(item.clinicalNotes || item.notes || '').includes(cleanQ);
+      const dietNoteMatch = cleanToken(item.dietaryStatus?.[activeDiet]?.note || '').includes(cleanQ);
+      const swapMatch = (item.dietaryStatus?.[activeDiet]?.substitutes || item.substitutes || []).some(s => cleanToken(s || '').includes(cleanQ));
 
-      return nameMatch || aliasMatch || descMatch || catMatch || noteMatch || dietNote;
+      return nameMatch || aliasMatch || descMatch || catMatch || noteMatch || dietNoteMatch || swapMatch;
     });
 
-    // Sort: Exact name matches first, then alias matches, then description
+    // Sort: Exact name matches first, then prefix/word matches, then alias matches, then description
     results.sort((a, b) => {
-      const aExact = cleanToken(a.name) === cleanQ;
-      const bExact = cleanToken(b.name) === cleanQ;
+      const aName = cleanToken(a.name || '');
+      const bName = cleanToken(b.name || '');
+      const aExact = aName === cleanQ;
+      const bExact = bName === cleanQ;
       if (aExact && !bExact) return -1;
       if (!aExact && bExact) return 1;
+
+      const aStarts = aName.startsWith(cleanQ);
+      const bStarts = bName.startsWith(cleanQ);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+
+      const aWord = aName.includes(cleanQ);
+      const bWord = bName.includes(cleanQ);
+      if (aWord && !bWord) return -1;
+      if (!aWord && bWord) return 1;
+
+      const aAlias = (a.aliases || []).some(al => cleanToken(al || '').includes(cleanQ));
+      const bAlias = (b.aliases || []).some(al => cleanToken(al || '').includes(cleanQ));
+      if (aAlias && !bAlias) return -1;
+      if (!aAlias && bAlias) return 1;
+
       return 0;
     });
   }
 
-  if (filterStatus !== 'ALL') {
-    results = results.filter(item => getItemStatus(item, activeDiet) === filterStatus);
+  if (filterStatus && filterStatus.toUpperCase() !== 'ALL') {
+    const targetStatus = filterStatus.toUpperCase();
+    results = results.filter(item => {
+      const itemStatus = (getItemStatus(item, activeDiet) || item.status || '').toUpperCase();
+      return itemStatus === targetStatus;
+    });
   }
-  if (filterCategory !== 'ALL') {
-    results = results.filter(item => item.category === filterCategory);
+  if (filterCategory && filterCategory.toUpperCase() !== 'ALL') {
+    const targetCat = filterCategory.toLowerCase();
+    results = results.filter(item => (item.category || '').toLowerCase() === targetCat);
   }
 
   return results;

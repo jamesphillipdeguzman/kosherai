@@ -1,7 +1,7 @@
 // Item Detail Modal Component (Multi-Diet Clinical Guidance & Pinoy Smart Swaps)
 import { STATUS, getItemDietaryInfo, getCategoryEmoji, getCategoryIcon } from '../data/lidDatabase.js';
 import { getDietProfile } from '../data/dietProfiles.js';
-import generatedImages from '../data/generatedImages.json';
+import generatedImages from '../data/generatedImages.json' with { type: 'json' };
 
 export function renderItemDetailModal(item, activeDiet = 'lid') {
   const info = getItemDietaryInfo(item, activeDiet);
