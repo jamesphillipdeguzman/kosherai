@@ -35,12 +35,19 @@ import {
   syncPendingTrips,
   saveFoodWasteRecord,
   deleteFoodWasteRecord,
+  markFoodWasteSynced,
+  syncPendingFoodWaste,
   saveMealPlan,
   deleteMealPlan,
   exportAllCourseCsvs,
   downloadCsvFile,
   PROJECT_CONFIG
 } from './services/courseProjectStorage.js';
+
+import {
+  saveFoodWasteToIndexedDB,
+  markFoodWasteAsSyncedInIndexedDB
+} from './services/indexedDbStorage.js';
 
 import { LID_DATABASE } from './data/lidDatabase.js';
 import { getActiveDiet, setActiveDiet } from './data/dietProfiles.js';
@@ -1322,7 +1329,8 @@ Cracked black pepper`;
       manualSyncTripsBtn.disabled = true;
       manualSyncTripsBtn.innerHTML = '🔄 Syncing...';
       try {
-        const res = await syncPendingTrips();
+        await syncPendingTrips();
+        await syncPendingFoodWaste();
         render();
       } catch (err) {
         console.warn('Manual sync failed:', err);
@@ -1360,7 +1368,7 @@ Cracked black pepper`;
   // Food Waste Form Submit
   const foodWasteForm = document.querySelector('#food-waste-form');
   if (foodWasteForm) {
-    foodWasteForm.addEventListener('submit', (e) => {
+    foodWasteForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const itemName = document.querySelector('#waste-item-name')?.value || 'Food Waste';
       const date = document.querySelector('#waste-date')?.value || new Date().toISOString().split('T')[0];
@@ -1368,18 +1376,45 @@ Cracked black pepper`;
       const reason = document.querySelector('#waste-reason')?.value || 'Spoiled / Molded';
       const costEst = parseFloat(document.querySelector('#waste-cost-est')?.value || 0);
 
-      saveFoodWasteRecord({
+      // 1. Save locally to localStorage (synced: false)
+      const wasteEntry = saveFoodWasteRecord({
         itemName,
         date,
         measuredWeightG: weightG,
         isEstimated: false, // Confirmed weighed on digital scale
         estimatedCost: costEst,
         reason,
-        notes: 'Net edible food waste (packaging excluded)'
+        notes: 'Net edible food waste (packaging excluded)',
+        synced: false
       });
+
+      // 2. Persist to IndexedDB (offline-first sync)
+      await saveFoodWasteToIndexedDB(wasteEntry, false);
 
       state.wasteModalOpen = false;
       render();
+
+      // 3. Immediately issue POST request to /api/food-waste
+      try {
+        const res = await fetch('/api/food-waste', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(wasteEntry)
+        });
+
+        if (res && res.ok) {
+          const payload = await res.json().catch(() => null);
+          if (payload && (payload.success || payload.synced)) {
+            // Update local record's synced flag to true upon a successful response
+            markFoodWasteSynced(wasteEntry.id, true);
+            await markFoodWasteAsSyncedInIndexedDB(wasteEntry.id);
+            render();
+            console.info('[Sync] Food waste entry synced to Neon PostgreSQL:', wasteEntry.id);
+          }
+        }
+      } catch (netErr) {
+        console.warn('[Sync] Food waste remote POST failed (persisted offline):', netErr);
+      }
     });
   }
 
@@ -1389,6 +1424,7 @@ Cracked black pepper`;
       const id = e.currentTarget.getAttribute('data-delete-waste');
       if (confirm('Delete this food waste record?')) {
         deleteFoodWasteRecord(id);
+        fetch(`/api/food-waste?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
         render();
       }
     });
@@ -1658,6 +1694,7 @@ window.addEventListener('online', () => {
   render();
   refreshScanHistory();
   syncPendingTrips().then(() => render()).catch(() => {});
+  syncPendingFoodWaste().then(() => render()).catch(() => {});
 });
 window.addEventListener('offline', () => {
   state.isOnline = false;
@@ -1665,6 +1702,9 @@ window.addEventListener('offline', () => {
 });
 
 window.addEventListener('kosherai-trips-synced', () => {
+  render();
+});
+window.addEventListener('kosherai-food-waste-synced', () => {
   render();
 });
 
@@ -1694,4 +1734,5 @@ if ('serviceWorker' in navigator) {
 render();
 refreshScanHistory();
 syncPendingTrips().then(() => render()).catch(() => {});
+syncPendingFoodWaste().then(() => render()).catch(() => {});
 

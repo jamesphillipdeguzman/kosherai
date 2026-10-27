@@ -2,6 +2,7 @@
 import assert from 'node:assert';
 import tripsApiHandler, { ensureTripsTables, isValidPostgresUrl } from '../api/trips.js';
 import scansApiHandler from '../api/scans.js';
+import foodWasteApiHandler from '../api/food-waste.js';
 
 console.log('🧪 Starting Neon Trips & Client Sync Test Suite...\n');
 
@@ -116,7 +117,30 @@ const { req: scanReq, res: scanRes, getData: getScanData } = createMockReqRes('P
 await scansApiHandler(scanReq, scanRes);
 const scanResult = getScanData();
 assert.strictEqual(scanResult.synced, false);
+// ----------------------------------------------------
+// Test 5: POST /api/food-waste handles food waste logs
+// ----------------------------------------------------
+console.log('\nTest 5: POST /api/food-waste handles food waste sync');
+
+const mockWastePayload = {
+  id: 'waste_test_001',
+  date: '2026-11-02',
+  projectWeek: 1,
+  itemName: 'Cooked Rice Leftovers',
+  measuredWeightG: 145,
+  isEstimated: false,
+  estimatedCost: 18.50,
+  reason: 'Spoiled / Molded',
+  notes: 'Net edible food waste'
+};
+
+delete process.env.DATABASE_URL;
+const { req: wasteReq, res: wasteRes, getData: getWasteData } = createMockReqRes('POST', mockWastePayload, '/api/food-waste');
+await foodWasteApiHandler(wasteReq, wasteRes);
+const wasteResult = getWasteData();
+assert.strictEqual(wasteResult.synced, false, 'Without DATABASE_URL, synced must be false for offline mode');
+assert.strictEqual(wasteResult.id, 'waste_test_001', 'Must echo or return the waste id');
 process.env.DATABASE_URL = origDbUrl;
-console.log('  ✅ api/scans handles trip payload and offline delegation.');
+console.log('  ✅ api/food-waste handles waste payload and offline delegation.');
 
 console.log('\n🎉 ALL NEON TRIPS & SYNC PIPELINE TESTS PASSED SUCCESSFULLY!');

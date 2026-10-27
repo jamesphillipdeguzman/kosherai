@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import scansApiHandler from './api/scans.js';
 import receiptScanHandler from './api/receipt-scan.js';
 import tripsApiHandler from './api/trips.js';
+import foodWasteApiHandler from './api/food-waste.js';
 
 export default defineConfig({
   server: {
@@ -39,6 +40,24 @@ export default defineConfig({
               await tripsApiHandler(req, res);
             } catch (err) {
               console.error('[Vite Trips API Error]:', err);
+              if (!res.headersSent) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  error: 'INTERNAL_SERVER_ERROR',
+                  message: err.message
+                }));
+              }
+            }
+            return;
+          }
+
+          // Intercept /api/food-waste route
+          if (url.pathname === '/api/food-waste') {
+            try {
+              await foodWasteApiHandler(req, res);
+            } catch (err) {
+              console.error('[Vite Food Waste API Error]:', err);
               if (!res.headersSent) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');

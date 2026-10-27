@@ -296,6 +296,54 @@ export async function getFoodWasteFromIndexedDB() {
   });
 }
 
+/**
+ * Retrieves all food waste records where synced === false for auto-retry
+ */
+export async function getUnsyncedFoodWasteFromIndexedDB() {
+  const db = await openIndexedDB();
+  if (!db) return [];
+
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STORES.FOOD_WASTE, 'readonly');
+      const store = tx.objectStore(STORES.FOOD_WASTE);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const all = req.result || [];
+        resolve(all.filter(w => w.synced === false));
+      };
+      req.onerror = () => resolve([]);
+    } catch {
+      resolve([]);
+    }
+  });
+}
+
+/**
+ * Marks a food waste record as synced: true in IndexedDB
+ */
+export async function markFoodWasteAsSyncedInIndexedDB(id) {
+  const db = await openIndexedDB();
+  if (!db) return false;
+
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STORES.FOOD_WASTE, 'readwrite');
+      const store = tx.objectStore(STORES.FOOD_WASTE);
+      const req = store.get(id);
+      req.onsuccess = () => {
+        if (req.result) {
+          store.put({ ...req.result, synced: true });
+        }
+      };
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
 export default {
   openIndexedDB,
   saveTripToIndexedDB,
@@ -306,5 +354,7 @@ export default {
   deleteTripFromIndexedDB,
   saveFoodWasteToIndexedDB,
   getFoodWasteFromIndexedDB,
+  getUnsyncedFoodWasteFromIndexedDB,
+  markFoodWasteAsSyncedInIndexedDB,
   STORES
 };

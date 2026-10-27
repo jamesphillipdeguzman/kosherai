@@ -630,7 +630,18 @@ function renderFoodWasteTab(state) {
               ${records.map(r => `
                 <tr>
                   <td>
-                    <div style="font-weight: 700;">${escapeHtml(r.itemName)}</div>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                      <span style="font-weight: 700;">${escapeHtml(r.itemName)}</span>
+                      ${r.synced ? `
+                        <span class="trip-sync-badge synced" title="Synced with Neon PostgreSQL cloud database">
+                          ☁️ Neon
+                        </span>
+                      ` : `
+                        <span class="trip-sync-badge offline" title="Saved locally in IndexedDB; will auto-sync to Neon when online">
+                          ⚠️ Local
+                        </span>
+                      `}
+                    </div>
                     ${r.notes ? `<div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(r.notes)}</div>` : ''}
                   </td>
                   <td style="font-family: var(--font-mono); font-size: 0.8rem;">

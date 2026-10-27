@@ -297,6 +297,45 @@ export default async function handler(req, res) {
     // ----------------------------------------------------
     if (method === 'POST') {
       const body = await parseRequestBody(req);
+
+      // Check if this is a food waste sync action delegated to /api/trips
+      if (body.type === 'food_waste' || body.action === 'food_waste' || body.foodWaste) {
+        const wasteData = body.foodWaste || body.waste || body;
+        const wasteId = wasteData.id || `waste_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const wDate = wasteData.date || new Date().toISOString().split('T')[0];
+        const wWeek = Number(wasteData.projectWeek || wasteData.project_week || 1);
+        const wItem = wasteData.itemName || wasteData.item_name || 'Food Waste';
+        const wWeight = Number(wasteData.measuredWeightG || wasteData.measured_weight_g || 0);
+        const wEst = Boolean(wasteData.isEstimated ?? wasteData.is_estimated);
+        const wCost = Number(wasteData.estimatedCost || wasteData.estimated_cost || 0);
+        const wReason = wasteData.reason || 'Spoiled / Molded';
+        const wNotes = wasteData.notes || '';
+
+        await sql`
+          INSERT INTO food_waste_logs (
+            id, date, project_week, item_name, measured_weight_g,
+            is_estimated, estimated_cost, reason, notes, created_at
+          ) VALUES (
+            ${wasteId}, ${wDate}, ${wWeek}, ${wItem}, ${wWeight},
+            ${wEst}, ${wCost}, ${wReason}, ${wNotes}, NOW()
+          )
+          ON CONFLICT (id) DO UPDATE SET
+            item_name = EXCLUDED.item_name,
+            measured_weight_g = EXCLUDED.measured_weight_g,
+            is_estimated = EXCLUDED.is_estimated,
+            estimated_cost = EXCLUDED.estimated_cost,
+            reason = EXCLUDED.reason,
+            notes = EXCLUDED.notes;
+        `;
+
+        return sendJson(res, 200, {
+          success: true,
+          synced: true,
+          id: wasteId,
+          message: `Food waste entry ${wasteId} saved to Neon PostgreSQL.`
+        });
+      }
+
       const tripData = body.trip || body;
       const rawItems = Array.isArray(body.items) ? body.items : (Array.isArray(tripData.items) ? tripData.items : []);
 

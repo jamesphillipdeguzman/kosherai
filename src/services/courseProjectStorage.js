@@ -6,7 +6,11 @@ import {
   getUnsyncedTripsFromIndexedDB,
   markTripAsSyncedInIndexedDB,
   deleteTripFromIndexedDB,
-  getGroceryItemsFromIndexedDB
+  getGroceryItemsFromIndexedDB,
+  saveFoodWasteToIndexedDB,
+  getFoodWasteFromIndexedDB,
+  getUnsyncedFoodWasteFromIndexedDB,
+  markFoodWasteAsSyncedInIndexedDB
 } from './indexedDbStorage.js';
 
 export const PROJECT_CONFIG = {
@@ -379,6 +383,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
     console.info('[Network] Back online: initiating automatic background sync with Neon...');
     syncPendingTrips().catch(() => {});
+    syncPendingFoodWaste().catch(() => {});
   });
 }
 
@@ -495,7 +500,8 @@ export function saveFoodWasteRecord(wasteData) {
       estimatedCost: Number(wasteData.estimatedCost || 0), // In ₱
       reason: wasteData.reason || 'Spoiled / Molded', // 'Spoiled', 'Expired', 'Cooked Excess', 'Trimmings', 'LID Mismatch'
       notes: wasteData.notes || '',
-      createdAt: wasteData.createdAt || new Date().toISOString()
+      createdAt: wasteData.createdAt || new Date().toISOString(),
+      synced: Boolean(wasteData.synced)
     };
 
     const updated = [record, ...records.filter(r => r.id !== id)];
@@ -504,6 +510,78 @@ export function saveFoodWasteRecord(wasteData) {
   } catch (e) {
     console.error('Failed to save food waste record:', e);
     throw e;
+  }
+}
+
+/**
+ * Updates the synced flag for a food waste record in localStorage
+ */
+export function markFoodWasteSynced(id, isSynced = true) {
+  try {
+    const records = getFoodWasteRecords();
+    const updated = records.map(r => r.id === id ? { ...r, synced: Boolean(isSynced) } : r);
+    localStorage.setItem(STORAGE_KEYS.FOOD_WASTE, JSON.stringify(updated));
+    return true;
+  } catch (e) {
+    console.warn('Failed to mark food waste synced in localStorage:', e);
+    return false;
+  }
+}
+
+/**
+ * Auto-retries synchronization of pending offline food waste logs to Neon PostgreSQL
+ */
+export async function syncPendingFoodWaste() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return { syncedCount: 0, pendingCount: 0 };
+  if (typeof fetch !== 'function') return { syncedCount: 0, pendingCount: 0 };
+
+  try {
+    const unsyncedFromDb = await getUnsyncedFoodWasteFromIndexedDB();
+    const unsyncedFromLocal = getFoodWasteRecords().filter(r => r.synced === false);
+
+    // Merge pending waste records by ID
+    const pendingMap = new Map();
+    unsyncedFromDb.forEach(w => pendingMap.set(w.id, w));
+    unsyncedFromLocal.forEach(w => {
+      if (!pendingMap.has(w.id)) pendingMap.set(w.id, w);
+    });
+
+    const pendingLogs = Array.from(pendingMap.values());
+    if (pendingLogs.length === 0) return { syncedCount: 0, pendingCount: 0 };
+
+    let syncedCount = 0;
+    for (const wasteEntry of pendingLogs) {
+      try {
+        const res = await fetch('/api/food-waste', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(wasteEntry)
+        });
+
+        if (res && res.ok) {
+          const payload = await res.json().catch(() => null);
+          if (payload && (payload.success || payload.synced)) {
+            await markFoodWasteAsSyncedInIndexedDB(wasteEntry.id);
+            markFoodWasteSynced(wasteEntry.id, true);
+            syncedCount++;
+          }
+        }
+      } catch (postErr) {
+        console.warn(`[Sync] Failed to sync pending food waste ${wasteEntry.id} to Neon:`, postErr.message);
+      }
+    }
+
+    if (syncedCount > 0) {
+      console.info(`[Sync] Auto-retry synced ${syncedCount} offline food waste logs to Neon.`);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('kosherai-food-waste-synced', { detail: { syncedCount } }));
+      }
+    }
+
+    return { syncedCount, pendingCount: pendingLogs.length - syncedCount };
+  } catch (err) {
+    console.warn('[Sync] Error during syncPendingFoodWaste:', err);
+    return { syncedCount: 0, pendingCount: 0 };
   }
 }
 
