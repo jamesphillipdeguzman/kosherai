@@ -3,6 +3,7 @@ import { CHECKLIST_BY_DIET, PRE_COOKING_CHECKLIST } from '../data/protocolRules.
 import { analyzeRecipe } from '../services/ruleEngine.js';
 import { DIET_RECIPES } from '../data/dietRecipes.js';
 import { getCategoryIcon } from '../data/lidDatabase.js';
+import { getRecipeImageUrl } from '../utils/cloudinary.js';
 import lidRecipes from '../data/lidRecipes.json' with { type: 'json' };
 import generatedImages from '../data/generatedImages.json' with { type: 'json' };
 
@@ -203,7 +204,9 @@ function renderRecipeCard(recipe) {
     'Serve immediately with protocol-compliant sides.'
   ];
   const clinicalNote = recipe.clinicalRationale || recipe.clinicalNote || 'Specifically formulated to comply with the active dietary guidelines.';
-  const dishImgUrl = recipe.imageUrl || generatedImages?.[recipe.id] || null;
+  const rawImage = recipe.image || recipe.imageUrl || generatedImages?.[recipe.id] || null;
+  const dishImgUrl = getRecipeImageUrl(rawImage);
+  const fallbackUnsplash = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80';
 
   return `
     <article class="recipe-card" id="recipe-${recipe.id}">
@@ -215,7 +218,7 @@ function renderRecipeCard(recipe) {
             loading="lazy"
             decoding="async"
             class="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-            onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='inline-block';"
+            onerror="if (!this.dataset.fallbackApplied) { this.dataset.fallbackApplied = 'true'; this.src='${fallbackUnsplash}'; } else { this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='inline-block'; }"
           />
           <span class="text-4xl filter drop-shadow-sm pointer-events-none" aria-hidden="true" style="display: none;">
             ${getCategoryIcon(category, title)}
