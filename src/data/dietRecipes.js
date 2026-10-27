@@ -14,7 +14,7 @@ export const DIET_RECIPES = {
         prepTime: "10 mins",
         cookTime: "25 mins",
         tag: "LID Compliant • <5 mcg Iodine",
-        imageUrl: "https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "Uses pure non-iodized kosher salt and skinless fresh chicken. Avoid store-bought chicken broth cubes.",
         instructions: [
           "Sauté ginger slices and crushed garlic in coconut oil until aromatic.",
@@ -38,7 +38,7 @@ export const DIET_RECIPES = {
         prepTime: "15 mins",
         cookTime: "20 mins",
         tag: "LID Compliant • No Soy Sauce",
-        imageUrl: "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "Traditional toyo is replaced with fresh calamansi reduction and caramelized onions for umami without fermented soy iodine.",
         instructions: [
           "Marinate lean beef sirloin in pure calamansi juice, cracked black pepper, and kosher salt.",
@@ -61,7 +61,7 @@ export const DIET_RECIPES = {
         prepTime: "5 mins",
         cookTime: "15 mins",
         tag: "LID Compliant • Plant Fuel",
-        imageUrl: "https://images.unsplash.com/photo-1590165482129-1b8b27698780?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "Yellow/orange sweet potatoes provide unfortified complex carbohydrates and vitamin A safely on LID.",
         instructions: [
           "Wash and peel yellow kamote, cutting into bite-sized wedges.",
@@ -89,7 +89,7 @@ export const DIET_RECIPES = {
         prepTime: "15 mins",
         cookTime: "12 mins",
         tag: "Low Glycemic • Charantin-Rich",
-        imageUrl: "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "Bitter melon contains charantin and polypeptide-p, clinical phytonutrients that help lower blood sugar levels naturally.",
         instructions: [
           "Slice ampalaya thinly, massage with light salt, and rinse with cold water to temper bitterness.",
@@ -112,7 +112,7 @@ export const DIET_RECIPES = {
         prepTime: "10 mins",
         cookTime: "20 mins",
         tag: "Zero Sugar Souring • High Fiber",
-        imageUrl: "https://images.unsplash.com/photo-1534939561126-855b8675edd7?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "Commercial powdered sinigang mixes contain hidden maltodextrin and MSG; fresh calamansi provides clean, zero-sugar acidity.",
         instructions: [
           "Boil fresh water with diced tomatoes and sliced white onions.",
@@ -135,7 +135,7 @@ export const DIET_RECIPES = {
         prepTime: "8 mins",
         cookTime: "3 mins",
         tag: "Antioxidant & Fiber Dense",
-        imageUrl: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "Sweet potato leaves have a very low glycemic load and are rich in polyphenols that improve insulin resistance.",
         instructions: [
           "Blanch freshly washed talbos ng kamote in rolling boiled water for 90 seconds, then plunge into ice water.",
@@ -163,7 +163,7 @@ export const DIET_RECIPES = {
         prepTime: "10 mins",
         cookTime: "25 mins",
         tag: "Low Purine • Ginger Broth",
-        imageUrl: "https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "Chicken breast has the lowest purine density among meats. Boiling with abundant ginger aids anti-inflammatory response.",
         instructions: [
           "Simmer lean skinless chicken breast with crushed ginger and peppercorns.",
@@ -185,7 +185,7 @@ export const DIET_RECIPES = {
         prepTime: "10 mins",
         cookTime: "15 mins",
         tag: "Hydrating • Minimal Purines",
-        imageUrl: "https://images.unsplash.com/photo-1518843875459-f738682238a6?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "Bottle gourd (upo) is 96% water and alkalizing to kidneys, promoting urinary excretion of uric acid.",
         instructions: [
           "Sauté minced garlic and onions in vegetable oil until golden.",
@@ -207,7 +207,7 @@ export const DIET_RECIPES = {
         prepTime: "5 mins",
         cookTime: "0 mins",
         tag: "Alkalizing • Low Purine",
-        imageUrl: "https://images.unsplash.com/photo-1604977042946-1eecc30f269e?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "Cucumbers are virtually purine-free and help dissolve crystallized uric acid in the bloodstream.",
         instructions: [
           "Thinly slice chilled native cucumbers.",
@@ -235,7 +235,7 @@ export const DIET_RECIPES = {
         prepTime: "15 mins",
         cookTime: "45 mins",
         tag: "No Patis • Fresh Broth",
-        imageUrl: "https://images.unsplash.com/photo-1541832676-9b763b0239ab?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "High potassium from cabbage and Baguio beans actively counterbalances systemic sodium to normalize blood pressure.",
         instructions: [
           "Simmer lean beef shank in water for 5 minutes, then discard the first water to remove excess sodium and impurities.",
@@ -257,7 +257,7 @@ export const DIET_RECIPES = {
         prepTime: "15 mins",
         cookTime: "15 mins",
         tag: "Soy-Free Umami",
-        imageUrl: "https://images.unsplash.com/photo-1432139555190-58524dae6a55?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "Utilizes calamansi citrus acids and natural onion sweetness to produce a savory glaze without any added sodium.",
         instructions: [
           "Slice lean pork loin into thin medallions and rub with cracked black pepper.",
@@ -278,7 +278,7 @@ export const DIET_RECIPES = {
         prepTime: "5 mins",
         cookTime: "0 mins",
         tag: "Crunchy • Zero Added Sodium",
-        imageUrl: "https://images.unsplash.com/photo-1563861826100-9cb868fdbe1c?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "Naturally refreshing, high-potassium jicama offers satisfying crunch without bagoong or salt dips.",
         instructions: [
           "Peel fresh jicama (singkamas) and cut into crisp matchstick fries.",
@@ -305,7 +305,7 @@ export const DIET_RECIPES = {
         prepTime: "10 mins",
         cookTime: "35 mins",
         tag: "High Fat • <3g Net Carbs",
-        imageUrl: "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "Rich pork belly provides healthy fats for ketone production; zero brown sugar or starch thickeners are used.",
         instructions: [
           "Brown pork belly cubes in a hot heavy-bottomed pot.",
@@ -328,7 +328,7 @@ export const DIET_RECIPES = {
         prepTime: "10 mins",
         cookTime: "20 mins",
         tag: "Pure Coconut Milk • Healthy Fats",
-        imageUrl: "https://images.unsplash.com/photo-1543339308-43e59d6b73a6?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "Coconut milk supplies Medium Chain Triglycerides (MCTs) that rapidly convert to fuel in ketosis.",
         instructions: [
           "Simmer pork shoulder slices with ginger and minced garlic in half cup of water until tender.",
@@ -350,7 +350,7 @@ export const DIET_RECIPES = {
         prepTime: "0 mins",
         cookTime: "0 mins",
         tag: "Zero Carb • Ketogenic",
-        imageUrl: "https://images.unsplash.com/photo-1541592106381-b31e9677c0e5?auto=format&fit=crop&w=600&q=80",
+        imageUrl: null,
         clinicalNote: "Authentic Pinoy chicharon without flour/starch breading is a textbook zero-carb high-fat snack.",
         instructions: [
           "Select clean, authentic pork rinds fried in natural pork lard.",

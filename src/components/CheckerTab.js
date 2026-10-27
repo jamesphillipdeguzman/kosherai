@@ -1,5 +1,5 @@
 // Quick Search & Multi-Diet Checker Tab Component (Offline First)
-import { LID_CATEGORIES, STATUS, getItemDietaryInfo, getItemStatus, getCategoryEmoji } from '../data/lidDatabase.js';
+import { LID_CATEGORIES, STATUS, getItemDietaryInfo, getItemStatus, getCategoryEmoji, getCategoryIcon } from '../data/lidDatabase.js';
 import { searchDatabase } from '../services/ruleEngine.js';
 import generatedImages from '../data/generatedImages.json';
 
@@ -128,7 +128,7 @@ function renderIngredientCard(item, activeDiet = 'lid') {
   return `
     <div class="ingredient-card group ${statusClass}" data-item-id="${item.id}" role="button" tabindex="0">
       <div class="card-header flex items-start gap-3">
-        <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-2xl border border-slate-200/60 dark:border-slate-700/60 flex-shrink-0 card-thumbnail-wrap overflow-hidden relative">
+        <div class="relative flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 flex-shrink-0 select-none overflow-hidden w-14 h-14 text-2xl card-thumbnail-wrap">
           ${imgUrl ? `
             <img
               src="${escapeHtml(imgUrl)}"
@@ -136,15 +136,15 @@ function renderIngredientCard(item, activeDiet = 'lid') {
               loading="lazy"
               decoding="async"
               class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-              onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';"
+              onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='inline-block';"
             />
-            <div class="category-icon-fallback w-full h-full flex items-center justify-center text-2xl select-none" style="display: none;">
-              ${escapeHtml(item.icon || getCategoryEmoji(item.category, item.name))}
-            </div>
+            <span class="text-2xl filter drop-shadow-sm pointer-events-none" aria-hidden="true" style="display: none;">
+              ${escapeHtml(item.icon || getCategoryIcon(item.category, item.name))}
+            </span>
           ` : `
-            <div class="category-icon-fallback w-full h-full flex items-center justify-center text-2xl select-none">
-              ${escapeHtml(item.icon || getCategoryEmoji(item.category, item.name))}
-            </div>
+            <span class="text-2xl filter drop-shadow-sm pointer-events-none" aria-hidden="true">
+              ${escapeHtml(item.icon || getCategoryIcon(item.category, item.name))}
+            </span>
           `}
         </div>
         <div class="card-title-group flex-1 min-w-0">

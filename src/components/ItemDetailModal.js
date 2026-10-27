@@ -1,5 +1,5 @@
 // Item Detail Modal Component (Multi-Diet Clinical Guidance & Pinoy Smart Swaps)
-import { STATUS, getItemDietaryInfo, getCategoryEmoji } from '../data/lidDatabase.js';
+import { STATUS, getItemDietaryInfo, getCategoryEmoji, getCategoryIcon } from '../data/lidDatabase.js';
 import { getDietProfile } from '../data/dietProfiles.js';
 import generatedImages from '../data/generatedImages.json';
 
@@ -32,7 +32,7 @@ export function renderItemDetailModal(item, activeDiet = 'lid') {
           <button class="btn-icon" id="item-modal-close-btn" aria-label="Close">✕</button>
         </div>
 
-        <div style="width: 100%; height: 160px; border-radius: var(--radius-md); overflow: hidden; margin-bottom: 16px; border: 1px solid var(--border-color); background: var(--bg-card-subtle); display: flex; align-items: center; justify-content: center; position: relative;">
+        <div class="relative w-full h-36 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-center select-none mb-4">
           ${imgUrl ? `
             <img
               src="${escapeHtml(imgUrl)}"
@@ -40,15 +40,15 @@ export function renderItemDetailModal(item, activeDiet = 'lid') {
               loading="lazy"
               decoding="async"
               style="width: 100%; height: 100%; object-fit: cover;"
-              onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';"
+              onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='inline-block';"
             />
-            <div class="modal-icon-fallback" style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 3.5rem; background: var(--bg-card-subtle);">
-              ${escapeHtml(item.icon || getCategoryEmoji(item.category, item.name))}
-            </div>
+            <span class="text-4xl filter drop-shadow-sm pointer-events-none" aria-hidden="true" style="display: none;">
+              ${escapeHtml(item.icon || getCategoryIcon(item.category, item.name))}
+            </span>
           ` : `
-            <div class="modal-icon-fallback" style="display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 3.5rem; background: var(--bg-card-subtle);">
-              ${escapeHtml(item.icon || getCategoryEmoji(item.category, item.name))}
-            </div>
+            <span class="text-4xl filter drop-shadow-sm pointer-events-none" aria-hidden="true">
+              ${escapeHtml(item.icon || getCategoryIcon(item.category, item.name))}
+            </span>
           `}
         </div>
 

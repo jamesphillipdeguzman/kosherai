@@ -46,7 +46,8 @@ function resolveImageAndIcon(item, generatedMap) {
 }
 
 // Case A: Item with explicit imageUrl
-const resA = resolveImageAndIcon(sampleIngredient, mappingContent);
+const itemWithImage = { ...sampleIngredient, imageUrl: 'https://res.cloudinary.com/demo/banana-ketchup.webp' };
+const resA = resolveImageAndIcon(itemWithImage, mappingContent);
 assert.ok(resA.imageUrl, 'Item with explicit imageUrl should resolve imageUrl');
 assert.strictEqual(resA.fallbackIcon, '🍅', 'Banana ketchup should fallback to tomato/condiment icon');
 

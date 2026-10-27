@@ -75,55 +75,41 @@ assert.ok(lidNote.includes('Severe contraindication for RAI'), 'LID note for iod
 
 console.log('  ✅ Ingredient card reactive explanations strictly verified.\n');
 
-// 5. Verify Optimized Image URLs on FOOD_DATABASE and DIET_RECIPES
-console.log('Test 5: Verify optimized imageUrl properties on FOOD_DATABASE and DIET_RECIPES');
+// 5. Verify All External Unsplash URLs Are Stripped from FOOD_DATABASE and DIET_RECIPES
+console.log('Test 5: Verify external Unsplash URLs are stripped from FOOD_DATABASE and DIET_RECIPES');
 assert.ok(FOOD_DATABASE, 'FOOD_DATABASE must be exported as alias for LID_DATABASE');
 
-// Check that FOOD_DATABASE items have imageUrl with sizing parameters
+// Check that no Unsplash URLs remain in FOOD_DATABASE
 for (const item of FOOD_DATABASE) {
-  assert.ok(item.imageUrl, `Food item ${item.id} must have an imageUrl`);
-  assert.ok(item.imageUrl.includes('auto=format'), `Food item ${item.id} imageUrl must include auto=format parameter`);
-  assert.ok(item.imageUrl.includes('w='), `Food item ${item.id} imageUrl must include responsive width parameter`);
+  assert.strictEqual(item.imageUrl, null, `Food item ${item.id} imageUrl should be null or free of external URLs`);
 }
-console.log(`  ✅ All ${FOOD_DATABASE.length} food items have verified responsive imageUrl properties.`);
+console.log(`  ✅ Verified: All ${FOOD_DATABASE.length} food items have 0 external Unsplash URLs.`);
 
-// Check that all meals in DIET_RECIPES have imageUrl with sizing parameters
+// Check that no Unsplash URLs remain in DIET_RECIPES
 for (const [diet, dietData] of Object.entries(DIET_RECIPES)) {
   for (const meal of dietData.meals) {
-    assert.ok(meal.imageUrl, `Meal ${meal.id} under ${diet} must have an imageUrl`);
-    assert.ok(meal.imageUrl.includes('auto=format'), `Meal ${meal.id} imageUrl must include auto=format parameter`);
-    assert.ok(meal.imageUrl.includes('w='), `Meal ${meal.id} imageUrl must include responsive width parameter`);
+    assert.strictEqual(meal.imageUrl, null, `Meal ${meal.id} under ${diet} imageUrl should be null or free of external URLs`);
   }
 }
-console.log('  ✅ All DIET_RECIPES meals have verified responsive imageUrl properties.\n');
+console.log('  ✅ Verified: All DIET_RECIPES meals have 0 external Unsplash URLs.\n');
 
-// 6. Verify Accurate Philippine Pantry Image IDs and Category Icon Badges
-console.log('Test 6: Verify Accurate Philippine Pantry Image IDs and Category Icon Badges');
+// 6. Verify Standardized Category Culinary Icons & MediaPlaceholder Mapping
+console.log('Test 6: Verify Standardized Category Culinary Icons & MediaPlaceholder Mapping');
+import { getCategoryIcon } from '../src/data/lidDatabase.js';
 
-const expectedPantryImages = {
-  'banana-ketchup': 'photo-1582515073490-39981397c445',
-  'vinegars': 'photo-1590736969955-71cc94801759',
-  'oyster-sauce': 'photo-1546069901-ba9599a7e63c',
-  'fresh-chilies': 'photo-1588252303782-cb80119abd6d',
-  'pure-oils': 'photo-1474979266404-7eaacbcd87c5',
-  'organ-meats-isaw-atay': 'photo-1544025162-d76694265947'
-};
+// Verify exact culinary categories requested
+assert.strictEqual(getCategoryIcon('Salts & Seasonings', 'Pure Kosher Salt'), '🧂');
+assert.strictEqual(getCategoryIcon('Condiments, Vinegars, Sauces', 'Sukang Paombong'), '🍶');
+assert.strictEqual(getCategoryIcon('Condiments, Vinegars, Sauces', 'Toyomansi'), '🍶');
+assert.strictEqual(getCategoryIcon('Produce, Herbs, Chilies', 'Siling Labuyo'), '🌶️');
+assert.strictEqual(getCategoryIcon('Produce, Herbs, Chilies', 'Sayote Greens'), '🥬');
+assert.strictEqual(getCategoryIcon('Seafood & Pastes', 'Fresh Bangus'), '🐟');
+assert.strictEqual(getCategoryIcon('Seafood & Pastes', 'Tahong Oysters'), '🦪');
+assert.strictEqual(getCategoryIcon('Meats & Poultry', 'Skinless Chicken Breast'), '🍗');
+assert.strictEqual(getCategoryIcon('Meats & Poultry', 'Pork Belly Liempo'), '🥩');
+assert.strictEqual(getCategoryIcon('Soups & Stews', 'LID Chicken Tinola Broth'), '🍲');
+assert.strictEqual(getCategoryIcon('Mains', 'Homemade Bistek Tagalog'), '🍛');
+assert.strictEqual(getCategoryIcon('Snacks & Sides', 'Steamed Kamote with Coconut Oil'), '🍠');
+console.log('  ✅ All standardized culinary category icons verified successfully.\n');
 
-for (const [id, expectedId] of Object.entries(expectedPantryImages)) {
-  const item = FOOD_DATABASE.find(f => f.id === id);
-  assert.ok(item, `Item ${id} must exist in FOOD_DATABASE`);
-  assert.ok(item.imageUrl.includes(expectedId), `Item ${id} must have verified accurate Unsplash ID ${expectedId}`);
-  assert.ok(item.icon, `Item ${id} must have an icon badge`);
-}
-
-// Verify getCategoryEmoji fallback
-assert.strictEqual(getCategoryEmoji(LID_CATEGORIES.CONDIMENTS, 'sukang paombong'), '🍶');
-assert.strictEqual(getCategoryEmoji(LID_CATEGORIES.CONDIMENTS, 'siling labuyo'), '🌶️');
-assert.strictEqual(getCategoryEmoji(LID_CATEGORIES.CONDIMENTS, 'kosher salt'), '🧂');
-assert.strictEqual(getCategoryEmoji(LID_CATEGORIES.PROTEINS, 'pork belly'), '🥩');
-assert.strictEqual(getCategoryEmoji(LID_CATEGORIES.PROTEINS, 'manok'), '🍗');
-assert.strictEqual(getCategoryEmoji(LID_CATEGORIES.PROTEINS, 'isaw'), '🍢');
-assert.strictEqual(getCategoryEmoji(LID_CATEGORIES.PROTEINS, 'tahong'), '🦪');
-console.log('  ✅ Verified accurate pantry images and category icon badge fallbacks.\n');
-
-console.log('🎉 ALL MULTI-DIET REFACTOR, ACCURATE IMAGES & ICON BADGE TESTS PASSED SUCCESSFULLY!');
+console.log('🎉 ALL MULTI-DIET REFACTOR, PLACEHOLDER & ICON TESTS PASSED SUCCESSFULLY!');

@@ -2,7 +2,9 @@
 import { PRE_COOKING_CHECKLIST } from '../data/protocolRules.js';
 import { analyzeRecipe } from '../services/ruleEngine.js';
 import { DIET_RECIPES } from '../data/dietRecipes.js';
+import { getCategoryIcon } from '../data/lidDatabase.js';
 import lidRecipes from '../data/lidRecipes.json';
+import generatedImages from '../data/generatedImages.json';
 
 export { DIET_RECIPES, lidRecipes };
 
@@ -173,21 +175,29 @@ function renderRecipeCard(recipe) {
     'Serve immediately with protocol-compliant sides.'
   ];
   const clinicalNote = recipe.clinicalNote || 'Specifically formulated to comply with the active dietary guidelines.';
+  const dishImgUrl = recipe.imageUrl || generatedImages?.[recipe.id] || null;
 
   return `
     <article class="recipe-card" id="recipe-${recipe.id}">
-      ${recipe.imageUrl ? `
-        <div class="recipe-card-banner relative w-full aspect-video sm:h-36 overflow-hidden rounded-t-lg bg-slate-100 dark:bg-slate-800">
+      <div class="recipe-card-banner relative w-full h-32 rounded-t-xl overflow-hidden bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200/80 dark:border-slate-700/60 flex items-center justify-center select-none text-4xl -mx-[22px] -mt-[22px] mb-4">
+        ${dishImgUrl ? `
           <img
-            src="${escapeHtml(recipe.imageUrl)}"
+            src="${escapeHtml(dishImgUrl)}"
             alt="${escapeHtml(title)}"
             loading="lazy"
             decoding="async"
             class="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-            onerror="this.parentElement.style.display='none'"
+            onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='inline-block';"
           />
-        </div>
-      ` : ''}
+          <span class="text-4xl filter drop-shadow-sm pointer-events-none" aria-hidden="true" style="display: none;">
+            ${getCategoryIcon(category, title)}
+          </span>
+        ` : `
+          <span class="text-4xl filter drop-shadow-sm pointer-events-none" aria-hidden="true">
+            ${getCategoryIcon(category, title)}
+          </span>
+        `}
+      </div>
       <div class="recipe-card-header">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px;">
           <span class="recipe-category-pill">${escapeHtml(category)}</span>
