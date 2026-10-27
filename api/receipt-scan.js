@@ -121,8 +121,8 @@ export function sanitizeReceiptData(data, activeDiet = 'lid') {
   sanitized.storeName = data.storeName || 'Unknown Store';
   sanitized.subtotal = sanitizeCurrency(data.subtotal);
   sanitized.discounts = sanitizeCurrency(data.discounts);
-  sanitized.tax = sanitizeCurrency(data.tax);
-  sanitized.totalAmountPaid = sanitizeCurrency(data.totalAmountPaid ?? data.total ?? data.amountPaid);
+  sanitized.totalAmountPaid = sanitizeCurrency(data.totalAmountPaid ?? data.totalAmount ?? data.total ?? data.amountPaid);
+  sanitized.totalAmount = sanitized.totalAmountPaid;
 
   let safeCount = 0;
   let flaggedCount = 0;
@@ -244,51 +244,15 @@ export default async function handler(req, res) {
 
     const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
 
-    const prompt = `
-You are an expert clinical nutrition auditor and optical character recognition (OCR) engine specialized in Philippine supermarket and grocery receipts (e.g., SM Supermarket, Puregold, Robinson's, Robinsons Easymart, Mercury Drug, WalterMart, The Landmark).
-Analyze this grocery receipt image for dietary compliance under the active protocol: "${currentDietName}" (Protocol key: "${currentDiet}").
-
-INSTRUCTIONS:
-1. Extract line-item food purchases, ignoring cashier metadata, blank customer form fields, totals, change, timestamps, and store headers.
-2. Clean and expand abbreviated Pinoy grocery terms & brands (e.g., "SIL LABUYO" -> "Siling Labuyo", "CKN BRST" -> "Chicken Breast", "MG BRTH CB" -> "Bouillon Cubes", "PTIS REF" -> "Patis / Fish Sauce", "BEAR BRAND / NIDO / ALASKA" -> "Powdered Cow's Milk", "CREAM CORNSTARCH" -> "Cornstarch", "HERSHEYS COCOA IN CA" -> "Cocoa Powder").
-3. Handle Philippine receipt formatting nuances:
-   - Barcode numbers: Strip 8-14 digit UPC/EAN barcode numbers (e.g., "04800361393515", "00731126011020"). Never output barcode numbers as item names or separate items.
-   - Multi-line quantities: When quantity and unit price appear on the next line (e.g., "2 X P310.00/Unit    620.00 V"), combine with the parent item (qty: 2, price: 310.0, total: 620.0).
-   - Trailing tax letters: Disregard trailing letters such as "V" (VATable). Normalize amounts to clean numeric floats (e.g., "620.00 V" -> 620.0).
-4. Audit each identified item against the active protocol guidelines. Mark as "SAFE", "CAUTION", or "AVOID".
-5. For any item marked "AVOID", provide a direct "Pinoy Smart Swap" and a brief clinical reason.
-
-DIETARY PROTOCOL GUIDELINES FOR "${currentDiet}":
-- Low-Iodine Diet (lid): AVOID iodized salt, table salt, marine seafood/fish, dairy (milk, cheese, butter, whey), egg yolks, soy (toyo, tofu), carrageenan/seaweed. SAFE: pure non-iodized kosher salt, fresh chicken/pork/beef, pure egg whites, sayote, kalabasa.
-- Low-Purine (low_purine): AVOID organ meats (isaw, atay, bopis), sardines, shellfish, munggo, rich gravies. SAFE: lean chicken breast, sayote, leafy greens, egg whites.
-- Low-Sodium (low_sodium): AVOID patis, bagoong, toyomansi, MSG, bouillon cubes, instant noodles, tuyo/daing. SAFE: fresh calamansi, crushed garlic, siling labuyo, fresh unbrined meats.
-- Diabetic / Low-GI (diabetic): AVOID refined starches (white rice sacks, white bread), added sugars, banana ketchup, sweet spaghetti sauce, sweet condensed milk. SAFE: cauliflower rice, red/brown rice, non-starchy vegetables.
-- Pinoy Keto (pinoy_keto): AVOID white rice, corn, potatoes, kamote, noodles, sugar. SAFE: pork belly, chicken, eggs, cauliflower rice, sayote.
-
-RETURN ONLY VALID JSON (no markdown fences, no explanatory text):
+    const prompt = `Perform quick document OCR on this receipt image. Return strictly JSON:
 {
-  "storeName": "Detected Store Name or Unknown",
-  "purchaseDate": "YYYY-MM-DD or null",
-  "detectedItemsCount": 0,
+  "storeName": string,
+  "purchaseDate": string,
+  "totalAmount": number,
   "items": [
-    {
-      "rawText": "Original line text from receipt",
-      "cleanName": "Standardized Ingredient Name",
-      "status": "SAFE" | "CAUTION" | "AVOID",
-      "clinicalReason": "Brief explanation under protocol",
-      "suggestedSwap": "Safe Pinoy alternative or null",
-      "qty": 1.0,
-      "price": 0.0,
-      "total": 0.0
-    }
-  ],
-  "subtotal": 0.0,
-  "discounts": 0.0,
-  "tax": 0.0,
-  "totalAmountPaid": 0.0,
-  "paymentMethod": "CASH"
-}
-`;
+    { "name": string, "quantity": number, "price": number, "total": number }
+  ]
+}`;
 
     // Cascade: Try gemini-3.8-flash first, fall back to gemini-2.0-flash
     const models = ['gemini-3.8-flash', 'gemini-2.0-flash'];
@@ -316,8 +280,12 @@ RETURN ONLY VALID JSON (no markdown fences, no explanatory text):
               }
             ],
             generationConfig: {
-              responseMimeType: 'application/json',
-              temperature: 0.05
+              responseMimeType: "application/json",
+              temperature: 0.1,
+              maxOutputTokens: 1024,
+              thinkingConfig: {
+                thinkingBudget: 0 // Completely disables reasoning latency
+              }
             }
           })
         });

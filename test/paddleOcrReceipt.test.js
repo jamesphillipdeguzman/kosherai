@@ -1,12 +1,16 @@
-// Comprehensive Test Suite for PaddleOCR (PP-OCRv4) Pipeline & Receipt Parsing
+// Comprehensive Test Suite for PaddleOCR Pipeline & Receipt Parsing
 import assert from 'node:assert';
 import {
   parseReceiptAmount,
   parseStructuredReceiptText,
-  aggregateStructuredLines
-} from '../src/services/paddleOcrService.js';
+  aggregateStructuredLines,
+  loadModelBuffer,
+  loadModelBufferWithCache,
+  OCR_MODELS,
+  CACHE_NAME
+} from '../src/services/paddleOcrReceipt.js';
 
-console.log('🧪 Starting PaddleOCR (PP-OCRv4) Receipt Parsing Test Suite...\n');
+console.log('🧪 Starting PaddleOCR Receipt Parsing Test Suite...\n');
 
 // ----------------------------------------------------
 // Test 1: parseReceiptAmount currency and symbol handling
@@ -111,5 +115,155 @@ assert.strictEqual(parsedSm.items[1].name, 'CHICKEN BREAST FRESH');
 assert.strictEqual(parsedSm.items[1].totalPrice, 466.07, 'Price with P prefix should parse as 466.07');
 assert.strictEqual(parsedSm.totalAmountPaid, 2331.07, 'Total amount must match 2,331.07');
 console.log('  ✅ Supermarket single-line receipt parsing passed.');
+
+// ----------------------------------------------------
+// Test 5: Verify OCR_MODELS Hugging Face Repository Structure & Cache Name
+// ----------------------------------------------------
+console.log('\nTest 5: OCR_MODELS Hugging Face URLs and cache name');
+
+assert.strictEqual(
+  OCR_MODELS.detUrl,
+  'https://huggingface.co/monkt/paddleocr-onnx/resolve/main/detection/v5/det.onnx',
+  'Detection URL must match monkt/paddleocr-onnx detection/v5/det.onnx'
+);
+
+assert.strictEqual(
+  OCR_MODELS.recUrl,
+  'https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/english/rec.onnx',
+  'Recognition URL must match monkt/paddleocr-onnx languages/english/rec.onnx'
+);
+
+assert.strictEqual(
+  OCR_MODELS.dictUrl,
+  'https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/english/dict.txt',
+  'Dictionary URL must match monkt/paddleocr-onnx languages/english/dict.txt'
+);
+
+assert.strictEqual(CACHE_NAME, 'kosherai-ocr-weights', 'Cache name must be kosherai-ocr-weights');
+console.log('  ✅ OCR_MODELS URLs and kosherai-ocr-weights cache name verified.');
+
+// ----------------------------------------------------
+// Test 6: Verify loadModelBuffer HTTP status checks & error handling
+// ----------------------------------------------------
+console.log('\nTest 6: loadModelBuffer HTTP status checks and rejection handling');
+
+const originalFetch = globalThis.fetch;
+
+// 6a: 404 Not Found throws descriptive error
+globalThis.fetch = async (url) => ({
+  ok: false,
+  status: 404,
+  headers: new Map(),
+  arrayBuffer: async () => new ArrayBuffer(0)
+});
+
+await assert.rejects(
+  async () => {
+    await loadModelBuffer(OCR_MODELS.detUrl);
+  },
+  {
+    name: 'Error',
+    message: new RegExp(`Failed to load OCR model from ${OCR_MODELS.detUrl.replace(/[\/\.]/g, '\\$&')}: 404`)
+  },
+  'Should reject on 404 status with exact status code message'
+);
+console.log('  ✅ 404 Not Found error properly caught and rejected.');
+
+// 6b: HTML response (e.g., SPA 404 fallback page) throws error
+globalThis.fetch = async (url) => ({
+  ok: true,
+  status: 200,
+  headers: {
+    get: (header) => (header.toLowerCase() === 'content-type' ? 'text/html; charset=utf-8' : null)
+  },
+  arrayBuffer: async () => new TextEncoder().encode('<!DOCTYPE html><html><body>404 Not Found</body></html>').buffer
+});
+
+await assert.rejects(
+  async () => {
+    await loadModelBuffer(OCR_MODELS.detUrl);
+  },
+  {
+    name: 'Error',
+    message: /returned HTML instead of binary model/
+  },
+  'Should reject when server returns HTML instead of binary model'
+);
+console.log('  ✅ HTML fallback routing properly rejected.');
+
+// 6c: Valid binary model buffer resolves successfully
+const dummyModelBytes = new Uint8Array(10240); // 10 KB mock ONNX model
+dummyModelBytes[0] = 0x08; // ONNX protobuf header byte
+globalThis.fetch = async (url) => ({
+  ok: true,
+  status: 200,
+  headers: {
+    get: (header) => (header.toLowerCase() === 'content-type' ? 'application/octet-stream' : null)
+  },
+  arrayBuffer: async () => dummyModelBytes.buffer
+});
+
+const validBuffer = await loadModelBuffer(OCR_MODELS.detUrl);
+assert.ok(validBuffer instanceof ArrayBuffer, 'Should return valid ArrayBuffer');
+assert.strictEqual(validBuffer.byteLength, 10240, 'Should load full binary buffer size');
+console.log('  ✅ Valid binary ONNX buffer loaded successfully.');
+
+// ----------------------------------------------------
+// Test 7: Verify Browser Cache API Storage ('kosherai-ocr-weights')
+// ----------------------------------------------------
+console.log('\nTest 7: Cache API storage for kosherai-ocr-weights');
+
+// Mock browser Cache API
+const mockCacheStorage = new Map();
+const mockCache = {
+  match: async (url) => {
+    const data = mockCacheStorage.get(url);
+    if (!data) return null;
+    return {
+      ok: true,
+      arrayBuffer: async () => data
+    };
+  },
+  put: async (url, response) => {
+    const buf = await response.arrayBuffer();
+    mockCacheStorage.set(url, buf);
+  }
+};
+
+globalThis.caches = {
+  open: async (name) => {
+    assert.strictEqual(name, 'kosherai-ocr-weights', 'Must open kosherai-ocr-weights cache');
+    return mockCache;
+  }
+};
+
+let fetchCallCount = 0;
+globalThis.fetch = async (url) => {
+  fetchCallCount++;
+  return {
+    ok: true,
+    status: 200,
+    headers: {
+      get: () => 'application/octet-stream'
+    },
+    arrayBuffer: async () => dummyModelBytes.buffer.slice(0)
+  };
+};
+
+// First call: Not in cache -> Fetches from network and puts into cache
+const firstBuffer = await loadModelBufferWithCache(OCR_MODELS.detUrl, () => {}, 'det model');
+assert.strictEqual(fetchCallCount, 1, 'Should fetch over network on cache miss');
+assert.strictEqual(firstBuffer.byteLength, 10240, 'Should return correct buffer');
+assert.ok(mockCacheStorage.has(OCR_MODELS.detUrl), 'Model buffer must be saved to kosherai-ocr-weights cache');
+
+// Second call: In cache -> Returns cached buffer without network fetch
+const secondBuffer = await loadModelBufferWithCache(OCR_MODELS.detUrl, () => {}, 'det model');
+assert.strictEqual(fetchCallCount, 1, 'Should NOT fetch over network on cache hit');
+assert.strictEqual(secondBuffer.byteLength, 10240, 'Should return cached buffer');
+console.log('  ✅ Cache API prevents repeated downloads (~15MB saved after first scan).');
+
+// Clean up mocks
+globalThis.fetch = originalFetch;
+delete globalThis.caches;
 
 console.log('\n🎉 ALL PADDLEOCR RECEIPT PARSING TESTS PASSED SUCCESSFULLY!');
