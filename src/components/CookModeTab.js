@@ -136,7 +136,9 @@ export function renderCookModeTab(state) {
               ${escapeHtml(currentDietData.description)}
             </p>
           </div>
-          <span class="recipe-count-badge">${filteredRecipes.length} Dishes</span>
+          <span class="recipe-count-badge px-2.5 py-0.5 rounded-full text-xs font-bold border border-emerald-600/40 dark:border-emerald-500/50 bg-emerald-500/5 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
+            ${filteredRecipes.length} Dishes
+          </span>
         </div>
 
         <!-- Category Filter Bar -->
@@ -146,7 +148,11 @@ export function renderCookModeTab(state) {
                                (cat.toLowerCase() === activeCategory.toLowerCase());
             return `
               <button 
-                class="recipe-filter-btn ${isSelected ? 'active' : ''}" 
+                class="recipe-filter-btn ${isSelected ? 'active ' : ''}px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  isSelected 
+                    ? 'border border-emerald-600 bg-emerald-500/10 text-emerald-800 dark:border-emerald-400 dark:text-emerald-300 dark:bg-emerald-950/40 shadow-sm' 
+                    : 'border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 bg-white/70 dark:bg-slate-900/60'
+                }" 
                 data-category="${cat === 'All' ? 'ALL' : cat}"
                 role="tab"
                 aria-selected="${isSelected}"
@@ -213,7 +219,7 @@ function renderRecipeCard(recipe) {
           </div>
         </div>
         <h3 class="recipe-card-title">${escapeHtml(title)}</h3>
-        <div class="recipe-clinical-badge">
+        <div class="recipe-clinical-badge inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border border-emerald-600/50 dark:border-emerald-400/50 bg-transparent text-emerald-800 dark:text-emerald-300">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
           </svg>

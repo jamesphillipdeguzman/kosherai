@@ -161,4 +161,25 @@ assert.ok(
 );
 console.log('  ✅ Recipe card orange category badge and high-contrast rationale verified.\n');
 
+// 7. Verify Recipe Section Crisp Green Outlines & Legibility
+console.log('Test 7: Verify Recipe Section Crisp Green Outlines & Legibility');
+// Active filter pill
+assert.ok(
+  cookHtml.includes('border border-emerald-600 bg-emerald-500/10 text-emerald-800 dark:border-emerald-400 dark:text-emerald-300 dark:bg-emerald-950/40 shadow-sm'),
+  'Active filter button must have crisp emerald outline and high contrast text'
+);
+
+// Total count badge
+assert.ok(
+  cookHtml.includes('border border-emerald-600/40 dark:border-emerald-500/50 bg-emerald-500/5 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300'),
+  'Total count badge must have transparent background with defined border and high-contrast text'
+);
+
+// Card compliance tag
+assert.ok(
+  cookHtml.includes('inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border border-emerald-600/50 dark:border-emerald-400/50 bg-transparent text-emerald-800 dark:text-emerald-300'),
+  'Card compliance tag must feature crisp outlined styling with transparent background'
+);
+console.log('  ✅ Recipe section crisp green outlines and legibility verified.\n');
+
 console.log('🎉 ALL MULTI-DIET DESYNCHRONIZATION, CONTRAST & THEME TOGGLE TESTS PASSED!');
