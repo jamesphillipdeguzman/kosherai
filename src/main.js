@@ -724,6 +724,32 @@ function attachEventHandlers() {
     });
   }
 
+  // Receipt Audit Modal Backdrop & Close Handlers
+  const receiptAuditBackdrop = document.querySelector('#receipt-audit-modal-backdrop');
+  const receiptAuditCloseBtn = document.querySelector('#receipt-audit-close-btn');
+  const receiptAuditDoneBtn = document.querySelector('#receipt-audit-done-btn');
+
+  if (receiptAuditBackdrop) {
+    receiptAuditBackdrop.addEventListener('click', (e) => {
+      if (e.target === receiptAuditBackdrop) {
+        state.scannedReceiptAudit = null;
+        render();
+      }
+    });
+  }
+  if (receiptAuditCloseBtn) {
+    receiptAuditCloseBtn.addEventListener('click', () => {
+      state.scannedReceiptAudit = null;
+      render();
+    });
+  }
+  if (receiptAuditDoneBtn) {
+    receiptAuditDoneBtn.addEventListener('click', () => {
+      state.scannedReceiptAudit = null;
+      render();
+    });
+  }
+
   // Scan Detail Modal Close / Done
   const scanModalCloseBtn = document.querySelector('#scan-modal-close-btn');
   const scanModalDoneBtn = document.querySelector('#scan-modal-done-btn');
@@ -2005,6 +2031,40 @@ window.addEventListener('kosherai-trips-synced', () => {
 });
 window.addEventListener('kosherai-food-waste-synced', () => {
   render();
+});
+
+// Global Escape Key Listener for Modals
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (state.scannedReceiptAudit) {
+      state.scannedReceiptAudit = null;
+      render();
+    } else if (state.selectedScanItem) {
+      state.selectedScanItem = null;
+      render();
+    } else if (state.selectedItem) {
+      state.selectedItem = null;
+      render();
+    } else if (state.settingsOpen) {
+      state.settingsOpen = false;
+      render();
+    } else if (state.receiptModalOpen) {
+      state.receiptModalOpen = false;
+      render();
+    } else if (state.manualTripModalOpen) {
+      state.manualTripModalOpen = false;
+      render();
+    } else if (state.wasteModalOpen) {
+      state.wasteModalOpen = false;
+      render();
+    } else if (state.mealPlanModalOpen) {
+      state.mealPlanModalOpen = false;
+      render();
+    } else if (state.configModalOpen) {
+      state.configModalOpen = false;
+      render();
+    }
+  }
 });
 
 // Register Service Worker for Offline PWA Capabilities (Production only)

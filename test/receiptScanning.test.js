@@ -221,6 +221,29 @@ assert.ok(htmlAudited.includes('Bouillon Cubes'), 'Renders flagged grocery item'
 assert.ok(htmlAudited.includes('Pinoy Smart Swap:'), 'Renders smart swap suggestion');
 assert.ok(htmlAudited.includes('Homemade broth simmered with kosher salt'), 'Renders exact swap text');
 
+// Verify Receipt Audit Modal backdrop, header contrast, close button and item styling
+assert.ok(htmlAudited.includes('fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'), 'Renders modal backdrop');
+assert.ok(htmlAudited.includes('id="receipt-audit-modal-backdrop"'), 'Backdrop has dismiss id');
+assert.ok(htmlAudited.includes('onclick="event.stopPropagation()"'), 'Inner dialog stops click propagation');
+assert.ok(htmlAudited.includes('id="receipt-audit-close-btn"'), 'Renders explicit close button');
+assert.ok(htmlAudited.includes('aria-label="Close modal"'), 'Close button has accessibility label');
+assert.ok(htmlAudited.includes('bg-slate-900 text-white px-5 py-4 rounded-t-2xl flex items-center justify-between'), 'Solid high contrast header');
+assert.ok(htmlAudited.includes('text-lg font-bold tracking-wide text-white'), 'Header title styling');
+assert.ok(htmlAudited.includes('bg-emerald-600 text-white text-xs px-2.5 py-0.5 rounded-full font-semibold'), 'Safe summary badge');
+assert.ok(htmlAudited.includes('bg-rose-600 text-white text-xs px-2.5 py-0.5 rounded-full font-semibold'), 'Avoid summary badge');
+
+// Line item typography and contrast
+assert.ok(htmlAudited.includes('bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl p-4 mb-3'), 'SAFE Card container styling');
+assert.ok(htmlAudited.includes('text-base font-bold text-emerald-950 dark:text-emerald-100'), 'SAFE Item title styling');
+assert.ok(htmlAudited.includes('text-xs font-mono text-emerald-800/80 dark:text-emerald-300/80 mt-0.5'), 'SAFE Receipt Line text');
+assert.ok(htmlAudited.includes('text-xs text-emerald-900/90 dark:text-emerald-200/90 mt-1.5'), 'SAFE Rationale text');
+
+assert.ok(htmlAudited.includes('bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 rounded-xl p-4 mb-3'), 'AVOID Card container styling');
+assert.ok(htmlAudited.includes('text-base font-bold text-rose-950 dark:text-rose-100'), 'AVOID Item title styling');
+assert.ok(htmlAudited.includes('text-xs font-mono text-rose-800/80 dark:text-rose-300/80 mt-0.5'), 'AVOID Receipt Line text');
+assert.ok(htmlAudited.includes('text-xs text-rose-900/90 dark:text-rose-200/90 mt-1.5'), 'AVOID Warning explanation');
+assert.ok(htmlAudited.includes('bg-amber-100/80 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 rounded-lg px-2.5 py-1.5'), 'Pinoy smart swap pill styling');
+
 console.log('  ✅ ScannerTab UI rendering verified successfully.');
 
 // ----------------------------------------------------

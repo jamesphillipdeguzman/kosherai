@@ -595,7 +595,7 @@ export function renderScannerTab(state) {
   `;
 }
 
-function renderReceiptAuditResult(audit, activeDiet = 'lid', cloudinaryUrl = null) {
+export function renderReceiptAuditResult(audit, activeDiet = 'lid', cloudinaryUrl = null) {
   const items = Array.isArray(audit.items) ? audit.items : [];
   const safeCount = items.filter(i => i.status === 'SAFE').length;
   const avoidCount = items.filter(i => i.status === 'AVOID').length;
@@ -613,161 +613,278 @@ function renderReceiptAuditResult(audit, activeDiet = 'lid', cloudinaryUrl = nul
   // Prevent "False SAFE" on empty item extraction
   if (items.length === 0) {
     return `
-      <div class="scan-result-card" style="border: 1px solid rgba(245, 158, 11, 0.4); background: rgba(30, 27, 20, 0.5);">
-        <!-- Warning Header Banner -->
-        <div class="result-banner" style="background: rgba(120, 53, 15, 0.35); border: 1px solid rgba(245, 158, 11, 0.5); border-radius: 14px; padding: 16px;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
-            <div style="display: flex; align-items: flex-start; gap: 12px;">
-              <span style="font-size: 1.8rem; line-height: 1;">⚠️</span>
-              <div>
-                <div style="font-size: 1.05rem; font-weight: 800; color: #fde68a;">
-                  No Grocery Line Items Detected
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 modal-overlay" id="receipt-audit-modal-backdrop" role="dialog" aria-modal="true">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+          
+          <!-- Header: Solid, high-contrast container with Title & Status Badges -->
+          <div class="bg-slate-900 text-white px-5 py-4 rounded-t-2xl flex items-center justify-between border-b border-slate-800">
+            <div class="flex items-center gap-3 min-w-0 pr-3">
+              <span class="text-2xl select-none flex-shrink-0">🧾</span>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <h3 class="text-lg font-bold tracking-wide text-white truncate">
+                    ${escapeHtml(audit.storeName || 'SM SUPERMARKET')}
+                  </h3>
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-teal-300 border border-teal-500/30 whitespace-nowrap">
+                    ${escapeHtml(activeDietName)}
+                  </span>
                 </div>
-                <div style="font-size: 0.82rem; color: #fed7aa; margin-top: 4px; line-height: 1.45;">
-                  No grocery line items could be detected on this receipt. Please ensure the receipt is flat, well-lit, and text is sharp, or try pasting the raw receipt text directly using the 'Paste Text' tab.
+                <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+                  <span style="font-size: 0.75rem; padding: 2px 8px; border-radius: 9999px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); font-weight: 800;">
+                    STATUS: UNREADABLE
+                  </span>
                 </div>
               </div>
             </div>
-            <span style="font-size: 0.75rem; padding: 3px 10px; border-radius: 9999px; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); font-weight: 800;">
-              STATUS: UNREADABLE
-            </span>
+
+            <!-- Explicit Close (X) Button -->
+            <button
+              id="receipt-audit-close-btn"
+              class="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors flex-shrink-0"
+              aria-label="Close modal"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-        </div>
 
-        <!-- Verification Source Badge -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin: 12px 0; font-size: 0.78rem;">
-          <span class="engine-badge" style="font-weight: 700; background: rgba(255,255,255,0.06); padding: 3px 8px; border-radius: 6px;">
-            ${audit.source === 'OFFLINE_PADDLE_OCR' ? '⚡ Evaluated by On-Device OCR & Clinical Rule Engine' : '🤖 Evaluated by Gemini AI Vision'}
-          </span>
-          ${(cloudinaryUrl || audit.cloudinaryUrl) ? `
-            <a href="${escapeHtml(cloudinaryUrl || audit.cloudinaryUrl)}" target="_blank" rel="noopener" style="font-size: 0.78rem; color: var(--accent-cyan); display: inline-flex; align-items: center; gap: 4px;">
-              <span>☁️ Saved to kosherai/receipts</span>
-              <span>↗</span>
-            </a>
-          ` : ''}
-        </div>
+          <!-- Scrollable Body -->
+          <div class="p-5 overflow-y-auto max-h-[calc(90vh-140px)] space-y-3">
+            <!-- Warning Header Banner -->
+            <div class="result-banner" style="background: rgba(120, 53, 15, 0.35); border: 1px solid rgba(245, 158, 11, 0.5); border-radius: 14px; padding: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                  <span style="font-size: 1.8rem; line-height: 1;">⚠️</span>
+                  <div>
+                    <div style="font-size: 1.05rem; font-weight: 800; color: #fde68a;">
+                      No Grocery Line Items Detected
+                    </div>
+                    <div style="font-size: 0.82rem; color: #fed7aa; margin-top: 4px; line-height: 1.45;">
+                      No grocery line items could be detected on this receipt. Please ensure the receipt is flat, well-lit, and text is sharp, or try pasting the raw receipt text directly using the 'Paste Text' tab.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-        <!-- Actionable Guidance Box -->
-        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 14px 16px; margin: 12px 0;">
-          <div style="font-size: 0.82rem; font-weight: 700; color: #fcd34d; margin-bottom: 6px;">
-            📋 Actionable Troubleshooting Tips:
+            <!-- Verification Source Badge -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin: 12px 0; font-size: 0.78rem;">
+              <span class="engine-badge" style="font-weight: 700; background: rgba(255,255,255,0.06); padding: 3px 8px; border-radius: 6px;">
+                ${audit.source === 'OFFLINE_PADDLE_OCR' ? '⚡ Evaluated by On-Device OCR & Clinical Rule Engine' : '🤖 Evaluated by Gemini AI Vision'}
+              </span>
+              ${(cloudinaryUrl || audit.cloudinaryUrl) ? `
+                <a href="${escapeHtml(cloudinaryUrl || audit.cloudinaryUrl)}" target="_blank" rel="noopener" style="font-size: 0.78rem; color: var(--accent-cyan); display: inline-flex; align-items: center; gap: 4px;">
+                  <span>☁️ Saved to kosherai/receipts</span>
+                  <span>↗</span>
+                </a>
+              ` : ''}
+            </div>
+
+            <!-- Actionable Guidance Box -->
+            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 14px 16px; margin: 12px 0;">
+              <div style="font-size: 0.82rem; font-weight: 700; color: #fcd34d; margin-bottom: 6px;">
+                📋 Actionable Troubleshooting Tips:
+              </div>
+              <ul style="margin: 0; padding-left: 20px; font-size: 0.8rem; color: #cbd5e1; line-height: 1.6;">
+                <li><strong>Flatten creases:</strong> Thermal receipt paper often curls or has deep folds hiding item text.</li>
+                <li><strong>Improve lighting:</strong> Avoid harsh overhead glare or dim shadows across small printed numbers.</li>
+                <li><strong>Text sharp & close:</strong> Ensure line items fill the frame and are legible.</li>
+                <li><strong>Try Manual / Text Mode:</strong> Switch to the <strong>✏️ Paste Text</strong> tab to paste or type receipt text directly for instant zero-lag auditing.</li>
+              </ul>
+            </div>
           </div>
-          <ul style="margin: 0; padding-left: 20px; font-size: 0.8rem; color: #cbd5e1; line-height: 1.6;">
-            <li><strong>Flatten creases:</strong> Thermal receipt paper often curls or has deep folds hiding item text.</li>
-            <li><strong>Improve lighting:</strong> Avoid harsh overhead glare or dim shadows across small printed numbers.</li>
-            <li><strong>Text sharp & close:</strong> Ensure line items fill the frame and are legible.</li>
-            <li><strong>Try Manual / Text Mode:</strong> Switch to the <strong>✏️ Paste Text</strong> tab to paste or type receipt text directly for instant zero-lag auditing.</li>
-          </ul>
-        </div>
 
-        <!-- Action Buttons -->
-        <div style="margin-top: 14px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px;">
-          <button id="rescan-btn" class="btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">
-            📸 Retake / Upload New Photo
-          </button>
-          <button id="toggle-text-mode" class="btn-primary" style="padding: 8px 16px; font-size: 0.85rem; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);">
-            ✏️ Switch to Paste Text
-          </button>
+          <!-- Footer Action Buttons -->
+          <div class="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 rounded-b-2xl flex items-center justify-between">
+            <button id="rescan-btn" class="btn-secondary text-xs px-3 py-2 rounded-lg font-medium">
+              📸 Retake / Upload New Photo
+            </button>
+            <button id="toggle-text-mode" class="btn-primary text-xs px-3 py-2 rounded-lg font-medium" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);">
+              ✏️ Switch to Paste Text
+            </button>
+          </div>
+
         </div>
       </div>
     `;
   }
 
   return `
-    <div class="scan-result-card">
-      <!-- Receipt Header Banner -->
-      <div class="result-banner banner-safe" style="background: #0f172a; border: 1px solid rgba(45, 212, 191, 0.4); border-radius: 14px; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
-          <div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 1.3rem;">🧾</span>
-              <span style="font-size: 1.1rem; font-weight: 800; color: #fff;">${escapeHtml(audit.storeName || 'Supermarket Receipt')}</span>
-              <span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px; border: 1px solid rgba(45, 212, 191, 0.6); background: rgba(45, 212, 191, 0.1); color: #5eead4; font-weight: 700;">
-                ${escapeHtml(activeDietName)}
-              </span>
-            </div>
-            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 4px;">
-              ${escapeHtml(audit.detectedItemsCount || items.length)} Grocery Food Items Audited
-            </div>
-          </div>
-          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-            <span style="font-size: 0.75rem; padding: 3px 8px; border-radius: 6px; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-weight: 700;">
-              🟢 ${safeCount} Safe
-            </span>
-            ${avoidCount > 0 ? `
-              <span style="font-size: 0.75rem; padding: 3px 8px; border-radius: 6px; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 700;">
-                🔴 ${avoidCount} Avoid
-              </span>
-            ` : ''}
-            ${cautionCount > 0 ? `
-              <span style="font-size: 0.75rem; padding: 3px 8px; border-radius: 6px; background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); font-weight: 700;">
-                🟡 ${cautionCount} Caution
-              </span>
-            ` : ''}
-          </div>
-        </div>
-      </div>
-
-      <!-- Verification Source Badge -->
-      <div style="display: flex; justify-content: space-between; align-items: center; margin: 12px 0; font-size: 0.78rem;">
-        <span class="engine-badge badge-gemini bg-sky-100 dark:bg-sky-950/60 border border-sky-300 dark:border-sky-800 text-sky-800 dark:text-sky-300 font-semibold text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5" style="font-weight: 700;">
-          <span class="text-sky-600 dark:text-sky-400 font-bold">${audit.source === 'OFFLINE_PADDLE_OCR' ? '⚡' : '🤖'}</span>
-          <span>${audit.source === 'OFFLINE_PADDLE_OCR' ? 'Evaluated by On-Device OCR & Clinical Rule Engine' : 'Verified by Gemini AI Vision Receipt Auditor'}</span>
-        </span>
-        ${(cloudinaryUrl || audit.cloudinaryUrl) ? `
-          <span style="color: #67e8f9; font-weight: 600;">☁️ Cloudinary Synced</span>
-        ` : ''}
-      </div>
-
-      <!-- Audited Items List -->
-      <div style="display: flex; flex-direction: column; gap: 10px;">
-        ${items.map(item => {
-          const isSafe = item.status === 'SAFE';
-          const isAvoid = item.status === 'AVOID';
-          const borderColor = isSafe ? 'rgba(16, 185, 129, 0.35)' : isAvoid ? 'rgba(239, 68, 68, 0.45)' : 'rgba(245, 158, 11, 0.4)';
-          const bgCard = isSafe ? 'rgba(6, 78, 59, 0.2)' : isAvoid ? 'rgba(127, 29, 29, 0.2)' : 'rgba(120, 53, 15, 0.2)';
-          const pillBg = isSafe ? 'rgba(16, 185, 129, 0.2)' : isAvoid ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)';
-          const pillColor = isSafe ? '#34d399' : isAvoid ? '#f87171' : '#fbbf24';
-
-          return `
-            <div style="border: 1px solid ${borderColor}; background: ${bgCard}; border-radius: 12px; padding: 12px 14px;">
-              <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
-                <div>
-                  <div style="font-weight: 700; color: #fff; font-size: 0.95rem;">${escapeHtml(item.cleanName)}</div>
-                  ${item.rawText && item.rawText !== item.cleanName ? `
-                    <div style="font-family: var(--font-mono, monospace); font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">
-                      Receipt Line: "${escapeHtml(item.rawText)}"
-                    </div>
-                  ` : ''}
-                </div>
-                <span style="font-size: 0.75rem; font-weight: 800; padding: 2px 10px; border-radius: 9999px; background: ${pillBg}; color: ${pillColor}; border: 1px solid ${borderColor}; white-space: nowrap;">
-                  ${isSafe ? '🟢 SAFE' : isAvoid ? '🔴 AVOID' : '🟡 CAUTION'}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 modal-overlay" id="receipt-audit-modal-backdrop" role="dialog" aria-modal="true">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+        
+        <!-- Header: Solid, high-contrast container with Title & Summary Badges -->
+        <div class="bg-slate-900 text-white px-5 py-4 rounded-t-2xl flex items-center justify-between border-b border-slate-800">
+          <div class="flex items-center gap-3 min-w-0 pr-3">
+            <span class="text-2xl select-none flex-shrink-0">🧾</span>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-lg font-bold tracking-wide text-white truncate">
+                  ${escapeHtml(audit.storeName || 'SM SUPERMARKET')}
+                </h3>
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-teal-300 border border-teal-500/30 whitespace-nowrap">
+                  ${escapeHtml(activeDietName)}
                 </span>
               </div>
-
-              ${item.clinicalReason ? `
-                <div style="font-size: 0.82rem; color: #cbd5e1; margin-top: 8px; line-height: 1.45;">
-                  ${escapeHtml(item.clinicalReason)}
-                </div>
-              ` : ''}
-
-              ${(isAvoid || item.suggestedSwap) && item.suggestedSwap ? `
-                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.1); font-size: 0.82rem; color: #6ee7b7; display: flex; align-items: flex-start; gap: 6px;">
-                  <span style="font-weight: 700; color: #34d399;">💡 Pinoy Smart Swap:</span>
-                  <span>${escapeHtml(item.suggestedSwap)}</span>
-                </div>
-              ` : ''}
+              <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+                <span class="bg-emerald-600 text-white text-xs px-2.5 py-0.5 rounded-full font-semibold">
+                  ${safeCount} Safe
+                </span>
+                ${avoidCount > 0 ? `
+                  <span class="bg-rose-600 text-white text-xs px-2.5 py-0.5 rounded-full font-semibold">
+                    ${avoidCount} Avoid
+                  </span>
+                ` : ''}
+                ${cautionCount > 0 ? `
+                  <span class="bg-amber-600 text-white text-xs px-2.5 py-0.5 rounded-full font-semibold">
+                    ${cautionCount} Caution
+                  </span>
+                ` : ''}
+              </div>
             </div>
-          `;
-        }).join('')}
-      </div>
+          </div>
+          
+          <!-- Explicit Close (X) Button -->
+          <button
+            id="receipt-audit-close-btn"
+            class="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors flex-shrink-0"
+            aria-label="Close modal"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
-      <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;">
-        <button id="rescan-btn" class="btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">Scan Another Receipt</button>
+        <!-- Scrollable Modal Body -->
+        <div class="p-5 overflow-y-auto max-h-[calc(90vh-140px)] space-y-3">
+          <!-- Engine Verification Source Badge -->
+          <div class="flex items-center justify-between pb-1 text-xs">
+            <span class="engine-badge badge-gemini bg-sky-100 dark:bg-sky-950/60 border border-sky-300 dark:border-sky-800 text-sky-800 dark:text-sky-300 font-semibold text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+              <span class="text-sky-600 dark:text-sky-400 font-bold">${audit.source === 'OFFLINE_PADDLE_OCR' ? '⚡' : '🤖'}</span>
+              <span>${audit.source === 'OFFLINE_PADDLE_OCR' ? 'Evaluated by On-Device OCR & Clinical Rule Engine' : 'Verified by Gemini AI Vision Receipt Auditor'}</span>
+            </span>
+            ${(cloudinaryUrl || audit.cloudinaryUrl) ? `
+              <span class="text-cyan-600 dark:text-cyan-400 font-semibold text-xs">☁️ Cloudinary Synced</span>
+            ` : ''}
+          </div>
+
+          <!-- Audited Items List -->
+          <div>
+            ${items.map(item => {
+              const isSafe = item.status === 'SAFE';
+              const isAvoid = item.status === 'AVOID';
+              
+              if (isSafe) {
+                return `
+                  <div class="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl p-4 mb-3">
+                    <div class="flex justify-between items-start gap-2">
+                      <div>
+                        <div class="text-base font-bold text-emerald-950 dark:text-emerald-100">${escapeHtml(item.cleanName)}</div>
+                        ${item.rawText && item.rawText !== item.cleanName ? `
+                          <div class="text-xs font-mono text-emerald-800/80 dark:text-emerald-300/80 mt-0.5">
+                            ${escapeHtml(item.rawText)}
+                          </div>
+                        ` : ''}
+                      </div>
+                      <span class="bg-emerald-600 text-white font-bold text-[11px] px-2.5 py-1 rounded-full uppercase tracking-wider whitespace-nowrap">
+                        SAFE
+                      </span>
+                    </div>
+                    ${item.clinicalReason ? `
+                      <div class="text-xs text-emerald-900/90 dark:text-emerald-200/90 mt-1.5 leading-relaxed">
+                        ${escapeHtml(item.clinicalReason)}
+                      </div>
+                    ` : ''}
+                    ${item.suggestedSwap ? `
+                      <div class="mt-2 flex items-center text-xs font-medium text-amber-900 dark:text-amber-200 bg-amber-100/80 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 rounded-lg px-2.5 py-1.5">
+                        <span class="font-bold mr-1">💡 Pinoy Smart Swap:</span>
+                        <span>${escapeHtml(item.suggestedSwap)}</span>
+                      </div>
+                    ` : ''}
+                  </div>
+                `;
+              } else if (isAvoid) {
+                return `
+                  <div class="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 rounded-xl p-4 mb-3">
+                    <div class="flex justify-between items-start gap-2">
+                      <div>
+                        <div class="text-base font-bold text-rose-950 dark:text-rose-100">${escapeHtml(item.cleanName)}</div>
+                        ${item.rawText && item.rawText !== item.cleanName ? `
+                          <div class="text-xs font-mono text-rose-800/80 dark:text-rose-300/80 mt-0.5">
+                            ${escapeHtml(item.rawText)}
+                          </div>
+                        ` : ''}
+                      </div>
+                      <span class="bg-rose-600 text-white font-bold text-[11px] px-2.5 py-1 rounded-full uppercase tracking-wider whitespace-nowrap">
+                        AVOID
+                      </span>
+                    </div>
+                    ${item.clinicalReason ? `
+                      <div class="text-xs text-rose-900/90 dark:text-rose-200/90 mt-1.5 leading-relaxed">
+                        ${escapeHtml(item.clinicalReason)}
+                      </div>
+                    ` : ''}
+                    ${item.suggestedSwap ? `
+                      <div class="mt-2 flex items-center text-xs font-medium text-amber-900 dark:text-amber-200 bg-amber-100/80 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 rounded-lg px-2.5 py-1.5">
+                        <span class="font-bold mr-1">💡 Pinoy Smart Swap:</span>
+                        <span>${escapeHtml(item.suggestedSwap)}</span>
+                      </div>
+                    ` : ''}
+                  </div>
+                `;
+              } else {
+                // CAUTION
+                return `
+                  <div class="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl p-4 mb-3">
+                    <div class="flex justify-between items-start gap-2">
+                      <div>
+                        <div class="text-base font-bold text-amber-950 dark:text-amber-100">${escapeHtml(item.cleanName)}</div>
+                        ${item.rawText && item.rawText !== item.cleanName ? `
+                          <div class="text-xs font-mono text-amber-800/80 dark:text-amber-300/80 mt-0.5">
+                            ${escapeHtml(item.rawText)}
+                          </div>
+                        ` : ''}
+                      </div>
+                      <span class="bg-amber-600 text-white font-bold text-[11px] px-2.5 py-1 rounded-full uppercase tracking-wider whitespace-nowrap">
+                        CAUTION
+                      </span>
+                    </div>
+                    ${item.clinicalReason ? `
+                      <div class="text-xs text-amber-900/90 dark:text-amber-200/90 mt-1.5 leading-relaxed">
+                        ${escapeHtml(item.clinicalReason)}
+                      </div>
+                    ` : ''}
+                    ${item.suggestedSwap ? `
+                      <div class="mt-2 flex items-center text-xs font-medium text-amber-900 dark:text-amber-200 bg-amber-100/80 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 rounded-lg px-2.5 py-1.5">
+                        <span class="font-bold mr-1">💡 Pinoy Smart Swap:</span>
+                        <span>${escapeHtml(item.suggestedSwap)}</span>
+                      </div>
+                    ` : ''}
+                  </div>
+                `;
+              }
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 rounded-b-2xl flex items-center justify-between">
+          <button id="rescan-btn" class="btn-secondary text-xs px-3 py-2 rounded-lg font-medium">
+            📸 Scan Another Receipt
+          </button>
+          <button id="receipt-audit-done-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-sm">
+            Done
+          </button>
+        </div>
+
       </div>
     </div>
   `;
 }
+
+export const renderReceiptAuditModal = renderReceiptAuditResult;
 
 function renderAnalysisResult(analysis, rawText, aiAnalysis, aiLoading, cloudinaryUrl) {
   const currentStatus = aiAnalysis?.status || analysis.status;
@@ -1098,22 +1215,30 @@ export function renderScanDetailModal(item) {
     : 'Recent Scan';
 
   return `
-    <div class="modal-overlay" id="scan-modal-overlay" role="dialog" aria-modal="true" style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 12px; animation: fadeIn 0.2s ease;">
-      <div class="scan-detail-card modal-content" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); width: 100%; max-width: 520px; max-height: 92vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px; box-shadow: 0 25px 60px rgba(0,0,0,0.7); display: flex; flex-direction: column; gap: 14px;">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 modal-overlay" id="scan-modal-overlay" role="dialog" aria-modal="true">
+      <div class="scan-detail-card modal-content bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] overflow-y-auto p-5 flex flex-col gap-3.5" onclick="event.stopPropagation()">
         
         <!-- Header -->
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+        <div class="flex justify-between items-start gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
           <div style="min-width: 0; flex: 1;">
             <div style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
               <span style="color: #38bdf8;">☁️ NEON ARCHIVED SCAN</span>
               <span>•</span>
               <span>${escapeHtml(formattedDate)}</span>
             </div>
-            <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary); margin-top: 4px; word-break: break-word;">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white mt-1 break-words">
               ${escapeHtml(item.title || 'Scanned Food Label')}
             </h3>
           </div>
-          <button id="scan-modal-close-btn" class="btn-icon" aria-label="Close" style="background: var(--bg-card-subtle); border: 1px solid var(--border-color); color: var(--text-secondary); width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.1rem; flex-shrink: 0;">✕</button>
+          <button
+            id="scan-modal-close-btn"
+            class="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors flex-shrink-0"
+            aria-label="Close modal"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         <!-- Remote Image Preview or Text Label Preview -->
