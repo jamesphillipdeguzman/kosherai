@@ -1840,6 +1840,7 @@ Cracked black pepper`;
       setTimeout(() => triggerCsvDownload('kosherai_shopping_trips_expenses.csv', csvs.tripsCsv), 300);
       setTimeout(() => triggerCsvDownload('kosherai_grocery_purchased_items.csv', csvs.itemsCsv), 600);
       setTimeout(() => triggerCsvDownload('kosherai_food_waste_records.csv', csvs.wasteCsv), 900);
+      setTimeout(() => showToast('✓ Complete academic dataset (all 4 CSVs) downloaded successfully', 'success'), 1000);
     });
   }
 

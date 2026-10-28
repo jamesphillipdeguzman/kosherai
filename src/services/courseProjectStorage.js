@@ -1216,21 +1216,31 @@ export function showToast(message, type = 'warning') {
 
   const toast = document.createElement('div');
   toast.id = 'kosherai-toast';
-  toast.className = 'fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-2xl transition-all duration-300 text-sm font-semibold ' +
-    (type === 'error' || type === 'warning'
+  const isSuccess = type === 'success';
+  const isWarning = type === 'warning';
+  const isError = type === 'error';
+
+  toast.className = 'fixed z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl transition-all duration-300 text-sm font-semibold ' +
+    (isWarning || isError
       ? 'bg-amber-900/95 text-amber-100 border border-amber-500/60 shadow-amber-950/50'
-      : 'bg-emerald-900/95 text-emerald-100 border border-emerald-500/60 shadow-emerald-950/50');
-  toast.style.cssText = 'position: fixed; bottom: 24px; right: 24px; z-index: 9999; padding: 14px 22px; border-radius: 12px; font-weight: 600; font-size: 0.9rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 10px; max-width: 90vw;';
+      : 'bg-emerald-950/95 text-emerald-100 border border-emerald-500/60 shadow-emerald-950/50');
   
-  const icon = type === 'warning' ? '⚠️' : type === 'error' ? '❌' : '✅';
-  toast.innerHTML = `<span style="font-size: 1.2rem;">${icon}</span><span>${message}</span>`;
+  toast.style.cssText = 'position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%); z-index: 9999; padding: 12px 20px; border-radius: 14px; font-weight: 600; font-size: 0.88rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 8px; max-width: 90vw; width: max-content; pointer-events: none; text-align: center; backdrop-filter: blur(8px);';
+  
+  const icon = isWarning ? '⚠️' : isError ? '❌' : '✓';
+  const hasIconPrefix = message.startsWith('✓') || message.startsWith('⚠️') || message.startsWith('❌') || message.startsWith('✅');
+  toast.innerHTML = (hasIconPrefix ? '' : `<span style="font-size: 1.15rem; font-weight: 800; color: ${isSuccess ? '#34d399' : 'inherit'};">${icon}</span>`) + `<span>${message}</span>`;
   document.body.appendChild(toast);
 
   setTimeout(() => {
     toast.style.opacity = '0';
-    toast.style.transform = 'translateY(10px)';
+    toast.style.transform = 'translate(-50%, 10px)';
     setTimeout(() => toast.remove(), 350);
-  }, 4000);
+  }, 3000);
+}
+
+if (typeof window !== 'undefined') {
+  window.showToast = showToast;
 }
 
 /**
@@ -1303,7 +1313,11 @@ export function handleExportWeeklySummary(activeState = {}) {
     return false;
   }
   const csvs = exportAllCourseCsvs(activeState);
-  return triggerCsvDownload('kosherai_six_week_summary_comparison.csv', csvs.summaryCsv);
+  const success = triggerCsvDownload('kosherai_six_week_summary_comparison.csv', csvs.summaryCsv);
+  if (success) {
+    showToast('✓ Six-Week Comparative Summary CSV downloaded successfully', 'success');
+  }
+  return success;
 }
 
 export function handleExportShoppingTrips(activeState = {}) {
@@ -1314,7 +1328,11 @@ export function handleExportShoppingTrips(activeState = {}) {
     return false;
   }
   const csvs = exportAllCourseCsvs(activeState);
-  return triggerCsvDownload('kosherai_shopping_trips_expenses.csv', csvs.tripsCsv);
+  const success = triggerCsvDownload('kosherai_shopping_trips_expenses.csv', csvs.tripsCsv);
+  if (success) {
+    showToast('✓ Shopping trips CSV downloaded successfully', 'success');
+  }
+  return success;
 }
 
 export function handleExportItemizedGroceries(activeState = {}) {
@@ -1327,7 +1345,11 @@ export function handleExportItemizedGroceries(activeState = {}) {
     return false;
   }
   const csvs = exportAllCourseCsvs(activeState);
-  return triggerCsvDownload('kosherai_grocery_purchased_items.csv', csvs.itemsCsv);
+  const success = triggerCsvDownload('kosherai_grocery_purchased_items.csv', csvs.itemsCsv);
+  if (success) {
+    showToast('✓ Itemized purchased groceries CSV downloaded successfully', 'success');
+  }
+  return success;
 }
 
 export function handleExportFoodWaste(activeState = {}) {
@@ -1338,5 +1360,9 @@ export function handleExportFoodWaste(activeState = {}) {
     return false;
   }
   const csvs = exportAllCourseCsvs(activeState);
-  return triggerCsvDownload('kosherai_food_waste_records.csv', csvs.wasteCsv);
+  const success = triggerCsvDownload('kosherai_food_waste_records.csv', csvs.wasteCsv);
+  if (success) {
+    showToast('✓ Food waste log CSV downloaded successfully', 'success');
+  }
+  return success;
 }

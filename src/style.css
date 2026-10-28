@@ -3429,31 +3429,53 @@ html.dark .week-pill-dates,
 }
 
 .subnav-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
   border-radius: var(--radius-full);
-  border: 1px solid transparent;
-  background: rgba(15, 23, 42, 0.6);
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.2s ease;
+  user-select: none;
 }
 
-.subnav-btn:hover {
-  background: var(--bg-card-hover);
-  color: var(--text-primary);
+html.light .subnav-btn:not(.active) {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #334155 !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+html.light .subnav-btn:not(.active):hover {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html.dark .subnav-btn:not(.active),
+:root:not(.light) .subnav-btn:not(.active) {
+  background-color: rgba(30, 41, 59, 0.8) !important;
+  border: 1px solid #334155 !important;
+  color: #cbd5e1 !important;
+}
+
+html.dark .subnav-btn:not(.active):hover,
+:root:not(.light) .subnav-btn:not(.active):hover {
+  background-color: #334155 !important;
+  color: #ffffff !important;
 }
 
 .subnav-btn.active {
-  background: rgba(6, 182, 212, 0.18);
-  border-color: rgba(6, 182, 212, 0.45);
-  color: var(--text-primary);
+  background-color: #059669 !important; /* bg-emerald-600 */
+  border: 1px solid #059669 !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
 }
+
+.shadow-xs { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important; }
 
 /* KPI Summary Cards */
 .kpi-cards-row {

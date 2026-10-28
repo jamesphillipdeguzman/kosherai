@@ -297,6 +297,12 @@ assert.strictEqual(exportRanCount, 1, 'handleDownloadClick executes callback exa
 assert.ok(exportTabHtml.includes('handleDownloadClick'), 'Export buttons use handleDownloadClick to stop event bubbling');
 assert.ok(exportTabHtml.includes('w-5 h-5 flex-shrink-0 mr-2'), 'Download SVG icon uses standard compact dimensions');
 
+// 9e: Course Sub-Tab Navigation Pill styling for light and dark modes
+assert.ok(exportTabHtml.includes('bg-white border border-slate-200 text-slate-700'), 'Inactive subnav tabs have light mode styling');
+assert.ok(exportTabHtml.includes('dark:bg-slate-800/80 dark:border-slate-700 dark:text-slate-300'), 'Inactive subnav tabs have dark mode styling');
+assert.ok(exportTabHtml.includes('bg-emerald-600 text-white font-bold border border-emerald-600 shadow-sm'), 'Active subnav tab has emerald styling');
+assert.ok(exportTabHtml.includes('text-xs font-semibold'), 'Subnav tabs have proportional text-xs font-semibold sizing');
+
 console.log('  ✅ Active state fallback, empty export handling, and card click bindings verified.');
 
 console.log('\n=========================================');

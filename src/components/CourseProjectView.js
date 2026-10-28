@@ -69,6 +69,13 @@ export function renderCourseProjectView(state) {
   const schedule = getProjectWeekSchedule(config.startDate);
   const comparison = getSixWeekComparison();
 
+  const getSubNavClasses = (tabKey) => {
+    const isActive = activeSubTab === tabKey;
+    return isActive
+      ? 'subnav-btn active bg-emerald-600 text-white font-bold border border-emerald-600 shadow-sm text-xs font-semibold'
+      : 'subnav-btn bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-xs dark:bg-slate-800/80 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700 text-xs font-semibold';
+  };
+
   return `
     <div class="course-project-container">
       <!-- Course Project Header Banner -->
@@ -94,41 +101,41 @@ export function renderCourseProjectView(state) {
         <!-- Weekly Progress Pills -->
         <div class="weekly-cycle-strip">
           ${schedule.map(w => {
-            const isCurrent = (state.selectedWeekView || 1) === w.weekNumber;
-            const weekStats = comparison.weeklyData.find(d => d.weekNumber === w.weekNumber);
-            const hasData = weekStats && weekStats.hasRecords;
-            const pillClasses = isCurrent 
-              ? 'active bg-teal-600 text-white dark:bg-teal-500' 
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
-            return `
+    const isCurrent = (state.selectedWeekView || 1) === w.weekNumber;
+    const weekStats = comparison.weeklyData.find(d => d.weekNumber === w.weekNumber);
+    const hasData = weekStats && weekStats.hasRecords;
+    const pillClasses = isCurrent
+      ? 'active bg-teal-600 text-white dark:bg-teal-500'
+      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
+    return `
               <button class="week-step-pill ${pillClasses} ${hasData ? 'has-data' : ''}" data-week-select="${w.weekNumber}">
                 <div class="week-pill-num">W${w.weekNumber}</div>
                 <div class="week-pill-type">${w.isBaseline ? 'Baseline' : (w.weekNumber === 2 ? 'Intervene' : 'Evaluate')}</div>
                 <div class="week-pill-dates">${w.startDate.slice(5)}</div>
               </button>
             `;
-          }).join('')}
+  }).join('')}
         </div>
 
         <!-- Course Sub-navigation Bar -->
         <div class="course-subnav">
-          <button class="subnav-btn ${activeSubTab === 'dashboard' ? 'active' : ''}" data-subtab="dashboard">
-            <span class="nav-icon">📊</span> 6-Week Dashboard
+          <button class="${getSubNavClasses('dashboard')}" data-subtab="dashboard">
+            <span class="nav-icon text-sm select-none">📊</span> 6-Week Dashboard
           </button>
-          <button class="subnav-btn ${activeSubTab === 'trips' ? 'active' : ''}" data-subtab="trips">
-            <span class="nav-icon">🧾</span> Shopping Trips & Receipts
+          <button class="${getSubNavClasses('trips')}" data-subtab="trips">
+            <span class="nav-icon text-sm select-none">🧾</span> Shopping Trips & Receipts
           </button>
-          <button class="subnav-btn ${activeSubTab === 'groceries' ? 'active' : ''}" data-subtab="groceries">
-            <span class="nav-icon">🥬</span> Grocery Purchases
+          <button class="${getSubNavClasses('groceries')}" data-subtab="groceries">
+            <span class="nav-icon text-sm select-none">🥬</span> Grocery Purchases
           </button>
-          <button class="subnav-btn ${activeSubTab === 'waste' ? 'active' : ''}" data-subtab="waste">
-            <span class="nav-icon">⚖️</span> Food Waste Log
+          <button class="${getSubNavClasses('waste')}" data-subtab="waste">
+            <span class="nav-icon text-sm select-none">⚖️</span> Food Waste Log
           </button>
-          <button class="subnav-btn ${activeSubTab === 'mealplan' ? 'active' : ''}" data-subtab="mealplan">
-            <span class="nav-icon">📋</span> Weekly Meal Planner
+          <button class="${getSubNavClasses('mealplan')}" data-subtab="mealplan">
+            <span class="nav-icon text-sm select-none">📋</span> Weekly Meal Planner
           </button>
-          <button class="subnav-btn ${activeSubTab === 'export' ? 'active' : ''}" data-subtab="export">
-            <span class="nav-icon">📁</span> CSV Export & Report
+          <button class="${getSubNavClasses('export')}" data-subtab="export">
+            <span class="nav-icon text-sm select-none">📁</span> CSV Export & Report
           </button>
         </div>
       </div>
@@ -265,9 +272,9 @@ function renderDashboardTab(comparison, config, state) {
             </thead>
             <tbody>
               ${weeklyData.map(w => {
-                const isUnderBudget = w.budgetDifference >= 0;
-                const hasSavings = w.savingsVsBaseline >= 0;
-                return `
+    const isUnderBudget = w.budgetDifference >= 0;
+    const hasSavings = w.savingsVsBaseline >= 0;
+    return `
                   <tr class="${w.isBaseline ? 'baseline-row' : ''}">
                     <td>
                       <div style="font-weight: 700;">Week ${w.weekNumber}</div>
@@ -284,13 +291,13 @@ function renderDashboardTab(comparison, config, state) {
                     </td>
                     <td style="font-family: var(--font-mono);">
                       ${w.isBaseline ? '<span class="badge-neutral">Baseline Ref</span>' : (
-                        w.hasRecords ? `
+        w.hasRecords ? `
                           <span class="${hasSavings ? 'text-safe' : 'text-avoid'}" style="font-weight: 700;">
                             ${hasSavings ? '▼ -' : '▲ +'}₱${formatNumber(Math.abs(w.savingsVsBaseline))}
                           </span>
                           <span style="font-size: 0.72rem; opacity: 0.8;">(${w.savingsPercent.toFixed(1)}%)</span>
                         ` : '—'
-                      )}
+      )}
                     </td>
                     <td style="font-family: var(--font-mono);">
                       ${w.totalScaleWeightKg > 0 ? `<strong>${w.totalScaleWeightKg.toFixed(2)}</strong> kg` : '—'}
@@ -306,14 +313,14 @@ function renderDashboardTab(comparison, config, state) {
                     </td>
                     <td>
                       ${!w.hasRecords ? '<span class="status-tag pending">Awaiting Entry</span>' : (
-                        w.isBaseline ? '<span class="status-tag baseline">W1 Baseline</span>' : (
-                          isUnderBudget ? '<span class="status-tag safe">On Target</span>' : '<span class="status-tag avoid">Over Budget</span>'
-                        )
-                      )}
+        w.isBaseline ? '<span class="status-tag baseline">W1 Baseline</span>' : (
+          isUnderBudget ? '<span class="status-tag safe">On Target</span>' : '<span class="status-tag avoid">Over Budget</span>'
+        )
+      )}
                     </td>
                   </tr>
                 `;
-              }).join('')}
+  }).join('')}
             </tbody>
           </table>
         </div>
@@ -328,21 +335,21 @@ function renderDashboardTab(comparison, config, state) {
           
           <div class="custom-bar-chart">
             ${weeklyData.map(w => {
-              const maxVal = Math.max(...weeklyData.map(d => Math.max(d.totalExpense, d.targetBudget)), baselineExpense, 5000);
-              const heightPct = Math.min(Math.round((w.totalExpense / maxVal) * 100), 100);
-              const baselinePct = Math.min(Math.round((baselineExpense / maxVal) * 100), 100);
-              return `
+    const maxVal = Math.max(...weeklyData.map(d => Math.max(d.totalExpense, d.targetBudget)), baselineExpense, 5000);
+    const heightPct = Math.min(Math.round((w.totalExpense / maxVal) * 100), 100);
+    const baselinePct = Math.min(Math.round((baselineExpense / maxVal) * 100), 100);
+    return `
                 <div class="bar-col">
                   <div class="bar-container">
                     <div class="baseline-line-indicator" style="bottom: ${baselinePct}%;" title="W1 Baseline: ₱${baselineExpense}"></div>
                     <div class="bar-fill ${w.isBaseline ? 'baseline-fill' : (w.totalExpense <= baselineExpense ? 'safe-fill' : 'over-fill')}" style="height: ${w.hasRecords ? Math.max(heightPct, 6) : 2}%;">
-                      <span class="bar-value-label">₱${w.totalExpense > 0 ? (w.totalExpense >= 1000 ? (w.totalExpense/1000).toFixed(1) + 'k' : w.totalExpense) : '0'}</span>
+                      <span class="bar-value-label">₱${w.totalExpense > 0 ? (w.totalExpense >= 1000 ? (w.totalExpense / 1000).toFixed(1) + 'k' : w.totalExpense) : '0'}</span>
                     </div>
                   </div>
                   <div class="bar-x-label">W${w.weekNumber}</div>
                 </div>
               `;
-            }).join('')}
+  }).join('')}
           </div>
           <div class="chart-legend">
             <span class="legend-item"><span class="legend-color baseline-color"></span> Baseline (W1)</span>
@@ -359,9 +366,9 @@ function renderDashboardTab(comparison, config, state) {
           
           <div class="custom-bar-chart">
             ${weeklyData.map(w => {
-              const maxWaste = Math.max(...weeklyData.map(d => d.totalWasteKg), 2);
-              const heightPct = Math.min(Math.round((w.totalWasteKg / maxWaste) * 100), 100);
-              return `
+    const maxWaste = Math.max(...weeklyData.map(d => d.totalWasteKg), 2);
+    const heightPct = Math.min(Math.round((w.totalWasteKg / maxWaste) * 100), 100);
+    return `
                 <div class="bar-col">
                   <div class="bar-container">
                     <div class="bar-fill waste-fill" style="height: ${w.totalWasteKg > 0 ? Math.max(heightPct, 6) : 2}%;">
@@ -371,7 +378,7 @@ function renderDashboardTab(comparison, config, state) {
                   <div class="bar-x-label">W${w.weekNumber}</div>
                 </div>
               `;
-            }).join('')}
+  }).join('')}
           </div>
           <div class="chart-legend">
             <span class="legend-item"><span class="legend-color waste-color"></span> Scale Waste (kg)</span>
@@ -440,8 +447,8 @@ function renderShoppingTripsTab(state) {
       ` : `
         <div class="trips-grid">
           ${trips.map(trip => {
-            const items = getGroceryItems(trip.id);
-            return `
+    const items = getGroceryItems(trip.id);
+    return `
               <div class="trip-card" data-trip-id="${trip.id}">
                 <div class="trip-card-header">
                   <div style="display: flex; align-items: center; gap: 10px;">
@@ -509,7 +516,7 @@ function renderShoppingTripsTab(state) {
                 </div>
               </div>
             `;
-          }).join('')}
+  }).join('')}
         </div>
       `}
     </div>
@@ -559,8 +566,8 @@ function renderGroceryPurchasesTab(state) {
             </thead>
             <tbody>
               ${items.map(i => {
-                const status = (i.lidStatus || 'SAFE').toUpperCase();
-                return `
+    const status = (i.lidStatus || 'SAFE').toUpperCase();
+    return `
                   <tr>
                     <td>
                       <div style="font-weight: 700;">${escapeHtml(i.name)}</div>
@@ -590,7 +597,7 @@ function renderGroceryPurchasesTab(state) {
                     </td>
                   </tr>
                 `;
-              }).join('')}
+  }).join('')}
             </tbody>
           </table>
         </div>
@@ -748,8 +755,8 @@ function renderMealPlanTab(state) {
       <!-- Meal Plan Calendar Grid -->
       <div class="mealplan-calendar-grid">
         ${daysOfWeek.map(day => {
-          const dayPlans = plans.filter(p => p.dayOfWeek === day);
-          return `
+    const dayPlans = plans.filter(p => p.dayOfWeek === day);
+    return `
             <div class="calendar-day-column">
               <div class="calendar-day-header">${day}</div>
               <div class="calendar-day-content">
@@ -773,7 +780,7 @@ function renderMealPlanTab(state) {
               </div>
             </div>
           `;
-        }).join('')}
+  }).join('')}
       </div>
     </div>
   `;
@@ -926,10 +933,9 @@ function renderReceiptScanModal(state) {
   }
 
   const dietBadgeHtml = scanData ? `
-    <div class="p-3 rounded-xl border mb-3 flex items-center justify-between gap-3 ${
-      (flaggedCount || 0) > 0
-        ? 'bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200'
-        : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-900 dark:text-emerald-200'
+    <div class="p-3 rounded-xl border mb-3 flex items-center justify-between gap-3 ${(flaggedCount || 0) > 0
+      ? 'bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200'
+      : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-900 dark:text-emerald-200'
     }">
       <div class="flex items-center gap-2.5">
         <span class="text-xl">${dietProfile.icon}</span>
@@ -943,11 +949,10 @@ function renderReceiptScanModal(state) {
           </div>
         </div>
       </div>
-      <span class="text-xs px-2.5 py-1 rounded-full font-bold shrink-0 ${
-        flaggedCount > 0
-          ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300'
-          : 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300'
-      }">
+      <span class="text-xs px-2.5 py-1 rounded-full font-bold shrink-0 ${flaggedCount > 0
+      ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300'
+      : 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300'
+    }">
         ${flaggedCount > 0 ? `⚠️ ${flaggedCount} Flagged` : '✓ Protocol Compliant'}
       </span>
     </div>
@@ -1183,16 +1188,23 @@ function renderFoodWasteModal(state) {
             </div>
           </div>
 
-          <div class="form-group">
-            <label class="form-label" for="waste-reason">Disposal Reason</label>
-            <select id="waste-reason" class="form-input">
-              <option value="Spoiled / Molded">Spoiled / Molded</option>
-              <option value="Cooked Excess / Leftover">Cooked Excess / Leftover</option>
-              <option value="Expired Package">Expired Package</option>
-              <option value="Peels & Trimmings">Peels & Trimmings</option>
-              <option value="LID Protocol Mismatch">LID Protocol Mismatch (Diet Safety)</option>
-            </select>
-          </div>
+         <div class="form-group">
+          <label class="form-label" for="waste-reason">Disposal Reason</label>
+          <select id="waste-reason" class="form-input">
+            <option value="Spoiled / Molded">Spoiled / Molded</option>
+            <option value="Cooked Excess / Leftover">Cooked Excess / Leftover</option>
+            <option value="Expired Package">Expired Package</option>
+            <option value="Peels & Trimmings">Peels & Trimmings</option>
+            <option value="Diet Protocol Mismatch">Diet Protocol Mismatch</option>
+            <option value="Accidental Spillage / Dropped">Accidental Spillage / Dropped</option>
+            <option value="Burnt / Cooking Error">Burnt / Cooking Error</option>
+            <option value="Cross-Contamination">Cross-Contamination</option>
+            <option value="Freezer Burn / Storage Defect">Freezer Burn / Storage Defect</option>
+            <option value="Stale / Texture Loss">Stale / Texture Loss</option>
+            <option value="Plate Scraping / Uneaten Portion">Plate Scraping / Uneaten Portion</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
 
           <div class="form-group">
             <label class="form-label" for="waste-cost-est">Estimated Cost (₱ PHP)</label>
@@ -1200,11 +1212,11 @@ function renderFoodWasteModal(state) {
             <div class="form-help">Tracked strictly as a food loss indicator; never added to your food expenses.</div>
           </div>
 
-          <!-- Strict tare reminder checkbox -->
+          <!-- Relaxed tare reminder checkbox -->
           <div style="background: var(--bg-card-subtle); padding: 10px 14px; border-radius: var(--radius-sm); border-left: 3px solid var(--accent-cyan); margin-bottom: 16px;">
             <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.8rem; cursor: pointer;">
-              <input type="checkbox" id="tare-check" required style="margin-top: 2px;" />
-              <span><strong>Packaging Excluded:</strong> I confirm this weight reflects purely edible food waste and excludes plates, plastic wrappers, or container tare.</span>
+              <input type="checkbox" id="tare-check" style="margin-top: 2px;" />
+              <span><strong>Approximate Food Only:</strong> Checked your best guess without heavy containers or bowls? (Rough estimates are totally fine!)</span>
             </label>
           </div>
 
