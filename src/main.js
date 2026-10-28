@@ -1796,6 +1796,11 @@ Cracked black pepper`;
   window.handleExportItemizedGroceries = () => handleExportItemizedGroceries(state);
   window.handleExportFoodWaste = () => handleExportFoodWaste(state);
   window.triggerCsvDownload = triggerCsvDownload;
+  window.handleDownloadClick = (e, exportFn) => {
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    if (typeof exportFn === 'function') return exportFn();
+  };
 
   const triggerExport = (type) => {
     if (type === 'summary') {
@@ -1809,21 +1814,16 @@ Cracked black pepper`;
     }
   };
 
-  // CSV Export Cards Click Listeners (Clicking anywhere on card triggers export)
-  document.querySelectorAll('.export-card[data-export-type]').forEach(card => {
-    card.addEventListener('click', (e) => {
-      const type = card.getAttribute('data-export-type');
-      triggerExport(type);
-    });
-  });
-
-  // CSV Export Buttons Click Listeners
+  // CSV Export Buttons Click Listeners (Single trigger with stopPropagation)
   document.querySelectorAll('.export-btn[data-export-type]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const type = btn.getAttribute('data-export-type');
-      triggerExport(type);
-    });
+    // Only bind if not already handled inline to prevent duplicate downloads
+    if (!btn.getAttribute('onclick')) {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const type = btn.getAttribute('data-export-type');
+        triggerExport(type);
+      });
+    }
   });
 
   // Download All CSVs

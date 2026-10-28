@@ -4692,6 +4692,24 @@ html.light .active-scanning-overlay {
   margin-top: 12px;
 }
 
+/* Download button icon constraints & utility sizing */
+.w-4 { width: 1rem !important; }
+.h-4 { height: 1rem !important; }
+.w-5 { width: 1.25rem !important; }
+.h-5 { height: 1.25rem !important; }
+.mr-1\.5 { margin-right: 0.375rem !important; }
+.mr-2 { margin-right: 0.5rem !important; }
+
+.export-btn svg {
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+  max-width: 1.25rem !important;
+  max-height: 1.25rem !important;
+  flex-shrink: 0 !important;
+  display: inline-block !important;
+  vertical-align: middle !important;
+}
+
 /* ==========================================================================
    THEME CONTRAST & RESPONSIVE LIGHT MODE UTILITIES
    ========================================================================== */

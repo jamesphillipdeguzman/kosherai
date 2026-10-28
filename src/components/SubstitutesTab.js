@@ -32,12 +32,14 @@ export function renderSubstitutesTab(state) {
 
   return `
     <div class="substitutes-container">
-      <div class="rounded-2xl p-6 bg-slate-900 text-white shadow-lg border border-slate-800" style="text-align: left; padding: 20px 24px; margin-bottom: 18px;">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-          <span style="font-size: 1.8rem;">🔄</span>
-          <div>
-            <h2 class="text-white font-bold" style="font-size: 1.25rem;">Safe Culinary Substitutes</h2>
-            <p class="text-slate-200" style="font-size: 0.84rem;">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm mb-4">
+        <div class="flex items-center gap-3">
+          <div class="bg-sky-500 text-white p-2.5 rounded-xl shrink-0 flex items-center justify-center text-xl select-none">
+            🔄
+          </div>
+          <div class="min-w-0">
+            <h2 class="text-slate-900 dark:text-white font-bold text-lg">Safe Culinary Substitutes</h2>
+            <p class="text-slate-600 dark:text-slate-300 text-xs mt-0.5 leading-relaxed">
               ${escapeHtml(currentProfile.swapTip || 'Swap risky grocery staples with delicious, compliant alternatives so you never feel deprived.')}
             </p>
           </div>

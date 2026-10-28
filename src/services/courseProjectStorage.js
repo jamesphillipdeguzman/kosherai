@@ -1236,6 +1236,9 @@ export function showToast(message, type = 'warning') {
 /**
  * Robust Client-Side CSV Blob Generator & Anchor Click Trigger
  */
+let lastDownloadTimestamp = 0;
+let lastDownloadFileName = '';
+
 export function triggerCsvDownload(arg1, arg2) {
   let filename = 'export.csv';
   let csvContent = '';
@@ -1250,6 +1253,14 @@ export function triggerCsvDownload(arg1, arg2) {
     filename = arg1 || 'export.csv';
     csvContent = arg2 || '';
   }
+
+  // Prevent duplicate downloads triggered within 500ms for the exact same file
+  const now = Date.now();
+  if (filename === lastDownloadFileName && (now - lastDownloadTimestamp < 500)) {
+    return false;
+  }
+  lastDownloadTimestamp = now;
+  lastDownloadFileName = filename;
 
   if (!csvContent || !csvContent.trim()) {
     showToast("No data available to export for this report.", "warning");

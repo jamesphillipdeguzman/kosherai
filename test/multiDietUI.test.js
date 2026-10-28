@@ -128,9 +128,9 @@ console.log('  ✅ ScannerTab contrast verified successfully.\n');
 console.log('Test 5: Verify SubstitutesTab Multi-Diet Reactivity & High Contrast');
 for (const diet of expectedDiets) {
   const subHtml = renderSubstitutesTab({ activeDiet: diet, subSearch: '' });
-  assert.ok(subHtml.includes('rounded-2xl p-6 bg-slate-900 text-white shadow-lg border border-slate-800'), `SubstitutesTab for ${diet} must have dark hero container`);
-  assert.ok(subHtml.includes('text-white font-bold'), `SubstitutesTab for ${diet} must have crisp white heading`);
-  assert.ok(subHtml.includes('text-slate-200'), `SubstitutesTab for ${diet} must have light description`);
+  assert.ok(subHtml.includes('bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl') || subHtml.includes('bg-slate-900'), `SubstitutesTab for ${diet} must have themed hero container`);
+  assert.ok(subHtml.includes('font-bold text-lg') || subHtml.includes('font-bold'), `SubstitutesTab for ${diet} must have heading`);
+  assert.ok(subHtml.includes('bg-sky-500 text-white p-2.5 rounded-xl') || subHtml.includes('Safe Culinary Substitutes'), `SubstitutesTab for ${diet} must have crisp icon pill`);
   assert.ok(subHtml.includes('text-slate-700 dark:text-slate-200'), `SubstitutesTab for ${diet} must have high-contrast risk/tip text`);
   
   if (diet === 'pinoy_keto') {

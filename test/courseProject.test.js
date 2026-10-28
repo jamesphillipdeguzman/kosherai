@@ -40,7 +40,7 @@ import {
   EMPTY_EXPORT_MESSAGE
 } from '../src/services/courseProjectStorage.js';
 
-import { renderCourseProjectView } from '../src/components/CourseProjectView.js';
+import { renderCourseProjectView, handleDownloadClick } from '../src/components/CourseProjectView.js';
 
 console.log('🧪 Starting KosherAI Six-Week Project Test Suite...\n');
 
@@ -283,6 +283,20 @@ assert.ok(exportTabHtml.includes('handleExportWeeklySummary'), 'Card 1 is wired 
 assert.ok(exportTabHtml.includes('handleExportShoppingTrips'), 'Card 2 is wired to handleExportShoppingTrips');
 assert.ok(exportTabHtml.includes('handleExportItemizedGroceries'), 'Card 3 is wired to handleExportItemizedGroceries');
 assert.ok(exportTabHtml.includes('Download CSV'), 'Cards have explicit Download CSV buttons');
+
+// 9d: handleDownloadClick prevents event bubbling and runs callback exactly once
+let stopped = false;
+let exportRanCount = 0;
+const mockEvent = {
+  stopPropagation: () => { stopped = true; },
+  preventDefault: () => {}
+};
+handleDownloadClick(mockEvent, () => { exportRanCount++; });
+assert.strictEqual(stopped, true, 'handleDownloadClick calls stopPropagation()');
+assert.strictEqual(exportRanCount, 1, 'handleDownloadClick executes callback exactly once');
+assert.ok(exportTabHtml.includes('handleDownloadClick'), 'Export buttons use handleDownloadClick to stop event bubbling');
+assert.ok(exportTabHtml.includes('w-5 h-5 flex-shrink-0 mr-2'), 'Download SVG icon uses standard compact dimensions');
+
 console.log('  ✅ Active state fallback, empty export handling, and card click bindings verified.');
 
 console.log('\n=========================================');
