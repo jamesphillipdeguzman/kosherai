@@ -982,18 +982,18 @@ function renderReceiptScanModal(state) {
                   </div>
                 </div>
 
-                <!-- 2. CRITICAL FIELD: Whole-Grocery Scale Weight Card (Full width, p-4, clean unit suffix) -->
-                <div class="rounded-2xl p-4 bg-emerald-50/70 border border-emerald-200/80 dark:bg-slate-900/60 dark:border-slate-700/60 transition-colors w-full">
-                  <label class="text-xs sm:text-sm font-semibold text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5 mb-1.5" for="edit-scale-weight">
+                <!-- 2. CRITICAL FIELD: Whole-Grocery Scale Weight (dark field, transparent input, white text) -->
+                <div class="scale-weight-field">
+                  <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="edit-scale-weight">
                     ⚖️ Whole-Grocery Scale Weight (kg)
                   </label>
-                  <div class="relative mt-1 flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/80 px-3 py-2 text-slate-900 dark:text-white focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition-colors">
-                    <input type="number" step="0.01" min="0" id="edit-scale-weight" class="w-full bg-transparent text-base font-semibold text-slate-900 dark:text-white outline-none placeholder-slate-400 dark:placeholder-slate-500" placeholder="e.g. 2.20" value="${scanData?.totalScaleWeightKg || ''}" ${isScanning ? 'disabled' : ''} required />
-                    <span class="scale-unit-badge ml-2 select-none text-sm font-semibold text-slate-500 dark:text-slate-400">kg</span>
+                  <div class="scale-weight-wrapper relative flex items-center rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 focus-within:border-emerald-500">
+                    <input type="number" step="0.01" min="0" id="edit-scale-weight" class="scale-weight-input w-full bg-transparent text-sm font-medium text-white placeholder-slate-500 outline-none border-none focus:ring-0" placeholder="0.00" value="${scanData?.totalScaleWeightKg || ''}" ${isScanning ? 'disabled' : ''} required />
+                    <span class="scale-weight-unit ml-2 select-none text-xs font-bold uppercase text-slate-400">kg</span>
                   </div>
-                  <div class="text-[11px] sm:text-xs text-emerald-900/80 dark:text-slate-400 mt-2 font-normal leading-relaxed">
+                  <p class="scale-weight-help mt-1 text-[11px] leading-tight text-slate-400">
                     Measured physical weight of food haul on your home scale before unpacking. Kept separate from receipt item weights for academic rigor.
-                  </div>
+                  </p>
                 </div>
 
                 <!-- 3. Final Amount Paid & Trip Type (2-column responsive subgrid) -->

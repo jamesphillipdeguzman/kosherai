@@ -4191,6 +4191,90 @@ html.light .highlight-box .scale-unit-badge {
   color: #0f766e;
 }
 
+/* Whole-Grocery Scale Weight Field
+   No Tailwind build exists in this project, so the utility classes used in the
+   markup are backed by explicit rules here. !important beats the global
+   `html.light .form-input` / `.bg-white` overrides and UA input defaults. */
+.scale-weight-field {
+  width: 100%;
+}
+
+.scale-weight-field > label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #cbd5e1 !important; /* slate-300 */
+  margin-bottom: 4px;
+}
+
+.scale-weight-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  border: 1px solid #334155 !important; /* slate-700 */
+  background-color: #1e293b !important; /* slate-800 */
+  padding: 8px 12px;
+  transition: border-color 0.15s ease;
+}
+
+.scale-weight-wrapper:focus-within {
+  border-color: #10b981 !important; /* emerald-500 */
+}
+
+.scale-weight-input,
+.scale-weight-input:focus,
+.scale-weight-input:disabled {
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  background-color: transparent !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: textfield;
+}
+
+.scale-weight-input::placeholder {
+  color: #64748b !important; /* slate-500 */
+  -webkit-text-fill-color: #64748b !important;
+  opacity: 1;
+}
+
+/* Prevent Chrome autofill from repainting the field white */
+.scale-weight-input:-webkit-autofill,
+.scale-weight-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+.scale-weight-unit {
+  margin-left: 8px;
+  user-select: none;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #94a3b8 !important; /* slate-400 */
+}
+
+.scale-weight-help {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.25;
+  color: #94a3b8 !important; /* slate-400 */
+}
+
 /* Animated Scanning Beam & Pulse Effect for Gemini Receipt Scanner */
 @keyframes scanLaserBeam {
   0% {
