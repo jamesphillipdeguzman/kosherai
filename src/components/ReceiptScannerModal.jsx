@@ -691,16 +691,30 @@ export default function ReceiptScannerModal({
                   </div>
 
                   {/* 2. Whole-Grocery Scale Weight Card */}
-                  <div className="rounded-2xl p-4 bg-teal-50/70 border border-teal-200/80 dark:bg-slate-800/80 dark:border-teal-900/50 transition-colors w-full">
+                  <div
+                    className={`rounded-2xl p-4 transition-colors w-full border ${
+                      theme === 'dark'
+                        ? 'bg-slate-900/60 border-slate-700/60'
+                        : 'bg-emerald-50/70 border-emerald-200/80'
+                    } dark:bg-slate-900/60 dark:border-slate-700/60`}
+                  >
                     <label
                       htmlFor={scaleWeightId}
-                      className="text-xs font-semibold text-teal-800 dark:text-teal-300 flex items-center gap-1.5 mb-2"
+                      className={`text-xs sm:text-sm font-semibold flex items-center gap-1.5 mb-1.5 ${
+                        theme === 'dark' ? 'text-emerald-400' : 'text-emerald-800'
+                      } dark:text-emerald-400`}
                     >
                       ⚖️ Whole-Grocery Scale Weight (kg)
                     </label>
 
-                    {/* Suffix container with absolute positioning to prevent overlap */}
-                    <div className="relative w-full flex items-center">
+                    {/* Padded input group with embedded trailing unit badge */}
+                    <div
+                      className={`relative mt-1 flex items-center rounded-lg border px-3 py-2 transition-colors focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 ${
+                        theme === 'dark'
+                          ? 'border-slate-700 bg-slate-800/80 text-white'
+                          : 'border-slate-300 bg-white text-slate-900'
+                      } dark:border-slate-700 dark:bg-slate-800/80 dark:text-white`}
+                    >
                       <input
                         id={scaleWeightId}
                         type="number"
@@ -708,19 +722,30 @@ export default function ReceiptScannerModal({
                         min="0"
                         required
                         disabled={isScanning}
-                        placeholder="e.g. 5.85"
                         value={scaleWeight}
                         onChange={e => setScaleWeight(e.target.value)}
-                        className="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-teal-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-base focus:ring-2 focus:ring-teal-500 outline-none pr-12 font-mono font-bold"
+                        placeholder="e.g. 2.20"
+                        className={`w-full bg-transparent text-base font-semibold outline-none ${
+                          theme === 'dark'
+                            ? 'text-white placeholder-slate-500'
+                            : 'text-slate-900 placeholder-slate-400'
+                        } dark:text-white dark:placeholder-slate-500`}
                       />
-                      <span className="absolute right-4 font-bold text-sm select-none pointer-events-none text-teal-700/70 dark:text-slate-400">
+                      <span
+                        className={`ml-2 select-none text-sm font-semibold ${
+                          theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                        } dark:text-slate-400`}
+                      >
                         kg
                       </span>
                     </div>
 
-                    <p className="text-[11px] text-teal-700/80 dark:text-slate-400 mt-2 font-normal leading-relaxed">
-                      Measured physical weight of food haul on your home scale before unpacking. Kept separate from
-                      receipt item weights for accurate academic tracking.
+                    <p
+                      className={`text-[11px] sm:text-xs mt-2 font-normal leading-relaxed ${
+                        theme === 'dark' ? 'text-slate-400' : 'text-emerald-900/80'
+                      } dark:text-slate-400`}
+                    >
+                      Measured physical weight of food haul on your home scale before unpacking. Kept separate from receipt item weights for academic rigor.
                     </p>
                   </div>
 

@@ -116,13 +116,16 @@ export function renderManualTripModal(state = {}) {
           </div>
 
           <!-- CRITICAL FIELD: Whole-Grocery Scale Weight Card -->
-          <div class="rounded-2xl p-4 bg-teal-50/70 border border-teal-200/80 dark:bg-slate-800/80 dark:border-teal-900/50 transition-colors w-full mb-3">
-            <label class="text-xs font-semibold text-teal-800 dark:text-teal-300 flex items-center gap-1.5 mb-1.5" for="manual-scale-weight">
+          <div class="rounded-2xl p-4 bg-emerald-50/70 border border-emerald-200/80 dark:bg-slate-900/60 dark:border-slate-700/60 transition-colors w-full mb-3">
+            <label class="text-xs sm:text-sm font-semibold text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5 mb-1.5" for="manual-scale-weight">
               ⚖️ Whole-Grocery Scale Weight (kg)
             </label>
-            <input type="number" step="0.01" min="0" id="manual-scale-weight" class="w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-teal-300 dark:border-slate-700 rounded-xl px-3 py-2.5 text-base focus:ring-2 focus:ring-teal-500 outline-none" placeholder="e.g. 4.25" required />
-            <div class="text-[11px] text-teal-700/80 dark:text-slate-400 mt-2 font-normal leading-relaxed">
-              Measured physical weight of food haul on your home scale before unpacking.
+            <div class="relative mt-1 flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/80 px-3 py-2 text-slate-900 dark:text-white focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 transition-colors">
+              <input type="number" step="0.01" min="0" id="manual-scale-weight" class="w-full bg-transparent text-base font-semibold text-slate-900 dark:text-white outline-none placeholder-slate-400 dark:placeholder-slate-500" placeholder="e.g. 2.20" required />
+              <span class="scale-unit-badge ml-2 select-none text-sm font-semibold text-slate-500 dark:text-slate-400">kg</span>
+            </div>
+            <div class="text-[11px] sm:text-xs text-emerald-900/80 dark:text-slate-400 mt-2 font-normal leading-relaxed">
+              Measured physical weight of food haul on your home scale before unpacking. Kept separate from receipt item weights for academic rigor.
             </div>
           </div>
 
