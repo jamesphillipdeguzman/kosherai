@@ -166,7 +166,7 @@ export default async function handler(req, res) {
         `;
       } else {
         rows = await sql`
-          SELECT * FROM food_waste_logs ORDER BY date DESC, created_at DESC LIMIT 200;
+          SELECT * FROM food_waste_logs ORDER BY date DESC, created_at DESC LIMIT 2000;
         `;
       }
 

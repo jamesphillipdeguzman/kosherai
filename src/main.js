@@ -42,6 +42,7 @@ import {
   saveShoppingTrip,
   deleteShoppingTrip,
   syncPendingTrips,
+  restoreFromNeon,
   saveFoodWasteRecord,
   deleteFoodWasteRecord,
   markFoodWasteSynced,
@@ -154,7 +155,11 @@ const state = {
   scannedReceiptData: null,
   receiptScanning: false,
   receiptProgress: 0,
-  receiptStatusMsg: ''
+  receiptStatusMsg: '',
+
+  // Neon cloud re-hydration status ({ ok, message } | null) and in-flight flag
+  neonRestoreStatus: null,
+  neonRestoring: false
 };
 
 // Main DOM Render Function
@@ -1605,6 +1610,14 @@ Cracked black pepper`;
     });
   }
 
+  // Manual "Restore from Neon" Button: push pending local records, then pull the cloud copy
+  const restoreNeonBtn = document.querySelector('#restore-neon-btn');
+  if (restoreNeonBtn) {
+    restoreNeonBtn.addEventListener('click', () => {
+      pushThenRestoreFromNeon({ manual: true });
+    });
+  }
+
   // Delete Trip
   document.querySelectorAll('.delete-trip-btn[data-delete-trip]').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -1959,8 +1972,7 @@ window.addEventListener('online', () => {
   state.isOnline = true;
   render();
   refreshScanHistory();
-  syncPendingTrips().then(() => render()).catch(() => {});
-  syncPendingFoodWaste().then(() => render()).catch(() => {});
+  pushThenRestoreFromNeon();
 });
 window.addEventListener('offline', () => {
   state.isOnline = false;
@@ -1996,11 +2008,45 @@ if ('serviceWorker' in navigator) {
   }
 }
 
+/**
+ * Uploads pending offline records first (so local edits are never overwritten),
+ * then re-hydrates trips, grocery items and food waste from Neon into the local cache.
+ * @param {{ manual?: boolean }} [opts] - manual=true surfaces a status message even on silent boots
+ */
+async function pushThenRestoreFromNeon({ manual = false } = {}) {
+  if (state.neonRestoring) return;
+  if (!navigator.onLine) {
+    if (manual) {
+      state.neonRestoreStatus = { ok: false, message: 'You are offline. Showing locally cached data.' };
+      render();
+    }
+    return;
+  }
+
+  state.neonRestoring = true;
+  if (manual) render();
+
+  try {
+    await syncPendingTrips().catch(() => {});
+    await syncPendingFoodWaste().catch(() => {});
+    const result = await restoreFromNeon();
+    // Silent on boot unless something was actually restored or the user asked
+    if (manual || (result.ok && (result.tripsRestored + result.wasteRestored) > 0)) {
+      state.neonRestoreStatus = { ok: result.ok, message: result.message };
+    }
+  } catch (err) {
+    console.warn('[Restore] Neon re-hydration failed:', err);
+    if (manual) state.neonRestoreStatus = { ok: false, message: 'Restore failed. Local data kept.' };
+  } finally {
+    state.neonRestoring = false;
+    render();
+  }
+}
+
 // Initial Render and mount sync from Neon PostgreSQL & IndexedDB
 render();
 refreshScanHistory();
-syncPendingTrips().then(() => render()).catch(() => {});
-syncPendingFoodWaste().then(() => render()).catch(() => {});
+pushThenRestoreFromNeon();
 fetchAllRecipeInteractions().then(() => render()).catch(() => {});
 syncPendingRecipeInteractions().catch(() => {});
 

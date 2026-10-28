@@ -451,6 +451,210 @@ export async function syncPendingTrips() {
   }
 }
 
+// ==========================================
+// NEON → LOCAL RE-HYDRATION (RESTORE FROM CLOUD)
+// ==========================================
+
+function buildTripExpenseRecord(trip, itemsCount) {
+  return {
+    id: `exp_trip_${trip.id}`,
+    tripId: trip.id,
+    date: trip.date,
+    projectWeek: Number(trip.projectWeek || 1),
+    vendor: trip.storeName,
+    category: trip.tripType,
+    amount: Number(trip.totalAmountPaid || 0),
+    isTripExpense: true,
+    notes: `Shopping trip (${itemsCount} items, whole weight: ${Number(trip.totalScaleWeightKg || 0)} kg)`
+  };
+}
+
+/**
+ * Merges remote Neon records into the localStorage cache.
+ *
+ * Merge rules (non-destructive):
+ * - Remote records are authoritative for any id they contain and are marked synced: true,
+ *   EXCEPT when the local copy is still pending upload (synced === false) — local edits win.
+ * - Local records absent from the remote response are kept untouched (never deleted).
+ * - Exactly one trip-linked expense is (re)built per restored trip so dashboards stay accurate;
+ *   standalone expenses are preserved.
+ *
+ * @param {Array|null} remoteTrips - Trips from GET /api/trips (each with items[]), or null to skip
+ * @param {Array|null} remoteWaste - Logs from GET /api/food-waste, or null to skip
+ * @returns {{ tripsRestored: number, itemsRestored: number, wasteRestored: number }}
+ */
+export function mergeRemoteCourseData(remoteTrips, remoteWaste) {
+  let tripsRestored = 0;
+  let itemsRestored = 0;
+  let wasteRestored = 0;
+
+  if (Array.isArray(remoteTrips)) {
+    const localTrips = getShoppingTrips();
+    const localItems = getGroceryItems();
+    const localExpenses = getExpenses();
+    const localTripMap = new Map(localTrips.map(t => [t.id, t]));
+
+    const restoredTripIds = new Set();
+    const restoredTrips = [];
+    const restoredItems = [];
+
+    for (const remote of remoteTrips) {
+      if (!remote || !remote.id) continue;
+      const local = localTripMap.get(remote.id);
+      if (local && local.synced === false) continue; // Pending local edit wins
+
+      const { items: remoteItems = [], ...tripFields } = remote;
+      const items = (Array.isArray(remoteItems) ? remoteItems : []).map(item => ({
+        ...item,
+        tripId: remote.id,
+        synced: true
+      }));
+
+      restoredTrips.push({
+        ...tripFields,
+        projectWeek: Number(tripFields.projectWeek || 1),
+        itemsCount: items.length || Number(tripFields.itemsCount || 0),
+        synced: true
+      });
+      restoredItems.push(...items);
+      restoredTripIds.add(remote.id);
+    }
+
+    const keptTrips = localTrips.filter(t => !restoredTripIds.has(t.id));
+    const mergedTrips = [...restoredTrips, ...keptTrips].sort((a, b) =>
+      String(b.date || '').localeCompare(String(a.date || '')) ||
+      String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
+    );
+
+    const keptItems = localItems.filter(i => !restoredTripIds.has(i.tripId));
+    const mergedItems = [...keptItems, ...restoredItems];
+
+    const keptExpenses = localExpenses.filter(e => !restoredTripIds.has(e.tripId));
+    const rebuiltExpenses = restoredTrips.map(t => buildTripExpenseRecord(t, t.itemsCount));
+    const mergedExpenses = [...rebuiltExpenses, ...keptExpenses];
+
+    localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(mergedTrips));
+    localStorage.setItem(STORAGE_KEYS.GROCERY_ITEMS, JSON.stringify(mergedItems));
+    localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(mergedExpenses));
+
+    tripsRestored = restoredTrips.length;
+    itemsRestored = restoredItems.length;
+  }
+
+  if (Array.isArray(remoteWaste)) {
+    const localWaste = getFoodWasteRecords();
+    const localWasteMap = new Map(localWaste.map(w => [w.id, w]));
+    const restoredIds = new Set();
+    const restoredWaste = [];
+
+    for (const remote of remoteWaste) {
+      if (!remote || !remote.id) continue;
+      const local = localWasteMap.get(remote.id);
+      if (local && local.synced === false) continue; // Pending local edit wins
+      restoredWaste.push({
+        ...remote,
+        projectWeek: Number(remote.projectWeek || 1),
+        measuredWeightG: Number(remote.measuredWeightG || 0),
+        estimatedCost: Number(remote.estimatedCost || 0),
+        synced: true
+      });
+      restoredIds.add(remote.id);
+    }
+
+    const mergedWaste = [...restoredWaste, ...localWaste.filter(w => !restoredIds.has(w.id))].sort((a, b) =>
+      String(b.date || '').localeCompare(String(a.date || '')) ||
+      String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
+    );
+    localStorage.setItem(STORAGE_KEYS.FOOD_WASTE, JSON.stringify(mergedWaste));
+    wasteRestored = restoredWaste.length;
+  }
+
+  return { tripsRestored, itemsRestored, wasteRestored };
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs = 8000) {
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const res = await fetch(url, { method: 'GET', signal: controller?.signal });
+    if (!res || !res.ok) return null;
+    return await res.json().catch(() => null);
+  } catch (err) {
+    console.warn(`[Restore] GET ${url} failed:`, err.message);
+    return null;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Pulls all shopping trips (with grocery items) and food waste logs from Neon and
+ * re-caches them into localStorage + IndexedDB. Safe to call on every boot:
+ * offline / unconfigured / failed responses leave the local cache untouched.
+ *
+ * @returns {Promise<{ ok: boolean, offline?: boolean, tripsRestored: number, itemsRestored: number, wasteRestored: number, message: string }>}
+ */
+export async function restoreFromNeon() {
+  const empty = { tripsRestored: 0, itemsRestored: 0, wasteRestored: 0 };
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return { ok: false, offline: true, ...empty, message: 'Device is offline. Showing locally cached data.' };
+  }
+  if (typeof fetch !== 'function') {
+    return { ok: false, ...empty, message: 'Network fetch unavailable.' };
+  }
+
+  const [tripsPayload, wastePayload] = await Promise.all([
+    fetchJsonWithTimeout('/api/trips'),
+    fetchJsonWithTimeout('/api/food-waste')
+  ]);
+
+  // Only trust responses that actually came from Neon (offline fallbacks return empty arrays)
+  const tripsOk = Boolean(tripsPayload && tripsPayload.synced === true && !tripsPayload.offline && Array.isArray(tripsPayload.trips));
+  const wasteOk = Boolean(wastePayload && wastePayload.synced === true && !wastePayload.offline && Array.isArray(wastePayload.foodWaste));
+
+  if (!tripsOk && !wasteOk) {
+    return {
+      ok: false,
+      ...empty,
+      message: tripsPayload?.message || wastePayload?.message || 'Neon database is unreachable. Local data kept.'
+    };
+  }
+
+  const result = mergeRemoteCourseData(
+    tripsOk ? tripsPayload.trips : null,
+    wasteOk ? wastePayload.foodWaste : null
+  );
+
+  // Mirror restored records into IndexedDB so the offline-first layer matches localStorage
+  try {
+    if (tripsOk) {
+      for (const remote of tripsPayload.trips) {
+        const local = getShoppingTrips().find(t => t.id === remote.id);
+        if (!local || local.synced === false) continue;
+        await saveTripToIndexedDB(local, getGroceryItems(remote.id), true);
+      }
+    }
+    if (wasteOk) {
+      for (const remote of wastePayload.foodWaste) {
+        const local = getFoodWasteRecords().find(w => w.id === remote.id);
+        if (!local || local.synced === false) continue;
+        await saveFoodWasteToIndexedDB(local, true);
+      }
+    }
+  } catch (idbErr) {
+    console.warn('[Restore] IndexedDB mirror warning:', idbErr);
+  }
+
+  if (typeof window !== 'undefined' && typeof CustomEvent === 'function') {
+    window.dispatchEvent(new CustomEvent('kosherai-neon-restored', { detail: result }));
+  }
+
+  const message = `Restored ${result.tripsRestored} trips, ${result.itemsRestored} grocery items, and ${result.wasteRestored} food waste logs from Neon.`;
+  console.info(`[Restore] ${message}`);
+  return { ok: true, ...result, message };
+}
+
 // Auto-retry when connection restored
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {

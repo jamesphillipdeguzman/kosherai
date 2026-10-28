@@ -238,7 +238,7 @@ export default async function handler(req, res) {
         `;
       } else {
         tripRows = await sql`
-          SELECT * FROM shopping_trips ORDER BY date DESC, created_at DESC LIMIT 100;
+          SELECT * FROM shopping_trips ORDER BY date DESC, created_at DESC LIMIT 1000;
         `;
         purchaseRows = await sql`
           SELECT * FROM grocery_purchases ORDER BY created_at ASC;
