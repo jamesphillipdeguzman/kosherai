@@ -113,37 +113,48 @@ export function Header({
         </div>
 
         {appMode === 'diet' && (
-          <div className="protocol-banner flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 mt-3 mb-2">
-            <div className="banner-content min-w-0 flex-1">
-              <span className="banner-icon flex-shrink-0">{currentProfile.icon}</span>
+          <div className="protocol-banner flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm mt-3 mb-2">
+            {/* Left / Top side: Icon + Clinical Target text */}
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <span className="text-2xl flex-shrink-0 select-none banner-icon">
+                {currentProfile.icon}
+              </span>
               <div className="min-w-0">
-                <div className="banner-title">{currentProfile.target}</div>
-                <div className="banner-desc sm:whitespace-normal">{currentProfile.tagline}</div>
+                <h4 className="text-sm font-bold text-emerald-700 dark:text-emerald-400 banner-title">
+                  Clinical Target: {(currentProfile.target || '').replace(/^Clinical Target:\s*/i, '')}
+                </h4>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed banner-desc sm:whitespace-normal">
+                  {currentProfile.tagline}
+                </p>
               </div>
             </div>
-            <div className="banner-target inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-wide border border-teal-600/60 dark:border-teal-400/60 bg-teal-500/10 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200 banner-target-interactive" title="Change Diet Protocol">
-              <div className="protocol-pill-btn inline-flex items-center justify-between w-full gap-2">
-                <span className="protocol-pill-info inline-flex items-center gap-1.5 min-w-0">
-                  <span className="protocol-pill-icon text-sm select-none">{currentProfile.icon}</span>
-                  <span className="protocol-pill-label truncate font-bold">{currentProfile.shortName}</span>
-                </span>
-                <svg className="protocol-pill-chevron w-4 h-4 flex-shrink-0 text-teal-600 dark:text-teal-400 pointer-events-none" width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                  <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                </svg>
+
+            {/* Right / Bottom side: Diet Protocol Selector */}
+            <div className="w-full sm:w-auto flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800 flex justify-end">
+              <div className="banner-target inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-wide border border-teal-600/60 dark:border-teal-400/60 bg-teal-500/10 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200 banner-target-interactive" title="Change Diet Protocol">
+                <div className="protocol-pill-btn inline-flex items-center justify-between w-full gap-2">
+                  <span className="protocol-pill-info inline-flex items-center gap-1.5 min-w-0">
+                    <span className="protocol-pill-icon text-sm select-none">{currentProfile.icon}</span>
+                    <span className="protocol-pill-label truncate font-bold">{currentProfile.shortName}</span>
+                  </span>
+                  <svg className="protocol-pill-chevron w-4 h-4 flex-shrink-0 text-teal-600 dark:text-teal-400 pointer-events-none" width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <select
+                  id="header-diet-selector"
+                  value={activeDiet}
+                  onChange={(e) => onSelectDiet && onSelectDiet(e.target.value)}
+                  className="protocol-select-native"
+                  aria-label="Select Dietary Protocol"
+                >
+                  {Object.values(DIET_PROFILES).map((profile) => (
+                    <option key={profile.id} value={profile.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 py-1.5">
+                      {profile.label || profile.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <select
-                id="header-diet-selector"
-                value={activeDiet}
-                onChange={(e) => onSelectDiet && onSelectDiet(e.target.value)}
-                className="protocol-select-native"
-                aria-label="Select Dietary Protocol"
-              >
-                {Object.values(DIET_PROFILES).map((profile) => (
-                  <option key={profile.id} value={profile.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 py-1.5">
-                    {profile.label || profile.name}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
         )}

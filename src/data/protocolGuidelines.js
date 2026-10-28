@@ -167,7 +167,7 @@ export const PROTOCOL_GUIDELINES = {
 
   low_sodium: {
     id: "low_sodium",
-    name: "Low-Sodium & Heart-Care (DASH)",
+    name: "Low-Sodium / Heart-Care (DASH)",
     dailyTarget: "< 1,500 - 2,000 mg Sodium / Day",
     duration: "Ongoing Cardiovascular Care",
     permittedSeasoning: "Calamansi, Garlic, Roasted Ginger, Siling Labuyo",

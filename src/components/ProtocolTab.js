@@ -56,9 +56,9 @@ export function renderProtocolTab(state = {}) {
     <div class="protocol-container">
       <!-- Protocol Overview Header Card -->
       <div class="protocol-header-card">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px;">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
           <h2 class="protocol-title" id="protocol-title-heading">${escapeHtml(protocol.name)}</h2>
-          <button id="print-protocol-btn" class="btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;">
+          <button id="print-protocol-btn" class="btn-secondary self-start sm:self-auto" style="padding: 6px 12px; font-size: 0.8rem;">
             🖨️ Print Protocol
           </button>
         </div>

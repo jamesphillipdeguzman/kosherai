@@ -237,13 +237,33 @@ html.light .ambient-streak-2 {
   padding: 16px 20px;
 }
 
-/* pt-24 utility class & mobile safe spacing */
+/* Top padding utilities & main container top offsets */
+.pt-16 {
+  padding-top: 4rem !important;
+}
+
+.pt-20 {
+  padding-top: 5rem !important;
+}
+
 .pt-24 {
-  padding-top: 24px !important;
+  padding-top: 6rem !important;
 }
 
 main.app-container {
   padding-top: 24px;
+}
+
+main.app-container.pt-16 {
+  padding-top: 4rem !important;
+}
+
+main.app-container.pt-20 {
+  padding-top: 5rem !important;
+}
+
+main.app-container.pt-24 {
+  padding-top: 6rem !important;
 }
 
 /* Engine Attribution Badges */
@@ -317,11 +337,18 @@ html.dark .badge-gemini,
     font-size: 0.78rem;
     max-width: 155px;
   }
-  main.app-container,
-  main.app-container.pt-24 {
-    padding-top: 18px !important;
+  main.app-container {
     padding-left: 12px;
     padding-right: 12px;
+  }
+  main.app-container.pt-16 {
+    padding-top: 4rem !important;
+  }
+  main.app-container.pt-20 {
+    padding-top: 5rem !important;
+  }
+  main.app-container.pt-24 {
+    padding-top: 5.5rem !important;
   }
   .presets-section {
     margin-top: 16px;
@@ -341,7 +368,7 @@ html.dark .badge-gemini,
   justify-content: space-between;
   align-items: center;
   padding: 14px 20px;
-  background: rgba(15, 23, 42, 0.78);
+  background: rgba(15, 23, 42, 0.98);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border-bottom: 1px solid var(--border-color);
@@ -364,7 +391,7 @@ html.dark .badge-gemini,
 }
 
 html.light .app-header {
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.98);
   border-bottom: 1px solid rgba(226, 232, 240, 0.85);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
 }
@@ -611,15 +638,7 @@ html.light select option, html.light .header-diet-dropdown option, html.light .f
 /* ==================== PROTOCOL BANNER ==================== */
 .protocol-banner {
   margin: 10px 0 8px 0;
-  padding: 14px 18px;
-  background: linear-gradient(135deg, rgba(5, 150, 105, 0.08) 0%, rgba(15, 23, 42, 0.85) 100%);
-  border: 1px solid var(--safe-border);
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  border-radius: 1rem;
   transition: all 0.2s ease;
 }
 
