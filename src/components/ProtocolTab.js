@@ -9,11 +9,13 @@ export { PROTOCOL_GUIDELINES, getProtocolGuidelines, normalizeDietProtocolKey, D
 export function renderProtocolTab(state = {}) {
   const { 
     cheatSearch = '', 
+    searchQuery = '',
     activeDiet = 'lid' 
   } = state;
 
   const protocol = getProtocolGuidelines(activeDiet);
-  const cleanQ = (cheatSearch || '').toLowerCase().trim();
+  const rawSearch = cheatSearch || searchQuery || '';
+  const cleanQ = rawSearch.toLowerCase().trim();
 
   // Filter prohibited items based on search input
   const prohibitedItems = protocol.prohibited || [];
@@ -41,6 +43,8 @@ export function renderProtocolTab(state = {}) {
            (add.name || '').toLowerCase().includes(cleanQ) || 
            (add.reason || add.rationale || '').toLowerCase().includes(cleanQ);
   });
+
+  const totalMatches = filteredProhibited.length + filteredPermitted.length + filteredAdditives.length;
 
   const diningWarning = protocol.diningWarning || {
     title: 'Dining Out & Restaurant Warning',
@@ -91,11 +95,20 @@ export function renderProtocolTab(state = {}) {
           class="search-input" 
           style="padding: 12px 16px 12px 46px; font-size: 0.9rem;" 
           placeholder="Filter clinical guidelines (e.g. potato, bread, dairy, restaurant, E407)..." 
-          value="${escapeHtml(cheatSearch)}"
+          value="${escapeHtml(rawSearch)}"
         />
       </div>
 
+      <!-- Global "No Results" Empty State -->
+      ${cleanQ && totalMatches === 0 ? `
+        <div class="py-12 text-center text-slate-500 dark:text-slate-400" style="padding: 48px 16px; text-align: center;">
+          <p class="text-base font-semibold" style="font-size: 1rem; font-weight: 600;">No ingredients or guidelines found for "${escapeHtml(rawSearch)}"</p>
+          <p class="text-xs text-slate-400 mt-1" style="font-size: 0.75rem; margin-top: 4px;">Try searching for generic terms like "salt", "sauce", "fish", or an E-number.</p>
+        </div>
+      ` : ''}
+
       <!-- Strictly Prohibited Section (AVOID 🔴) -->
+      ${filteredProhibited.length > 0 ? `
       <div class="protocol-section" id="protocol-prohibited-section">
         <div class="section-header">
           <div class="section-title-wrap">
@@ -109,20 +122,18 @@ export function renderProtocolTab(state = {}) {
         </div>
 
         <div class="prohibited-items-list">
-          ${filteredProhibited.length > 0 ? filteredProhibited.map(item => `
+          ${filteredProhibited.map(item => `
             <div class="protocol-item-row">
               <div class="item-row-title">${escapeHtml(item.name || item.title)}</div>
               <div class="item-row-detail">${escapeHtml(item.desc || item.detail)}</div>
             </div>
-          `).join('') : `
-            <div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
-              No prohibited guidelines match "${escapeHtml(cheatSearch)}".
-            </div>
-          `}
+          `).join('')}
         </div>
       </div>
+      ` : ''}
 
       <!-- Strictly Permitted Section (SAFE 🟢) -->
+      ${filteredPermitted.length > 0 ? `
       <div class="protocol-section" id="protocol-permitted-section">
         <div class="section-header">
           <div class="section-title-wrap">
@@ -136,21 +147,19 @@ export function renderProtocolTab(state = {}) {
         </div>
 
         <div class="permitted-items-list">
-          ${filteredPermitted.length > 0 ? filteredPermitted.map(item => `
+          ${filteredPermitted.map(item => `
             <div class="protocol-item-row">
               <div class="item-row-title">${escapeHtml(item.name || item.title)}</div>
               <div class="item-row-detail">${escapeHtml(item.desc || item.detail)}</div>
             </div>
-          `).join('') : `
-            <div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
-              No permitted guidelines match "${escapeHtml(cheatSearch)}".
-            </div>
-          `}
+          `).join('')}
         </div>
       </div>
+      ` : ''}
 
       <!-- Additives & Watch List Reference Card -->
-      <div class="protocol-section">
+      ${filteredAdditives.length > 0 ? `
+      <div class="protocol-section" id="protocol-additives-section">
         <div class="section-header" style="background: var(--bg-card-subtle);">
           <div class="section-title-wrap">
             <span style="font-size: 1.2rem;">🧪</span>
@@ -173,7 +182,7 @@ export function renderProtocolTab(state = {}) {
               </tr>
             </thead>
             <tbody>
-              ${filteredAdditives.length > 0 ? filteredAdditives.map(add => `
+              ${filteredAdditives.map(add => `
                 <tr>
                   <td><span class="code-badge">${escapeHtml(add.code)}</span></td>
                   <td style="font-weight: 600; color: var(--text-primary);">${escapeHtml(add.name)}</td>
@@ -184,19 +193,15 @@ export function renderProtocolTab(state = {}) {
                   </td>
                   <td style="font-size: 0.85rem; color: var(--text-secondary);">${escapeHtml(add.reason || add.rationale || '')}</td>
                 </tr>
-              `).join('') : `
-                <tr>
-                  <td colspan="4" style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
-                    No additives match "${escapeHtml(cheatSearch)}".
-                  </td>
-                </tr>
-              `}
+              `).join('')}
             </tbody>
           </table>
         </div>
       </div>
+      ` : ''}
 
-      <!-- Dining Out Survival Guide (Reactive to Active Diet) -->
+      <!-- Dining Out Survival Guide (Reactive to Active Diet, hidden during search) -->
+      ${!cleanQ ? `
       <div class="protocol-header-card" style="border-left: 4px solid var(--avoid-red);">
         <h3 style="font-size: 1.1rem; font-weight: 800; color: #f87171; margin-bottom: 8px;">
           ⚠️ ${escapeHtml(diningWarning.title)}
@@ -208,6 +213,7 @@ export function renderProtocolTab(state = {}) {
           💡 <strong>Safe Dining Advice:</strong> ${escapeHtml(diningWarning.advice)}
         </div>
       </div>
+      ` : ''}
     </div>
   `;
 }

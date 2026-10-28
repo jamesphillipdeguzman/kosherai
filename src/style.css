@@ -4830,12 +4830,20 @@ html.dark .dark\:text-emerald-400,
 :root:not(.light) .dark\:text-emerald-400 { color: #34d399 !important; }
 
 /* Slate theme utilities */
+.text-slate-400 { color: #94a3b8 !important; }
 .text-slate-500 { color: #64748b !important; }
 .text-slate-700 { color: #334155 !important; }
 .text-slate-900 { color: #0f172a !important; }
+html.light .text-slate-400 { color: #64748b !important; }
 html.dark .dark\:text-slate-300, :root:not(.light) .dark\:text-slate-300 { color: #cbd5e1 !important; }
 html.dark .dark\:text-slate-400, :root:not(.light) .dark\:text-slate-400 { color: #94a3b8 !important; }
 html.dark .dark\:text-white, :root:not(.light) .dark\:text-white { color: #ffffff !important; }
+
+/* Spacing and text utilities for search empty state */
+.py-12 { padding-top: 3rem !important; padding-bottom: 3rem !important; }
+.text-center { text-align: center !important; }
+.text-base { font-size: 1rem !important; line-height: 1.5rem !important; }
+.mt-1 { margin-top: 0.25rem !important; }
 
 
 

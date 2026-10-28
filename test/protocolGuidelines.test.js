@@ -160,9 +160,36 @@ assert.ok(filteredKetoHtml.includes('Starchy Root Vegetables'), 'Filter "Root" m
 assert.ok(!filteredKetoHtml.includes('Starchy Staples & Grains'), 'Filter "Root" must NOT show Starchy Staples & Grains in prohibited list');
 assert.ok(filteredKetoHtml.includes('1 items') || filteredKetoHtml.includes('1 item'), 'Filter "Root" count badge should show 1 item');
 
+// 1. Verify sections with 0 matches are completely hidden (not rendered)
+assert.ok(!filteredKetoHtml.includes('id="protocol-permitted-section"'), 'Permitted section with 0 matches must be hidden');
+assert.ok(!filteredKetoHtml.includes('id="protocol-additives-section"'), 'Additives section with 0 matches must be hidden');
+assert.ok(!filteredKetoHtml.includes('0 items'), 'Should not display empty section containers showing "0 items"');
+
+// 2. Verify static dining warning banner is hidden when searching
+assert.ok(!filteredKetoHtml.includes('Dining Out'), 'Static dining warning banner must be hidden when searching');
+
 const filteredDiabeticHtml = renderProtocolTab({ activeDiet: 'diabetic', cheatSearch: 'rice' });
 assert.ok(filteredDiabeticHtml.includes('Refined Grains') && filteredDiabeticHtml.includes('White Rice'), 'Filter "rice" on diabetic must match Refined Grains & White Rice');
 assert.ok(!filteredDiabeticHtml.includes('Refined Sugars'), 'Filter "rice" must not show Refined Sugars');
+assert.ok(!filteredDiabeticHtml.includes('Dining Out'), 'Dining warning must be hidden during search');
+
+// 3. Verify global empty state when ALL sections have 0 matches
+const emptyProtocolHtml = renderProtocolTab({ activeDiet: 'lid', cheatSearch: 'unobtainium99' });
+assert.ok(!emptyProtocolHtml.includes('id="protocol-prohibited-section"'), 'Prohibited section must not render when 0 matches');
+assert.ok(!emptyProtocolHtml.includes('id="protocol-permitted-section"'), 'Permitted section must not render when 0 matches');
+assert.ok(!emptyProtocolHtml.includes('id="protocol-additives-section"'), 'Additives section must not render when 0 matches');
+assert.ok(!emptyProtocolHtml.includes('Dining Out'), 'Dining warning must not render during search');
+assert.ok(emptyProtocolHtml.includes('No ingredients or guidelines found for "unobtainium99"'), 'Must render global empty state message with search query');
+assert.ok(emptyProtocolHtml.includes('Try searching for generic terms like "salt", "sauce", "fish", or an E-number.'), 'Must render empty state tip text');
+assert.ok(emptyProtocolHtml.includes('py-12 text-center text-slate-500 dark:text-slate-400'), 'Must have correct empty state container classes');
+
+// 4. Verify initial state (no search) shows all sections and warning banner
+const defaultProtocolHtml = renderProtocolTab({ activeDiet: 'lid' });
+assert.ok(defaultProtocolHtml.includes('id="protocol-prohibited-section"'), 'Prohibited section must render on initial view');
+assert.ok(defaultProtocolHtml.includes('id="protocol-permitted-section"'), 'Permitted section must render on initial view');
+assert.ok(defaultProtocolHtml.includes('id="protocol-additives-section"'), 'Additives section must render on initial view');
+assert.ok(defaultProtocolHtml.includes('Dining Out'), 'Dining warning banner must render on initial view');
+assert.ok(!defaultProtocolHtml.includes('No ingredients or guidelines found for'), 'Global empty state must not render when there is no search');
 
 console.log('  ✅ Search filter responsiveness strictly verified.\n');
 
