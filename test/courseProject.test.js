@@ -30,8 +30,17 @@ import {
   getSixWeekComparison,
   saveMealPlan,
   getMealPlans,
-  exportAllCourseCsvs
+  exportAllCourseCsvs,
+  triggerCsvDownload,
+  handleExportWeeklySummary,
+  handleExportShoppingTrips,
+  handleExportItemizedGroceries,
+  handleExportFoodWaste,
+  hasCourseData,
+  EMPTY_EXPORT_MESSAGE
 } from '../src/services/courseProjectStorage.js';
+
+import { renderCourseProjectView } from '../src/components/CourseProjectView.js';
 
 console.log('🧪 Starting KosherAI Six-Week Project Test Suite...\n');
 
@@ -213,6 +222,69 @@ assert.ok(csvs.wasteCsv.includes('Waste ID,Date Discarded,Project Week,Food Item
 assert.ok(csvs.wasteCsv.includes('Spoiled leafy greens'), 'Waste CSV includes discarded item');
 console.log('  ✅ All 4 CSV export structures and contents formatted validly for academic reporting.');
 
+// ----------------------------------------------------
+// Test 9: Active State Fallback, Toast Notifications & Export Card Bindings
+// ----------------------------------------------------
+console.log('\nTest 9: Active state fallback, empty notification, and export card bindings');
+
+// 9a: Fallback to active React/cloud state when localStorage is empty
+localStorage.clear();
+assert.strictEqual(getShoppingTrips().length, 0, 'LocalStorage trips must be empty');
+
+const mockActiveState = {
+  trips: [
+    {
+      id: 'active-trip-1',
+      date: '2026-11-01',
+      projectWeek: 1,
+      storeName: 'Robinsons Supermarket',
+      tripType: 'Supermarket',
+      totalScaleWeightKg: 5.2,
+      totalAmountPaid: 1850.00,
+      itemsCount: 1,
+      notes: 'Active in-memory state'
+    }
+  ],
+  groceryItems: [
+    {
+      id: 'active-item-1',
+      tripId: 'active-trip-1',
+      purchaseDate: '2026-11-01',
+      projectWeek: 1,
+      name: 'Lean Beef Sirloin',
+      quantity: 1,
+      unit: 'kg',
+      unitPrice: 420,
+      totalPrice: 420,
+      weightGrams: 1000,
+      lidStatus: 'SAFE',
+      category: 'Fresh Meat'
+    }
+  ]
+};
+
+const activeCsvs = exportAllCourseCsvs(mockActiveState);
+assert.ok(activeCsvs.tripsCsv.includes('Robinsons Supermarket'), 'Export falls back to activeState trips when localStorage is empty');
+assert.ok(activeCsvs.itemsCsv.includes('Lean Beef Sirloin'), 'Export falls back to activeState groceryItems when localStorage is empty');
+assert.strictEqual(hasCourseData(mockActiveState), true, 'hasCourseData returns true for activeState');
+
+// 9b: When both localStorage and activeState are empty, warning is triggered and no silent failure
+const emptyState = { trips: [], groceryItems: [], foodWaste: [] };
+assert.strictEqual(hasCourseData(emptyState), false, 'hasCourseData returns false when completely empty');
+assert.strictEqual(handleExportWeeklySummary(emptyState), false, 'Weekly summary returns false when empty');
+assert.strictEqual(handleExportShoppingTrips(emptyState), false, 'Shopping trips returns false when empty');
+assert.strictEqual(handleExportItemizedGroceries(emptyState), false, 'Itemized groceries returns false when empty');
+assert.strictEqual(EMPTY_EXPORT_MESSAGE, "No records available to export. Please record a trip or restore from Neon first.");
+
+// 9c: UI Card bindings & styling in renderCourseProjectView export tab
+const exportTabHtml = renderCourseProjectView({ courseSubTab: 'export' });
+assert.ok(exportTabHtml.includes('cursor-pointer hover:border-emerald-500 transition-all'), 'Export cards have cursor-pointer and hover:border-emerald-500 styling');
+assert.ok(exportTabHtml.includes('handleExportWeeklySummary'), 'Card 1 is wired to handleExportWeeklySummary');
+assert.ok(exportTabHtml.includes('handleExportShoppingTrips'), 'Card 2 is wired to handleExportShoppingTrips');
+assert.ok(exportTabHtml.includes('handleExportItemizedGroceries'), 'Card 3 is wired to handleExportItemizedGroceries');
+assert.ok(exportTabHtml.includes('Download CSV'), 'Cards have explicit Download CSV buttons');
+console.log('  ✅ Active state fallback, empty export handling, and card click bindings verified.');
+
 console.log('\n=========================================');
-console.log('🎉 ALL 8 TEST SUITES PASSED SUCCESSFULLY!');
+console.log('🎉 ALL 9 TEST SUITES PASSED SUCCESSFULLY!');
 console.log('=========================================');

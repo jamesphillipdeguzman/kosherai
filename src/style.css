@@ -4631,6 +4631,10 @@ html.light .active-scanning-overlay {
   gap: 16px;
 }
 
+.cursor-pointer { cursor: pointer !important; }
+.transition-all { transition-property: all !important; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important; transition-duration: 150ms !important; }
+.hover\:border-emerald-500:hover { border-color: #10b981 !important; }
+
 .export-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -4640,11 +4644,13 @@ html.light .active-scanning-overlay {
   flex-direction: column;
   gap: 10px;
   transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .export-card:hover {
-  border-color: rgba(6, 182, 212, 0.4);
+  border-color: #10b981 !important;
   transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
 }
 
 .export-card-icon {

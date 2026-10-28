@@ -23,8 +23,25 @@ import {
   detectDuplicateReceipt,
   exportAllCourseCsvs,
   downloadCsvFile,
+  triggerCsvDownload,
+  handleExportWeeklySummary,
+  handleExportShoppingTrips,
+  handleExportItemizedGroceries,
+  handleExportFoodWaste,
+  showToast,
+  hasCourseData,
   PROJECT_CONFIG
 } from '../services/courseProjectStorage.js';
+
+export {
+  triggerCsvDownload,
+  handleExportWeeklySummary,
+  handleExportShoppingTrips,
+  handleExportItemizedGroceries,
+  handleExportFoodWaste,
+  showToast,
+  hasCourseData
+};
 
 import { compressImage, scanSupermarketReceipt } from '../services/aiVerification.js';
 import { LID_DATABASE, STATUS } from '../data/lidDatabase.js';
@@ -765,42 +782,46 @@ function renderExportTab(comparison, config) {
 
       <div class="export-cards-grid">
         <!-- 6-Week Comparative Summary CSV -->
-        <div class="export-card">
+        <div class="export-card cursor-pointer hover:border-emerald-500 transition-all" id="export-card-summary" data-export-type="summary" onclick="if(window.handleExportWeeklySummary) window.handleExportWeeklySummary();">
           <div class="export-card-icon">📊</div>
           <h3>1. Six-Week Comparative Summary</h3>
           <p>Weekly breakdown of expenses vs. Week 1 baseline, whole grocery scale weight (kg), food waste weight (g/kg), waste-to-purchase ratios, and financial savings.</p>
-          <button class="btn-primary export-btn" data-export-type="summary">
-            ⬇️ Download Summary CSV
+          <button class="btn-primary export-btn flex items-center justify-center gap-2 w-full mt-3" data-export-type="summary" onclick="event.stopPropagation(); if(window.handleExportWeeklySummary) window.handleExportWeeklySummary();">
+            <svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            <span>Download CSV</span>
           </button>
         </div>
 
         <!-- Shopping Trips & Whole Weight CSV -->
-        <div class="export-card">
+        <div class="export-card cursor-pointer hover:border-emerald-500 transition-all" id="export-card-trips" data-export-type="trips" onclick="if(window.handleExportShoppingTrips) window.handleExportShoppingTrips();">
           <div class="export-card-icon">🧾</div>
           <h3>2. Shopping Trips & Scale Weights</h3>
           <p>Every supermarket and wet market shopping trip, purchase dates, whole-grocery physical scale weights, total amounts paid, and items count.</p>
-          <button class="btn-secondary export-btn" data-export-type="trips">
-            ⬇️ Download Trips CSV
+          <button class="btn-secondary export-btn flex items-center justify-center gap-2 w-full mt-3" data-export-type="trips" onclick="event.stopPropagation(); if(window.handleExportShoppingTrips) window.handleExportShoppingTrips();">
+            <svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            <span>Download CSV</span>
           </button>
         </div>
 
         <!-- Itemized Grocery Records CSV -->
-        <div class="export-card">
+        <div class="export-card cursor-pointer hover:border-emerald-500 transition-all" id="export-card-items" data-export-type="items" onclick="if(window.handleExportItemizedGroceries) window.handleExportItemizedGroceries();">
           <div class="export-card-icon">🥬</div>
           <h3>3. Itemized Purchased Groceries</h3>
           <p>Every individual food item extracted from receipts, quantities, units, unit prices, line totals, package net weights, and clinical LID status.</p>
-          <button class="btn-secondary export-btn" data-export-type="items">
-            ⬇️ Download Groceries CSV
+          <button class="btn-secondary export-btn flex items-center justify-center gap-2 w-full mt-3" data-export-type="items" onclick="event.stopPropagation(); if(window.handleExportItemizedGroceries) window.handleExportItemizedGroceries();">
+            <svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            <span>Download CSV</span>
           </button>
         </div>
 
         <!-- Food Waste Log CSV -->
-        <div class="export-card">
+        <div class="export-card cursor-pointer hover:border-emerald-500 transition-all" id="export-card-waste" data-export-type="waste" onclick="if(window.handleExportFoodWaste) window.handleExportFoodWaste();">
           <div class="export-card-icon">⚖️</div>
           <h3>4. Food Waste Measurement Log</h3>
           <p>Digital scale measurements of discarded food items, dates, disposal reasons, and estimated cost, excluding non-food packaging tare.</p>
-          <button class="btn-secondary export-btn" data-export-type="waste">
-            ⬇️ Download Food Waste CSV
+          <button class="btn-secondary export-btn flex items-center justify-center gap-2 w-full mt-3" data-export-type="waste" onclick="event.stopPropagation(); if(window.handleExportFoodWaste) window.handleExportFoodWaste();">
+            <svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            <span>Download CSV</span>
           </button>
         </div>
       </div>

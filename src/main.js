@@ -51,6 +51,13 @@ import {
   deleteMealPlan,
   exportAllCourseCsvs,
   downloadCsvFile,
+  triggerCsvDownload,
+  handleExportWeeklySummary,
+  handleExportShoppingTrips,
+  handleExportItemizedGroceries,
+  handleExportFoodWaste,
+  showToast,
+  hasCourseData,
   PROJECT_CONFIG
 } from './services/courseProjectStorage.js';
 
@@ -1783,21 +1790,39 @@ Cracked black pepper`;
     });
   });
 
-  // CSV Export Buttons
+  // Expose global export handlers for card and button clicks
+  window.handleExportWeeklySummary = () => handleExportWeeklySummary(state);
+  window.handleExportShoppingTrips = () => handleExportShoppingTrips(state);
+  window.handleExportItemizedGroceries = () => handleExportItemizedGroceries(state);
+  window.handleExportFoodWaste = () => handleExportFoodWaste(state);
+  window.triggerCsvDownload = triggerCsvDownload;
+
+  const triggerExport = (type) => {
+    if (type === 'summary') {
+      handleExportWeeklySummary(state);
+    } else if (type === 'trips') {
+      handleExportShoppingTrips(state);
+    } else if (type === 'items') {
+      handleExportItemizedGroceries(state);
+    } else if (type === 'waste') {
+      handleExportFoodWaste(state);
+    }
+  };
+
+  // CSV Export Cards Click Listeners (Clicking anywhere on card triggers export)
+  document.querySelectorAll('.export-card[data-export-type]').forEach(card => {
+    card.addEventListener('click', (e) => {
+      const type = card.getAttribute('data-export-type');
+      triggerExport(type);
+    });
+  });
+
+  // CSV Export Buttons Click Listeners
   document.querySelectorAll('.export-btn[data-export-type]').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const type = e.currentTarget.getAttribute('data-export-type');
-      const csvs = exportAllCourseCsvs();
-
-      if (type === 'summary') {
-        downloadCsvFile(csvs.summaryCsv, 'kosherai_six_week_summary_comparison.csv');
-      } else if (type === 'trips') {
-        downloadCsvFile(csvs.tripsCsv, 'kosherai_shopping_trips_expenses.csv');
-      } else if (type === 'items') {
-        downloadCsvFile(csvs.itemsCsv, 'kosherai_grocery_purchased_items.csv');
-      } else if (type === 'waste') {
-        downloadCsvFile(csvs.wasteCsv, 'kosherai_food_waste_records.csv');
-      }
+      e.stopPropagation();
+      const type = btn.getAttribute('data-export-type');
+      triggerExport(type);
     });
   });
 
@@ -1805,11 +1830,16 @@ Cracked black pepper`;
   const downloadAllCsvsBtn = document.querySelector('#download-all-csvs-btn');
   if (downloadAllCsvsBtn) {
     downloadAllCsvsBtn.addEventListener('click', () => {
-      const csvs = exportAllCourseCsvs();
-      downloadCsvFile(csvs.summaryCsv, 'kosherai_six_week_summary_comparison.csv');
-      setTimeout(() => downloadCsvFile(csvs.tripsCsv, 'kosherai_shopping_trips_expenses.csv'), 300);
-      setTimeout(() => downloadCsvFile(csvs.itemsCsv, 'kosherai_grocery_purchased_items.csv'), 600);
-      setTimeout(() => downloadCsvFile(csvs.wasteCsv, 'kosherai_food_waste_records.csv'), 900);
+      if (!hasCourseData(state)) {
+        showToast("No records available to export. Please record a trip or restore from Neon first.", "warning");
+        if (typeof alert === 'function') alert("No records available to export. Please record a trip or restore from Neon first.");
+        return;
+      }
+      const csvs = exportAllCourseCsvs(state);
+      triggerCsvDownload('kosherai_six_week_summary_comparison.csv', csvs.summaryCsv);
+      setTimeout(() => triggerCsvDownload('kosherai_shopping_trips_expenses.csv', csvs.tripsCsv), 300);
+      setTimeout(() => triggerCsvDownload('kosherai_grocery_purchased_items.csv', csvs.itemsCsv), 600);
+      setTimeout(() => triggerCsvDownload('kosherai_food_waste_records.csv', csvs.wasteCsv), 900);
     });
   }
 

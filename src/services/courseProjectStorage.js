@@ -1089,13 +1089,15 @@ function escapeCsvField(val) {
   return `"${str}"`;
 }
 
-export function exportAllCourseCsvs() {
-  const comparison = getSixWeekComparison();
-  const trips = getShoppingTrips();
-  const items = getGroceryItems();
-  const expenses = getExpenses();
-  const waste = getFoodWasteRecords();
-  const mealPlans = getMealPlans();
+export function exportAllCourseCsvs(activeState = {}) {
+  const comparison = activeState.comparison || getSixWeekComparison();
+  const trips = (activeState.trips && activeState.trips.length > 0) ? activeState.trips : getShoppingTrips();
+  const items = (activeState.groceryItems && activeState.groceryItems.length > 0) 
+    ? activeState.groceryItems 
+    : ((activeState.groceryPurchases && activeState.groceryPurchases.length > 0) ? activeState.groceryPurchases : getGroceryItems());
+  const expenses = (activeState.expenses && activeState.expenses.length > 0) ? activeState.expenses : getExpenses();
+  const waste = (activeState.foodWaste && activeState.foodWaste.length > 0) ? activeState.foodWaste : getFoodWasteRecords();
+  const mealPlans = (activeState.mealPlans && activeState.mealPlans.length > 0) ? activeState.mealPlans : getMealPlans();
 
   // 1. Shopping Trips CSV
   const tripsCsvRows = [
@@ -1204,16 +1206,126 @@ export function exportAllCourseCsvs() {
 }
 
 /**
- * Browser file download helper
+ * Toast notification banner for user feedback
  */
-export function downloadCsvFile(content, filename) {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+export function showToast(message, type = 'warning') {
+  if (typeof document === 'undefined') return;
+
+  const existing = document.querySelector('#kosherai-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'kosherai-toast';
+  toast.className = 'fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-2xl transition-all duration-300 text-sm font-semibold ' +
+    (type === 'error' || type === 'warning'
+      ? 'bg-amber-900/95 text-amber-100 border border-amber-500/60 shadow-amber-950/50'
+      : 'bg-emerald-900/95 text-emerald-100 border border-emerald-500/60 shadow-emerald-950/50');
+  toast.style.cssText = 'position: fixed; bottom: 24px; right: 24px; z-index: 9999; padding: 14px 22px; border-radius: 12px; font-weight: 600; font-size: 0.9rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 10px; max-width: 90vw;';
+  
+  const icon = type === 'warning' ? '⚠️' : type === 'error' ? '❌' : '✅';
+  toast.innerHTML = `<span style="font-size: 1.2rem;">${icon}</span><span>${message}</span>`;
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    setTimeout(() => toast.remove(), 350);
+  }, 4000);
+}
+
+/**
+ * Robust Client-Side CSV Blob Generator & Anchor Click Trigger
+ */
+export function triggerCsvDownload(arg1, arg2) {
+  let filename = 'export.csv';
+  let csvContent = '';
+
+  if (typeof arg1 === 'string' && arg1.toLowerCase().endsWith('.csv')) {
+    filename = arg1;
+    csvContent = arg2 || '';
+  } else if (typeof arg2 === 'string' && arg2.toLowerCase().endsWith('.csv')) {
+    csvContent = arg1 || '';
+    filename = arg2;
+  } else {
+    filename = arg1 || 'export.csv';
+    csvContent = arg2 || '';
+  }
+
+  if (!csvContent || !csvContent.trim()) {
+    showToast("No data available to export for this report.", "warning");
+    if (typeof alert === 'function') {
+      alert("No data available to export for this report.");
+    }
+    return false;
+  }
+
+  const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
   URL.revokeObjectURL(url);
+  return true;
+}
+
+export const downloadCsvFile = triggerCsvDownload;
+
+export const EMPTY_EXPORT_MESSAGE = "No records available to export. Please record a trip or restore from Neon first.";
+
+export function hasCourseData(activeState = {}) {
+  const trips = (activeState.trips && activeState.trips.length > 0) ? activeState.trips : getShoppingTrips();
+  const items = (activeState.groceryItems && activeState.groceryItems.length > 0) 
+    ? activeState.groceryItems 
+    : ((activeState.groceryPurchases && activeState.groceryPurchases.length > 0) ? activeState.groceryPurchases : getGroceryItems());
+  const waste = (activeState.foodWaste && activeState.foodWaste.length > 0) ? activeState.foodWaste : getFoodWasteRecords();
+  return (trips.length > 0 || items.length > 0 || waste.length > 0);
+}
+
+export function handleExportWeeklySummary(activeState = {}) {
+  if (!hasCourseData(activeState)) {
+    showToast(EMPTY_EXPORT_MESSAGE, 'warning');
+    if (typeof alert === 'function') alert(EMPTY_EXPORT_MESSAGE);
+    return false;
+  }
+  const csvs = exportAllCourseCsvs(activeState);
+  return triggerCsvDownload('kosherai_six_week_summary_comparison.csv', csvs.summaryCsv);
+}
+
+export function handleExportShoppingTrips(activeState = {}) {
+  const trips = (activeState.trips && activeState.trips.length > 0) ? activeState.trips : getShoppingTrips();
+  if (trips.length === 0) {
+    showToast(EMPTY_EXPORT_MESSAGE, 'warning');
+    if (typeof alert === 'function') alert(EMPTY_EXPORT_MESSAGE);
+    return false;
+  }
+  const csvs = exportAllCourseCsvs(activeState);
+  return triggerCsvDownload('kosherai_shopping_trips_expenses.csv', csvs.tripsCsv);
+}
+
+export function handleExportItemizedGroceries(activeState = {}) {
+  const items = (activeState.groceryItems && activeState.groceryItems.length > 0) 
+    ? activeState.groceryItems 
+    : ((activeState.groceryPurchases && activeState.groceryPurchases.length > 0) ? activeState.groceryPurchases : getGroceryItems());
+  if (items.length === 0) {
+    showToast(EMPTY_EXPORT_MESSAGE, 'warning');
+    if (typeof alert === 'function') alert(EMPTY_EXPORT_MESSAGE);
+    return false;
+  }
+  const csvs = exportAllCourseCsvs(activeState);
+  return triggerCsvDownload('kosherai_grocery_purchased_items.csv', csvs.itemsCsv);
+}
+
+export function handleExportFoodWaste(activeState = {}) {
+  const waste = (activeState.foodWaste && activeState.foodWaste.length > 0) ? activeState.foodWaste : getFoodWasteRecords();
+  if (waste.length === 0) {
+    showToast(EMPTY_EXPORT_MESSAGE, 'warning');
+    if (typeof alert === 'function') alert(EMPTY_EXPORT_MESSAGE);
+    return false;
+  }
+  const csvs = exportAllCourseCsvs(activeState);
+  return triggerCsvDownload('kosherai_food_waste_records.csv', csvs.wasteCsv);
 }
