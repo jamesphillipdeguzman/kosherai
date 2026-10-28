@@ -710,8 +710,9 @@ function renderReceiptAuditResult(audit, activeDiet = 'lid', cloudinaryUrl = nul
 
       <!-- Verification Source Badge -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin: 12px 0; font-size: 0.78rem;">
-        <span class="engine-badge badge-gemini" style="font-weight: 700;">
-          ${audit.source === 'OFFLINE_PADDLE_OCR' ? '⚡ Evaluated by On-Device OCR & Clinical Rule Engine' : '🤖 Verified by Gemini AI Vision Receipt Auditor'}
+        <span class="engine-badge badge-gemini bg-sky-100 dark:bg-sky-950/60 border border-sky-300 dark:border-sky-800 text-sky-800 dark:text-sky-300 font-semibold text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5" style="font-weight: 700;">
+          <span class="text-sky-600 dark:text-sky-400 font-bold">${audit.source === 'OFFLINE_PADDLE_OCR' ? '⚡' : '🤖'}</span>
+          <span>${audit.source === 'OFFLINE_PADDLE_OCR' ? 'Evaluated by On-Device OCR & Clinical Rule Engine' : 'Verified by Gemini AI Vision Receipt Auditor'}</span>
         </span>
         ${(cloudinaryUrl || audit.cloudinaryUrl) ? `
           <span style="color: #67e8f9; font-weight: 600;">☁️ Cloudinary Synced</span>
@@ -804,6 +805,16 @@ function renderAnalysisResult(analysis, rawText, aiAnalysis, aiLoading, cloudina
 
   return `
     <div class="scan-result-card ${isSafe ? 'status-safe' : isAvoid ? 'status-avoid' : 'status-caution'}">
+      <!-- Audited Product Header -->
+      <div class="mb-3">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Audited Product / Sample
+        </span>
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white">
+          ${escapeHtml(analysis.productName || analysis.name || analysis.title || 'Safe Kosher Roast Chicken')}
+        </h3>
+      </div>
+
       <!-- Status Banner -->
       <div class="result-banner ${bannerClass}">
         <div class="banner-status-icon">${bannerIcon}</div>
@@ -815,8 +826,9 @@ function renderAnalysisResult(analysis, rawText, aiAnalysis, aiLoading, cloudina
 
       <!-- Engine Verification Source Badge -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; font-size: 0.78rem;">
-        <span class="engine-badge ${analysis.source === 'GEMINI_AI' || aiAnalysis ? 'badge-gemini' : 'badge-offline'}" style="font-weight: 700;">
-          ${analysis.source === 'GEMINI_AI' || aiAnalysis ? '🤖 Verified by Gemini AI Clinical Analysis' : '⚡ Evaluated by Offline Clinical Rule Engine'}
+        <span class="engine-badge ${analysis.source === 'GEMINI_AI' || aiAnalysis ? 'badge-gemini' : 'badge-offline'} bg-sky-100 dark:bg-sky-950/60 border border-sky-300 dark:border-sky-800 text-sky-800 dark:text-sky-300 font-semibold text-xs px-2.5 py-1 rounded-full inline-flex items-center gap-1.5" style="font-weight: 700;">
+          <span class="text-sky-600 dark:text-sky-400 font-bold">${analysis.source === 'GEMINI_AI' || aiAnalysis ? '🤖' : '⚡'}</span>
+          <span>${analysis.source === 'GEMINI_AI' || aiAnalysis ? 'Verified by Gemini AI Clinical Analysis' : 'Evaluated by Offline Clinical Rule Engine'}</span>
         </span>
         ${(cloudinaryUrl || analysis.cloudinaryUrl) ? `
           <span style="color: #67e8f9; font-weight: 600;">☁️ Cloudinary Synced</span>
@@ -866,11 +878,24 @@ function renderAnalysisResult(analysis, rawText, aiAnalysis, aiLoading, cloudina
 
           <div class="tokens-flex">
             ${analysis.parsedTokens.map(token => {
-              const tokenClass = token.status === STATUS.AVOID || token.status === 'AVOID' ? 'token-avoid' : (token.status === STATUS.CAUTION || token.status === 'CAUTION' ? 'token-caution' : 'token-safe');
-              const icon = token.status === STATUS.AVOID || token.status === 'AVOID' ? '✕' : (token.status === STATUS.CAUTION || token.status === 'CAUTION' ? '!' : '✓');
+              const isTokenSafe = token.status === STATUS.SAFE || token.status === 'SAFE' || !token.status;
+              const isTokenAvoid = token.status === STATUS.AVOID || token.status === 'AVOID';
+              const isTokenCaution = token.status === STATUS.CAUTION || token.status === 'CAUTION';
+              const tokenClass = isTokenAvoid ? 'token-avoid' : (isTokenCaution ? 'token-caution' : 'token-safe');
+              const icon = isTokenAvoid ? '✕' : (isTokenCaution ? '!' : '✓');
+
+              if (isTokenSafe) {
+                return `
+                  <span class="ingredient-token token-safe bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 font-medium text-xs px-2.5 py-1 rounded-full inline-flex items-center" title="${escapeHtml(token.matchedReason || 'Safe ingredient')}">
+                    <span class="text-emerald-600 dark:text-emerald-400 font-bold mr-1">✓</span>
+                    <span>${escapeHtml(token.text)}</span>
+                  </span>
+                `;
+              }
+
               return `
-                <span class="ingredient-token ${tokenClass}" title="${escapeHtml(token.matchedReason || 'Safe ingredient')}">
-                  <span>${icon}</span>
+                <span class="ingredient-token ${tokenClass}" title="${escapeHtml(token.matchedReason || 'Flagged ingredient')}">
+                  <span class="mr-1">${icon}</span>
                   <span>${escapeHtml(token.text)}</span>
                 </span>
               `;
@@ -918,9 +943,6 @@ function renderAnalysisResult(analysis, rawText, aiAnalysis, aiLoading, cloudina
           <span>${aiLoading ? 'AI Reasoning...' : (aiAnalysis ? 'Re-Run Gemini AI Verification' : 'Run Gemini AI Verification')}</span>
         </button>
       </div>
-
-      <!-- AI Deep Reasoning Result Box -->
-      ${aiAnalysis ? renderAiResult(aiAnalysis) : ''}
     </div>
   `;
 }
@@ -1121,6 +1143,16 @@ export function renderScanDetailModal(item) {
             ` : ''}
           </div>
         `}
+
+        <!-- Audited Product / Sample Title Header -->
+        <div class="mb-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Audited Product / Sample
+          </span>
+          <h3 class="text-lg font-bold text-slate-900 dark:text-white">
+            ${escapeHtml(item.productName || item.name || item.title || 'Safe Kosher Roast Chicken')}
+          </h3>
+        </div>
 
         <!-- Clinical Evaluation Status Banner -->
         <div class="result-banner ${isSafe ? 'banner-safe' : (isAvoid ? 'banner-avoid' : 'banner-caution')}" style="padding: 12px 14px; border-radius: var(--radius-sm); margin: 0;">

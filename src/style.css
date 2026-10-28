@@ -257,9 +257,23 @@ main.app-container {
   letter-spacing: 0.02em;
 }
 .badge-gemini {
-  background: rgba(6, 182, 212, 0.15);
-  color: #67e8f9;
-  border: 1px solid rgba(6, 182, 212, 0.4);
+  background-color: #e0f2fe !important; /* bg-sky-100 */
+  border: 1px solid #7dd3fc !important; /* border-sky-300 */
+  color: #075985 !important; /* text-sky-800 */
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  padding: 3px 10px !important;
+  border-radius: var(--radius-full) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+
+html.dark .badge-gemini,
+:root:not(.light) .badge-gemini {
+  background-color: rgba(8, 47, 73, 0.6) !important; /* dark:bg-sky-950/60 */
+  border-color: #075985 !important; /* dark:border-sky-800 */
+  color: #7dd3fc !important; /* dark:text-sky-300 */
 }
 .badge-offline {
   background: rgba(245, 158, 11, 0.12);
@@ -1590,9 +1604,18 @@ html.dark .badge-status.badge-neutral {
   gap: 5px;
 }
 .ingredient-token.token-safe {
-  background: rgba(16, 185, 129, 0.12);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background-color: #ecfdf5 !important; /* bg-emerald-50 */
+  border: 1px solid #6ee7b7 !important; /* border-emerald-300 */
+  color: #064e3b !important; /* text-emerald-900 */
+  font-weight: 500 !important;
+  font-size: 0.75rem !important;
+}
+
+html.dark .ingredient-token.token-safe,
+:root:not(.light) .ingredient-token.token-safe {
+  background-color: rgba(6, 78, 59, 0.4) !important; /* dark:bg-emerald-950/40 */
+  border-color: #065f46 !important; /* dark:border-emerald-800 */
+  color: #a7f3d0 !important; /* dark:text-emerald-200 */
 }
 .ingredient-token.token-avoid {
   background: rgba(239, 68, 68, 0.18);
@@ -4192,9 +4215,7 @@ html.light .highlight-box .scale-unit-badge {
 }
 
 /* Whole-Grocery Scale Weight Field
-   No Tailwind build exists in this project, so the utility classes used in the
-   markup are backed by explicit rules here. !important beats the global
-   `html.light .form-input` / `.bg-white` overrides and UA input defaults. */
+   Dynamic light & dark mode support without Tailwind build dependency. */
 .scale-weight-field {
   width: 100%;
 }
@@ -4205,8 +4226,13 @@ html.light .highlight-box .scale-unit-badge {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #cbd5e1 !important; /* slate-300 */
+  color: #334155 !important; /* slate-700 in light mode */
   margin-bottom: 4px;
+}
+
+html.dark .scale-weight-field > label,
+:root:not(.light) .scale-weight-field > label {
+  color: #cbd5e1 !important; /* slate-300 in dark mode */
 }
 
 .scale-weight-wrapper {
@@ -4214,10 +4240,16 @@ html.light .highlight-box .scale-unit-badge {
   display: flex;
   align-items: center;
   border-radius: 8px;
-  border: 1px solid #334155 !important; /* slate-700 */
-  background-color: #1e293b !important; /* slate-800 */
+  border: 1px solid #cbd5e1 !important; /* border-slate-300 in light mode */
+  background-color: #ffffff !important; /* bg-white in light mode */
   padding: 8px 12px;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+html.dark .scale-weight-wrapper,
+:root:not(.light) .scale-weight-wrapper {
+  border-color: #334155 !important; /* border-slate-700 in dark mode */
+  background-color: #1e293b !important; /* bg-slate-800 in dark mode */
 }
 
 .scale-weight-wrapper:focus-within {
@@ -4233,12 +4265,12 @@ html.light .highlight-box .scale-unit-badge {
   margin: 0;
   background-color: transparent !important;
   background-image: none !important;
-  color: #ffffff !important;
-  -webkit-text-fill-color: #ffffff !important;
-  caret-color: #ffffff;
+  color: #0f172a !important; /* text-slate-900 in light mode */
+  -webkit-text-fill-color: #0f172a !important;
+  caret-color: #0f172a;
   font-family: var(--font-sans);
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
@@ -4246,15 +4278,34 @@ html.light .highlight-box .scale-unit-badge {
   appearance: textfield;
 }
 
+html.dark .scale-weight-input,
+html.dark .scale-weight-input:focus,
+html.dark .scale-weight-input:disabled,
+:root:not(.light) .scale-weight-input,
+:root:not(.light) .scale-weight-input:focus,
+:root:not(.light) .scale-weight-input:disabled {
+  color: #ffffff !important; /* text-white in dark mode */
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff;
+}
+
 .scale-weight-input::placeholder {
-  color: #64748b !important; /* slate-500 */
-  -webkit-text-fill-color: #64748b !important;
+  color: #94a3b8 !important; /* placeholder-slate-400 in light mode */
+  -webkit-text-fill-color: #94a3b8 !important;
   opacity: 1;
 }
 
-/* Prevent Chrome autofill from repainting the field white */
-.scale-weight-input:-webkit-autofill,
-.scale-weight-input:-webkit-autofill:focus {
+html.dark .scale-weight-input::placeholder,
+:root:not(.light) .scale-weight-input::placeholder {
+  color: #64748b !important; /* placeholder-slate-500 in dark mode */
+  -webkit-text-fill-color: #64748b !important;
+}
+
+/* Prevent Chrome autofill from repainting the field white in dark mode */
+html.dark .scale-weight-input:-webkit-autofill,
+html.dark .scale-weight-input:-webkit-autofill:focus,
+:root:not(.light) .scale-weight-input:-webkit-autofill,
+:root:not(.light) .scale-weight-input:-webkit-autofill:focus {
   -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
   -webkit-text-fill-color: #ffffff !important;
 }
@@ -4265,14 +4316,24 @@ html.light .highlight-box .scale-unit-badge {
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: #94a3b8 !important; /* slate-400 */
+  color: #64748b !important; /* text-slate-500 in light mode */
+}
+
+html.dark .scale-weight-unit,
+:root:not(.light) .scale-weight-unit {
+  color: #94a3b8 !important; /* text-slate-400 in dark mode */
 }
 
 .scale-weight-help {
   margin-top: 4px;
   font-size: 11px;
   line-height: 1.25;
-  color: #94a3b8 !important; /* slate-400 */
+  color: #64748b !important; /* text-slate-500 in light mode */
+}
+
+html.dark .scale-weight-help,
+:root:not(.light) .scale-weight-help {
+  color: #94a3b8 !important; /* text-slate-400 in dark mode */
 }
 
 /* Animated Scanning Beam & Pulse Effect for Gemini Receipt Scanner */
@@ -4717,6 +4778,65 @@ html.dark .trip-sync-badge.offline,
   color: #fbbf24;
   border-color: rgba(251, 191, 36, 0.3);
 }
+
+/* ==========================================================================
+   Food Label & Scanner Result Contrast Utilities
+   ========================================================================== */
+.mb-3 { margin-bottom: 0.75rem !important; }
+.text-xs { font-size: 0.75rem !important; line-height: 1rem !important; }
+.text-sm { font-size: 0.875rem !important; line-height: 1.25rem !important; }
+.text-lg { font-size: 1.125rem !important; line-height: 1.75rem !important; }
+.font-medium { font-weight: 500 !important; }
+.font-semibold { font-weight: 600 !important; }
+.font-bold { font-weight: 700 !important; }
+.uppercase { text-transform: uppercase !important; }
+.tracking-wider { letter-spacing: 0.05em !important; }
+.mr-1 { margin-right: 0.25rem !important; }
+
+/* Sky theme utilities for Gemini AI verification badge */
+.bg-sky-100 { background-color: #e0f2fe !important; }
+.border-sky-300 { border-color: #7dd3fc !important; }
+.text-sky-800 { color: #075985 !important; }
+.text-sky-600 { color: #0284c7 !important; }
+
+html.dark .dark\:bg-sky-950\/60,
+:root:not(.light) .dark\:bg-sky-950\/60 { background-color: rgba(8, 47, 73, 0.6) !important; }
+
+html.dark .dark\:border-sky-800,
+:root:not(.light) .dark\:border-sky-800 { border-color: #075985 !important; }
+
+html.dark .dark\:text-sky-300,
+:root:not(.light) .dark\:text-sky-300 { color: #7dd3fc !important; }
+
+html.dark .dark\:text-sky-400,
+:root:not(.light) .dark\:text-sky-400 { color: #38bdf8 !important; }
+
+/* Emerald theme utilities for compliant parsed ingredient tags */
+.bg-emerald-50 { background-color: #ecfdf5 !important; }
+.border-emerald-300 { border-color: #6ee7b7 !important; }
+.text-emerald-900 { color: #064e3b !important; }
+.text-emerald-600 { color: #059669 !important; }
+
+html.dark .dark\:bg-emerald-950\/40,
+:root:not(.light) .dark\:bg-emerald-950\/40 { background-color: rgba(6, 78, 59, 0.4) !important; }
+
+html.dark .dark\:border-emerald-800,
+:root:not(.light) .dark\:border-emerald-800 { border-color: #065f46 !important; }
+
+html.dark .dark\:text-emerald-200,
+:root:not(.light) .dark\:text-emerald-200 { color: #a7f3d0 !important; }
+
+html.dark .dark\:text-emerald-400,
+:root:not(.light) .dark\:text-emerald-400 { color: #34d399 !important; }
+
+/* Slate theme utilities */
+.text-slate-500 { color: #64748b !important; }
+.text-slate-700 { color: #334155 !important; }
+.text-slate-900 { color: #0f172a !important; }
+html.dark .dark\:text-slate-300, :root:not(.light) .dark\:text-slate-300 { color: #cbd5e1 !important; }
+html.dark .dark\:text-slate-400, :root:not(.light) .dark\:text-slate-400 { color: #94a3b8 !important; }
+html.dark .dark\:text-white, :root:not(.light) .dark\:text-white { color: #ffffff !important; }
+
 
 
 

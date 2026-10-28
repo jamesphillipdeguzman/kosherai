@@ -381,6 +381,9 @@ function renderShoppingTripsTab(state) {
           <button class="btn-secondary" id="manual-sync-trips-btn" title="Synchronize local IndexedDB trips to Neon PostgreSQL">
             ☁️ Sync Neon
           </button>
+          <button class="btn-secondary" id="restore-neon-btn" title="Pull and restore latest data from Neon PostgreSQL cloud">
+            ☁️ Restore from Neon
+          </button>
         </div>
       </div>
 
@@ -982,16 +985,16 @@ function renderReceiptScanModal(state) {
                   </div>
                 </div>
 
-                <!-- 2. CRITICAL FIELD: Whole-Grocery Scale Weight (dark field, transparent input, white text) -->
+                <!-- 2. CRITICAL FIELD: Whole-Grocery Scale Weight -->
                 <div class="scale-weight-field">
-                  <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="edit-scale-weight">
+                  <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1" for="edit-scale-weight">
                     ⚖️ Whole-Grocery Scale Weight (kg)
                   </label>
-                  <div class="scale-weight-wrapper relative flex items-center rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 focus-within:border-emerald-500">
-                    <input type="number" step="0.01" min="0" id="edit-scale-weight" class="scale-weight-input w-full bg-transparent text-sm font-medium text-white placeholder-slate-500 outline-none border-none focus:ring-0" placeholder="0.00" value="${scanData?.totalScaleWeightKg || ''}" ${isScanning ? 'disabled' : ''} required />
-                    <span class="scale-weight-unit ml-2 select-none text-xs font-bold uppercase text-slate-400">kg</span>
+                  <div class="scale-weight-wrapper relative flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white focus-within:border-emerald-500">
+                    <input type="number" step="0.01" min="0" id="edit-scale-weight" class="scale-weight-input w-full bg-transparent text-slate-900 dark:text-white font-semibold outline-none border-none focus:ring-0 placeholder-slate-400 dark:placeholder-slate-500" placeholder="0.00" value="${scanData?.totalScaleWeightKg || ''}" ${isScanning ? 'disabled' : ''} required />
+                    <span class="scale-weight-unit ml-2 select-none text-xs font-bold uppercase text-slate-500 dark:text-slate-400">kg</span>
                   </div>
-                  <p class="scale-weight-help mt-1 text-[11px] leading-tight text-slate-400">
+                  <p class="scale-weight-help mt-1 text-[11px] leading-tight text-slate-500 dark:text-slate-400">
                     Measured physical weight of food haul on your home scale before unpacking. Kept separate from receipt item weights for academic rigor.
                   </p>
                 </div>

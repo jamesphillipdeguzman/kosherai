@@ -596,6 +596,7 @@ function attachEventHandlers() {
       const sample = SAMPLE_LABELS[idx];
       if (sample) {
         state.scanText = sample.text;
+        state.scanProductName = sample.title;
         state.imagePreviewUrl = null;
         if (sample.isReceipt) {
           state.scannerTab = 'receipt';
@@ -1828,6 +1829,10 @@ async function processScanText(text, title = 'Food Label', isReceipt = false) {
   console.log(`[Scanner] Gemini Key present: ${Boolean(settings.geminiApiKey)}`);
   console.log(`[Scanner] Cloudinary configured: ${Boolean(settings.cloudinaryCloudName && settings.cloudinaryPreset)}`);
 
+  const sampleMatch = SAMPLE_LABELS.find(s => s.text.trim() === text.trim() || (title && s.title.toLowerCase() === title.toLowerCase()));
+  const resolvedTitle = title && title !== 'Food Label' ? title : (sampleMatch ? sampleMatch.title : 'Safe Kosher Roast Chicken');
+  state.scanProductName = resolvedTitle;
+
   const scanTarget = state.scanTarget || state.scannerTab || state.scannerMode;
   const scannerMode = state.scannerMode || state.scannerTab;
   const activeTarget = scanTarget || scannerMode || 'food_label';
@@ -1854,6 +1859,9 @@ async function processScanText(text, title = 'Food Label', isReceipt = false) {
     state.scanAnalysis = {
       isReceipt: true,
       storeName,
+      productName: resolvedTitle || `${storeName} Receipt Audit`,
+      name: resolvedTitle || `${storeName} Receipt Audit`,
+      title: resolvedTitle || `${storeName} Receipt Audit`,
       detectedItemsCount: auditedItems.length,
       status: overallStatus,
       overallBadge: `${storeName} Receipt`,
@@ -1863,7 +1871,9 @@ async function processScanText(text, title = 'Food Label', isReceipt = false) {
     };
 
     state.scanHistory = saveScanResult({
-      title: title || `${storeName} Receipt Audit`,
+      title: resolvedTitle || `${storeName} Receipt Audit`,
+      productName: resolvedTitle || `${storeName} Receipt Audit`,
+      name: resolvedTitle || `${storeName} Receipt Audit`,
       rawText: text,
       status: overallStatus,
       reason: `Audited ${auditedItems.length} items under ${(state.activeDiet || 'lid').toUpperCase()}`,
@@ -1892,6 +1902,9 @@ async function processScanText(text, title = 'Food Label', isReceipt = false) {
       analysis = {
         isSafe: aiResult.status === 'SAFE',
         status: aiResult.status,
+        productName: resolvedTitle,
+        name: resolvedTitle,
+        title: resolvedTitle,
         overallBadge: aiResult.status === 'SAFE' ? 'SAFE TO EAT' : aiResult.status === 'AVOID' ? 'STRICTLY AVOID' : 'CHECK LABEL CAREFULLY',
         reasons: Array.isArray(aiResult.reasons) ? aiResult.reasons : [aiResult.reason],
         reason: aiResult.reason,
@@ -1916,6 +1929,9 @@ async function processScanText(text, title = 'Food Label', isReceipt = false) {
     } catch (err) {
       console.warn('[Scanner] Gemini evaluation failed, falling back to offline rule engine:', err);
       analysis = analyzeIngredients(text);
+      analysis.productName = resolvedTitle;
+      analysis.name = resolvedTitle;
+      analysis.title = resolvedTitle;
       analysis.source = 'OFFLINE_RULE_ENGINE';
       state.aiAnalysis = null;
     } finally {
@@ -1923,6 +1939,9 @@ async function processScanText(text, title = 'Food Label', isReceipt = false) {
     }
   } else {
     analysis = analyzeIngredients(text);
+    analysis.productName = resolvedTitle;
+    analysis.name = resolvedTitle;
+    analysis.title = resolvedTitle;
     analysis.source = 'OFFLINE_RULE_ENGINE';
     state.aiAnalysis = null;
   }
@@ -1937,7 +1956,9 @@ async function processScanText(text, title = 'Food Label', isReceipt = false) {
   const reason = state.aiAnalysis?.reason || analysis.reason || (analysis.reasons && analysis.reasons[0]) || '';
 
   state.scanHistory = saveScanResult({
-    title,
+    title: resolvedTitle,
+    productName: resolvedTitle,
+    name: resolvedTitle,
     rawText: text,
     status: analysis.status,
     reason,
