@@ -200,8 +200,8 @@ export function renderProtocolTab(state = {}) {
       </div>
       ` : ''}
 
-      <!-- Dining Out Survival Guide (Reactive to Active Diet, hidden during search) -->
       ${!cleanQ ? `
+      <!-- Restaurant & Dining Warning Guide (Reactive to Active Diet, hidden during search) -->
       <div class="protocol-header-card" style="border-left: 4px solid var(--avoid-red);">
         <h3 style="font-size: 1.1rem; font-weight: 800; color: #f87171; margin-bottom: 8px;">
           ⚠️ ${escapeHtml(diningWarning.title)}

@@ -51,7 +51,6 @@ export {
   handleExportShoppingTrips,
   handleExportItemizedGroceries,
   handleExportFoodWaste,
-  handleDownloadClick,
   showToast,
   hasCourseData
 };
