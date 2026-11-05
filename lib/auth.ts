@@ -9,6 +9,11 @@ const pool = databaseUrl
   ? new Pool({ connectionString: databaseUrl })
   : null;
 
+const appBaseUrl =
+  process.env.BETTER_AUTH_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:5173');
+
 /**
  * Server Authentication Instance
  * Configures Email/Password, optional Google OAuth, and keeps Neon users table synced.
@@ -18,7 +23,13 @@ export const auth = betterAuth({
     provider: 'postgres',
     url: databaseUrl || ''
   },
-  baseURL: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:5173',
+  baseURL: appBaseUrl,
+  trustedOrigins: [
+    'https://kosherai-gel.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : [])
+  ],
   secret: process.env.BETTER_AUTH_SECRET || 'c7f92e41a89b3d047e1f6a5b8c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d',
   emailAndPassword: {
     enabled: true,
