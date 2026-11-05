@@ -4970,6 +4970,221 @@ html.dark .dark\:text-amber-200, :root:not(.light) .dark\:text-amber-200 { color
 .tracking-wide { letter-spacing: 0.025em !important; }
 .tracking-wider { letter-spacing: 0.05em !important; }
 
+/* =========================================================================
+   Unified Grocery Intake Modal: Venue Toggle, Responsive Rows & Mobile Tip
+   ========================================================================= */
+
+/* Venue Mode Segmented Switch */
+.venue-mode-toggle-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 6px 0 16px;
+}
+.venue-mode-toggle {
+  display: inline-flex;
+  padding: 4px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  gap: 4px;
+}
+html.dark .venue-mode-toggle {
+  background: #1e293b;
+  border-color: #334155;
+}
+.venue-toggle-btn {
+  padding: 7px 18px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.venue-toggle-btn:hover {
+  color: #0f172a;
+}
+html.dark .venue-toggle-btn {
+  color: #94a3b8;
+}
+html.dark .venue-toggle-btn:hover {
+  color: #f8fafc;
+}
+.venue-toggle-btn.active {
+  background: #059669 !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+/* Portrait Orientation Prompt (Mobile < 640px) */
+.portrait-orientation-tip {
+  display: none;
+}
+@media (max-width: 639px) and (orientation: portrait) {
+  .portrait-orientation-tip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    border-radius: 10px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: #065f46;
+  }
+  html.dark .portrait-orientation-tip {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #6ee7b7;
+  }
+}
+.portrait-orientation-tip .tip-dismiss-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: inherit;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+.portrait-orientation-tip .tip-dismiss-btn:hover {
+  opacity: 1;
+}
+
+/* Responsive Item Rows Layout */
+.mobile-cell-label {
+  display: none;
+}
+
+/* Mobile 2-Tier Card Layout (< 640px) */
+@media (max-width: 639px) {
+  .receipt-items-table-wrapper {
+    overflow-x: visible !important;
+    max-height: 380px !important;
+    border: none !important;
+    background: transparent !important;
+  }
+  .receipt-items-table thead {
+    display: none !important;
+  }
+  .receipt-items-table,
+  .receipt-items-table tbody {
+    display: block !important;
+    width: 100% !important;
+  }
+  .receipt-item-row {
+    display: grid !important;
+    grid-template-columns: repeat(6, 1fr) !important;
+    gap: 8px !important;
+    padding: 12px !important;
+    margin-bottom: 12px !important;
+    border-radius: 12px !important;
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  }
+  html.dark .receipt-item-row {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
+  }
+
+  /* Tier 1: Full-width Item Name input + Inline Delete (✕) */
+  .receipt-item-row .item-cell-name {
+    grid-column: 1 / 6 !important;
+    display: block !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+  .receipt-item-row .item-cell-delete {
+    grid-column: 6 / 7 !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: flex-end !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+  .receipt-item-row .item-cell-delete .remove-item-row-btn {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 8px !important;
+    color: #ef4444 !important;
+    background: rgba(239, 68, 68, 0.1) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1rem !important;
+    cursor: pointer !important;
+  }
+
+  /* Tier 2: 3-column cluster */
+  /* Column 1 of cluster: [Qty + Unit selector] spanning cols 1-2 */
+  .receipt-item-row .item-cell-qty {
+    grid-column: 1 / 2 !important;
+    display: block !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+  .receipt-item-row .item-cell-unit {
+    grid-column: 2 / 3 !important;
+    display: block !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+  .receipt-item-row .item-cell-qty input {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-right-width: 0 !important;
+    text-align: center !important;
+  }
+  .receipt-item-row .item-cell-unit input {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    text-align: center !important;
+  }
+
+  /* Column 2 of cluster: [Price (₱)] spanning cols 3-4 */
+  .receipt-item-row .item-cell-price {
+    grid-column: 3 / 5 !important;
+    display: block !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+
+  /* Column 3 of cluster: [Line Total (₱)] spanning cols 5-6 */
+  .receipt-item-row .item-cell-total {
+    grid-column: 5 / 7 !important;
+    display: block !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+
+  .mobile-cell-label {
+    display: block !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    color: #64748b !important;
+    margin-bottom: 2px !important;
+  }
+  html.dark .mobile-cell-label {
+    color: #94a3b8 !important;
+  }
+}
+
 
 
 

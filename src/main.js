@@ -11,7 +11,7 @@ import { renderSubstitutesTab } from './components/SubstitutesTab.js';
 import { renderCookModeTab, lidRecipes, DIET_RECIPES } from './components/CookModeTab.js';
 import { renderSettingsModal } from './components/SettingsModal.js';
 import { renderItemDetailModal } from './components/ItemDetailModal.js';
-import { renderCourseProjectView } from './components/CourseProjectView.js';
+import { renderCourseProjectView, createReceiptItemRowHtml } from './components/CourseProjectView.js';
 import { parseQuantityAndUnit, createManualItemRowHtml } from './components/ManualTripModal.js';
 import {
   toggleRecipeLike,
@@ -158,6 +158,7 @@ const state = {
   wasteModalOpen: false,
   mealPlanModalOpen: false,
   configModalOpen: false,
+  groceryVenueMode: (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_venue_mode') : null) || 'supermarket',
   receiptPreviewUrl: null,
   scannedReceiptData: null,
   receiptScanning: false,
@@ -1145,11 +1146,12 @@ Cracked black pepper`;
     });
   });
 
-  // Open Receipt Scanner Modal
+  // Open Receipt Scanner Modal / Unified Food Intake
   const openReceiptScannerBtn = document.querySelector('#open-receipt-scanner-btn');
   const emptyScanBtn = document.querySelector('#empty-scan-btn');
   const handleOpenReceiptScanner = () => {
     state.receiptModalOpen = true;
+    state.groceryVenueMode = (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_venue_mode') : null) || state.groceryVenueMode || 'supermarket';
     state.scannedReceiptData = null;
     state.receiptPreviewUrl = null;
     state.receiptScanning = false;
@@ -1366,23 +1368,102 @@ Cracked black pepper`;
     });
   }
 
+  // In-Modal Venue Mode Toggle (Segmented Switch: Supermarket vs Wet Market)
+  document.querySelectorAll('.venue-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const venue = btn.getAttribute('data-venue');
+      if (venue && venue !== state.groceryVenueMode) {
+        state.groceryVenueMode = venue;
+        try { localStorage.setItem('kosherai_venue_mode', venue); } catch (e) {}
+        render();
+      }
+    });
+  });
+
+  // Mobile Portrait Orientation Tip Dismissal
+  const dismissTipBtn = document.querySelector('#dismiss-portrait-tip-btn');
+  if (dismissTipBtn) {
+    dismissTipBtn.addEventListener('click', () => {
+      const tip = document.querySelector('#portrait-orientation-tip');
+      if (tip) tip.style.display = 'none';
+      try { sessionStorage.setItem('kosherai_portrait_tip_dismissed', '1'); } catch (e) {}
+    });
+  }
+
+  // Live Line Total Calculation for Item Rows
+  function attachItemRowCalculationListeners() {
+    const tbody = document.querySelector('#receipt-items-tbody');
+    if (!tbody) return;
+    tbody.querySelectorAll('tr').forEach(row => {
+      const qtyInput = row.querySelector('.item-qty-val');
+      const priceInput = row.querySelector('.item-price-val');
+      const totalInput = row.querySelector('.item-total-val');
+
+      const handleCalc = () => {
+        const qty = parseFloat(qtyInput?.value || 0);
+        const price = parseFloat(priceInput?.value || 0);
+        if (totalInput && !isNaN(qty) && !isNaN(price) && qty > 0 && price >= 0) {
+          totalInput.value = (qty * price).toFixed(2);
+        }
+      };
+
+      if (qtyInput && !qtyInput._hasCalcListener) {
+        qtyInput.addEventListener('input', handleCalc);
+        qtyInput._hasCalcListener = true;
+      }
+      if (priceInput && !priceInput._hasCalcListener) {
+        priceInput.addEventListener('input', handleCalc);
+        priceInput._hasCalcListener = true;
+      }
+    });
+  }
+  attachItemRowCalculationListeners();
+
+  // Apply Sum of Items to Total Amount Paid
+  const applyItemsSumBtn = document.querySelector('#apply-items-sum-btn');
+  if (applyItemsSumBtn) {
+    applyItemsSumBtn.addEventListener('click', () => {
+      let sum = 0;
+      document.querySelectorAll('#receipt-items-tbody tr').forEach(row => {
+        const lineTotal = parseFloat(row.querySelector('.item-total-val')?.value || 0);
+        if (!isNaN(lineTotal) && lineTotal > 0) {
+          sum += lineTotal;
+        } else {
+          const qty = parseFloat(row.querySelector('.item-qty-val')?.value || 1);
+          const price = parseFloat(row.querySelector('.item-price-val')?.value || 0);
+          if (!isNaN(price) && price > 0) sum += (qty * price);
+        }
+      });
+      const totalInput = document.querySelector('#edit-total-amount');
+      if (totalInput && sum > 0) {
+        totalInput.value = sum.toFixed(2);
+        showToast(`✓ Applied sum of items (₱${sum.toFixed(2)}) to total amount paid`, 'success');
+      }
+    });
+  }
+
   // Add Item Row in Receipt Verification Table
   const addReceiptItemRowBtn = document.querySelector('#add-receipt-item-row');
   if (addReceiptItemRowBtn) {
     addReceiptItemRowBtn.addEventListener('click', () => {
       const tbody = document.querySelector('#receipt-items-tbody');
       if (tbody) {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td><input type="text" class="table-input item-name-val" placeholder="Item Name" required /></td>
-          <td><input type="number" step="0.1" class="table-input item-qty-val" value="1" style="width: 50px;" /></td>
-          <td><input type="text" class="table-input item-unit-val" value="pcs" style="width: 50px;" /></td>
-          <td><input type="number" step="0.01" class="table-input item-price-val" placeholder="0.00" style="width: 70px;" /></td>
-          <td><input type="number" step="0.01" class="table-input item-total-val" placeholder="0.00" style="width: 80px;" /></td>
-          <td><button type="button" class="btn-icon remove-item-row-btn">✕</button></td>
-        `;
-        tbody.appendChild(tr);
-        attachRowRemoveListeners();
+        const isWet = state.groceryVenueMode === 'wet_market';
+        const temp = document.createElement('tbody');
+        temp.innerHTML = createReceiptItemRowHtml(
+          { name: '', quantity: 1, unit: isWet ? 'kg' : 'pcs', unitPrice: '', totalPrice: '' },
+          tbody.children.length,
+          null,
+          isWet
+        );
+        const newRow = temp.firstElementChild;
+        if (newRow) {
+          tbody.appendChild(newRow);
+          attachRowRemoveListeners();
+          attachItemRowCalculationListeners();
+          const nameInput = newRow.querySelector('.item-name-val');
+          if (nameInput) nameInput.focus();
+        }
       }
     });
   }
@@ -1403,33 +1484,49 @@ Cracked black pepper`;
     receiptVerificationForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const storeName = document.querySelector('#edit-store-name')?.value || 'Supermarket';
+      const activeVenue = state.groceryVenueMode || (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_venue_mode') : null) || 'supermarket';
+      const isWetMarket = activeVenue === 'wet_market';
+      const trip_type = isWetMarket ? 'wet_market' : 'supermarket';
+      const tripType = trip_type;
+
+      const storeNameInput = document.querySelector('#edit-store-name')?.value?.trim();
+      const defaultStore = isWetMarket ? 'Wet Market / Palengke' : 'Supermarket';
+      const storeName = storeNameInput || defaultStore;
       const purchaseDate = document.querySelector('#edit-purchase-date')?.value || new Date().toISOString().split('T')[0];
       const scaleWeight = parseFloat(document.querySelector('#edit-scale-weight')?.value || 0);
       const totalAmount = parseFloat(document.querySelector('#edit-total-amount')?.value || 0);
-      const tripType = document.querySelector('#edit-trip-type')?.value || 'Supermarket';
 
       const items = [];
       document.querySelectorAll('#receipt-items-tbody tr').forEach((row, idx) => {
         const name = row.querySelector('.item-name-val')?.value?.trim();
         const qty = parseFloat(row.querySelector('.item-qty-val')?.value || 1);
-        const unit = row.querySelector('.item-unit-val')?.value?.trim() || 'pcs';
+        const unit = row.querySelector('.item-unit-val')?.value?.trim() || (isWetMarket ? 'kg' : 'pcs');
         const price = parseFloat(row.querySelector('.item-price-val')?.value || 0);
         const total = parseFloat(row.querySelector('.item-total-val')?.value || (qty * price) || price || 0);
-        const category = row.getAttribute('data-item-category') || 'General Food';
+        const category = row.getAttribute('data-item-category') || (isWetMarket ? 'Wet Market Produce' : 'General Food');
         const lidStatus = row.getAttribute('data-item-status') || 'SAFE';
         const lidReason = row.getAttribute('data-item-reason') || '';
+
+        let weightGrams = 0;
+        const unitLower = unit.toLowerCase();
+        if (unitLower === 'kg' || unitLower === 'kgs' || unitLower === 'kilo' || unitLower === 'kilos') {
+          weightGrams = Math.round(qty * 1000);
+        } else if (unitLower === 'g' || unitLower === 'gm' || unitLower === 'gram' || unitLower === 'grams') {
+          weightGrams = Math.round(qty);
+        }
 
         if (name) {
           items.push({
             id: `item_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
             name,
-            rawReceiptText: name,
+            rawReceiptText: `${name} (${qty} ${unit})`.trim(),
             quantity: qty,
             unit,
             unitPrice: price,
             totalPrice: total,
-            weightGrams: 0,
+            lineTotal: total,
+            price: total,
+            weightGrams,
             category,
             lidStatus,
             lidReason
@@ -1444,8 +1541,11 @@ Cracked black pepper`;
         totalScaleWeightKg: scaleWeight, // Whole grocery physical scale weight
         totalAmountPaid: totalAmount,
         tripType,
-        receiptImageUrl: state.receiptPreviewUrl || null,
-        notes: `Receipt scanned (${items.length} items verified)`,
+        trip_type,
+        receiptImageUrl: isWetMarket ? null : (state.receiptPreviewUrl || null),
+        notes: isWetMarket
+          ? (items.length > 0 ? `Wet market trip (${items.length} item${items.length === 1 ? '' : 's'} recorded)` : 'Manual wet market entry')
+          : `Receipt scanned (${items.length} items verified)`,
         items,
         rawItems: items
       }, items);
@@ -1457,14 +1557,24 @@ Cracked black pepper`;
     });
   }
 
-  // Manual Trip Modal Open & Close
+  // Manual Trip Modal Open & Close (Backward Compatibility: routes to unified modal with wet_market mode)
   const openManualTripBtn = document.querySelector('#open-manual-trip-btn');
   const emptyManualBtn = document.querySelector('#empty-manual-btn');
   const closeManualTripBtn = document.querySelector('#close-manual-trip-btn');
   const cancelManualTripBtn = document.querySelector('#cancel-manual-trip-btn');
 
-  if (openManualTripBtn) openManualTripBtn.addEventListener('click', () => { state.manualTripModalOpen = true; render(); });
-  if (emptyManualBtn) emptyManualBtn.addEventListener('click', () => { state.manualTripModalOpen = true; render(); });
+  if (openManualTripBtn) openManualTripBtn.addEventListener('click', () => {
+    state.receiptModalOpen = true;
+    state.groceryVenueMode = 'wet_market';
+    try { localStorage.setItem('kosherai_venue_mode', 'wet_market'); } catch (e) {}
+    render();
+  });
+  if (emptyManualBtn) emptyManualBtn.addEventListener('click', () => {
+    state.receiptModalOpen = true;
+    state.groceryVenueMode = 'wet_market';
+    try { localStorage.setItem('kosherai_venue_mode', 'wet_market'); } catch (e) {}
+    render();
+  });
   if (closeManualTripBtn) closeManualTripBtn.addEventListener('click', () => { state.manualTripModalOpen = false; render(); });
   if (cancelManualTripBtn) cancelManualTripBtn.addEventListener('click', () => { state.manualTripModalOpen = false; render(); });
 

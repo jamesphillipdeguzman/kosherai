@@ -244,7 +244,8 @@ export async function saveShoppingTrip(tripData, items = []) {
       date,
       projectWeek,
       storeName: tripData.storeName || 'Supermarket',
-      tripType: tripData.tripType || 'Supermarket',
+      tripType: tripData.tripType || tripData.trip_type || 'Supermarket',
+      trip_type: tripData.trip_type || tripData.tripType || 'Supermarket',
       totalAmountPaid: totalAmount,
       totalScaleWeightKg: scaleWeightKg, // Physical scale weight of whole grocery haul
       receiptImageUrl: tripData.receiptImageUrl || null,

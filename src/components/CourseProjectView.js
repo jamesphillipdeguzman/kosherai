@@ -52,7 +52,9 @@ export {
   handleExportItemizedGroceries,
   handleExportFoodWaste,
   showToast,
-  hasCourseData
+  hasCourseData,
+  createReceiptItemRowHtml,
+  renderReceiptScanModal
 };
 
 import { compressImage, scanSupermarketReceipt } from '../services/aiVerification.js';
@@ -409,10 +411,7 @@ function renderShoppingTripsTab(state) {
         </div>
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
           <button class="btn-primary" id="open-receipt-scanner-btn">
-            📷 Scan Supermarket Receipt
-          </button>
-          <button class="btn-secondary" id="open-manual-trip-btn">
-            ✍️ Manual Trip Entry (Wet Market)
+            📷 Scan Food
           </button>
           <button class="btn-secondary" id="manual-sync-trips-btn" title="Synchronize local IndexedDB trips to Neon PostgreSQL">
             ☁️ Sync Neon
@@ -440,8 +439,7 @@ function renderShoppingTripsTab(state) {
           <h3>No Shopping Trips Recorded Yet</h3>
           <p>Scan your first grocery receipt from your camera/phone or add a manual trip record for Week 1 baseline.</p>
           <div style="display: flex; gap: 10px; justify-content: center; margin-top: 14px;">
-            <button class="btn-primary" id="empty-scan-btn">📷 Scan Receipt</button>
-            <button class="btn-secondary" id="empty-manual-btn">✍️ Manual Entry</button>
+            <button class="btn-primary" id="empty-scan-btn">📷 Scan Food</button>
           </div>
         </div>
       ` : `
@@ -883,6 +881,70 @@ function renderExportTab(comparison, config) {
 // =========================================================================
 
 /**
+ * Generates an item row markup supporting responsive 2-tier card layout on mobile
+ * and single-row table grid on desktop.
+ */
+function createReceiptItemRowHtml(item = {}, idx = 0, dietProfile = null, isWetMarket = false) {
+  const name = item.name || '';
+  const qty = item.quantity !== undefined && item.quantity !== null ? item.quantity : (item.qty !== undefined ? item.qty : 1);
+  const unit = item.unit || (isWetMarket ? 'kg' : 'pcs');
+  const price = item.unitPrice !== undefined && item.unitPrice !== null ? item.unitPrice : (item.price !== undefined ? item.price : '');
+  const total = item.totalPrice !== undefined && item.totalPrice !== null ? item.totalPrice : (item.lineTotal !== undefined ? item.lineTotal : (price !== '' ? (Number(qty) * Number(price)).toFixed(2) : ''));
+  const category = item.category || (isWetMarket ? 'Wet Market Produce' : 'General Food');
+  const status = item.lidStatus || item.status || 'SAFE';
+  const reason = item.lidReason || item.clinicalReason || '';
+  const isAvoid = item.isSafeForDiet === false || item.dietStatus === 'AVOID';
+  const flagReason = item.dietFlagReason || (dietProfile ? 'Flagged for ' + (dietProfile.shortName || dietProfile.name) : '');
+  const swap = item.suggestedSwap || '';
+
+  return `
+    <tr class="receipt-item-row" data-row-idx="${idx}" data-item-category="${escapeHtml(category)}" data-item-status="${escapeHtml(status)}" data-item-reason="${escapeHtml(reason)}">
+      <!-- Tier 1 (Mobile) / Col 1 (Desktop): Item Name -->
+      <td class="item-cell-name">
+        <div class="item-name-wrapper" style="display: flex; flex-direction: column; gap: 4px;">
+          <input type="text" class="table-input item-name-val w-full" placeholder="${isWetMarket ? 'e.g. Sayote, Pork Belly, Talong' : 'Item Name'}" value="${escapeHtml(name)}" required />
+          ${isAvoid ? `
+            <div class="text-[11px] text-rose-700 dark:text-rose-300 flex flex-wrap items-center gap-1 font-medium bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+              <span>⚠️ ${escapeHtml(flagReason)}</span>
+              ${swap ? `<span>• Swap: <strong>${escapeHtml(swap)}</strong></span>` : ''}
+            </div>
+          ` : ''}
+        </div>
+      </td>
+
+      <!-- Tier 2 Col 1a (Mobile) / Col 2 (Desktop): Qty -->
+      <td class="item-cell-qty">
+        <label class="mobile-cell-label">Qty</label>
+        <input type="number" step="0.1" min="0.1" class="table-input item-qty-val" value="${qty}" style="width: 100%; text-align: center;" />
+      </td>
+
+      <!-- Tier 2 Col 1b (Mobile) / Col 3 (Desktop): Unit -->
+      <td class="item-cell-unit">
+        <label class="mobile-cell-label">Unit</label>
+        <input type="text" class="table-input item-unit-val" value="${escapeHtml(unit)}" placeholder="unit" style="width: 100%; text-align: center;" />
+      </td>
+
+      <!-- Tier 2 Col 2 (Mobile) / Col 4 (Desktop): Price -->
+      <td class="item-cell-price">
+        <label class="mobile-cell-label">Price (₱)</label>
+        <input type="number" step="0.01" min="0" class="table-input item-price-val" placeholder="0.00" value="${price !== '' ? price : ''}" style="width: 100%; text-align: right;" />
+      </td>
+
+      <!-- Tier 2 Col 3 (Mobile) / Col 5 (Desktop): Line Total -->
+      <td class="item-cell-total">
+        <label class="mobile-cell-label">Total (₱)</label>
+        <input type="number" step="0.01" min="0" class="table-input item-total-val" placeholder="0.00" value="${total !== '' ? total : ''}" style="width: 100%; text-align: right;" />
+      </td>
+
+      <!-- Tier 1 Delete (Mobile) / Col 6 (Desktop): Delete Button -->
+      <td class="item-cell-delete" style="text-align: center;">
+        <button type="button" class="btn-icon remove-item-row-btn" title="Remove item" aria-label="Remove item">✕</button>
+      </td>
+    </tr>
+  `;
+}
+
+/**
  * Side-by-Side Supermarket Receipt Scanner & Verification Modal
  */
 function renderReceiptScanModal(state) {
@@ -890,6 +952,11 @@ function renderReceiptScanModal(state) {
   const isScanning = state.receiptScanning || false;
   const scanProgress = state.receiptProgress || 0;
   const scanStatusMsg = state.receiptStatusMsg || 'Processing receipt...';
+
+  // Venue state switch: "supermarket" (default) | "wet_market"
+  const activeVenue = state.groceryVenueMode || (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_venue_mode') : null) || 'supermarket';
+  const isSupermarket = activeVenue === 'supermarket';
+  const isWetMarket = !isSupermarket;
 
   // Math check
   let mathAlertHtml = '';
@@ -958,14 +1025,34 @@ function renderReceiptScanModal(state) {
     </div>
   ` : '';
 
+  // Render items rows using createReceiptItemRowHtml
+  const items = scanData?.items || [];
+  let itemsHtml = '';
+  if (items.length > 0) {
+    itemsHtml = items.map((item, idx) => createReceiptItemRowHtml(item, idx, dietProfile, isWetMarket)).join('');
+  } else {
+    itemsHtml = createReceiptItemRowHtml(
+      { name: '', quantity: 1, unit: isWetMarket ? 'kg' : 'pcs', unitPrice: '', totalPrice: '' },
+      0,
+      dietProfile,
+      isWetMarket
+    );
+  }
+
+  // Portrait orientation dismiss check
+  const portraitTipDismissed = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('kosherai_portrait_tip_dismissed') === '1';
+
   return `
     <div class="modal-overlay" id="receipt-modal-overlay">
       <div class="modal-content receipt-modal-large" role="dialog" aria-modal="true">
+        <!-- Header -->
         <div class="modal-header">
           <div style="flex: 1; padding-right: 12px; min-width: 0;">
-            <h2 class="modal-title">Intelligent Supermarket Receipt Scanner</h2>
+            <h2 class="modal-title">${isWetMarket ? 'Wet Market Food Intake & Manual Log' : 'Intelligent Supermarket Receipt Scanner'}</h2>
             <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">
-              AI document OCR extracts store details, itemized purchases, and final amount paid for side-by-side verification.
+              ${isWetMarket
+                ? 'Record palengke and receipt-less produce, scale weights, and itemized batch purchases.'
+                : 'AI document OCR extracts store details, itemized purchases, and final amount paid for side-by-side verification.'}
             </div>
           </div>
           <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
@@ -976,7 +1063,22 @@ function renderReceiptScanModal(state) {
           </div>
         </div>
 
-          <div class="receipt-scanner-split flex flex-col md:grid md:grid-cols-12 gap-6 relative">
+        <!-- In-Modal Venue Mode Toggle (Segmented Switch) -->
+        <div class="venue-mode-toggle-container">
+          <div class="venue-mode-toggle" role="tablist" aria-label="Grocery Venue Mode">
+            <button type="button" class="venue-toggle-btn ${isSupermarket ? 'active' : ''}" data-venue="supermarket" role="tab" aria-selected="${isSupermarket}">
+              🛒 Supermarket
+            </button>
+            <button type="button" class="venue-toggle-btn ${isWetMarket ? 'active' : ''}" data-venue="wet_market" role="tab" aria-selected="${isWetMarket}">
+              🥬 Wet Market
+            </button>
+          </div>
+        </div>
+
+        <!-- Main Body: Split or Full Width depending on Venue -->
+        <div class="receipt-scanner-split ${isSupermarket ? 'flex flex-col md:grid md:grid-cols-12 gap-6' : 'flex flex-col gap-6 max-w-3xl mx-auto w-full'} relative">
+          
+          ${isSupermarket ? `
             <!-- Left Pane / Upload Card (Mobile: full width on top, Desktop: 5 cols) -->
             <div class="split-left-pane w-full md:col-span-5">
               <!-- Persistent file input so camera/file picker can always be triggered -->
@@ -1010,149 +1112,139 @@ function renderReceiptScanModal(state) {
                 </div>
               `}
             </div>
+          ` : ''}
 
-            <!-- Right Pane: Extracted Editable Fields (Mobile: stacked below, Desktop: 7 cols) -->
-            <div class="split-right-pane w-full md:col-span-7 relative">
-              ${isScanning ? `
-                <div class="active-scanning-overlay">
-                  <div class="w-12 h-12 rounded-full border-4 border-teal-500/20 border-t-teal-500 animate-spin mb-3"></div>
-                  <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 text-xs font-semibold mb-2">
-                    <span class="animate-pulse">✨</span> Gemini Vision Active
-                  </div>
-                  <h3 class="text-base font-bold text-slate-900 dark:text-white mb-1">Analyzing Supermarket Receipt...</h3>
-                  <p id="scan-status-text" class="text-xs sm:text-sm text-teal-800 dark:text-teal-300 text-center max-w-xs font-medium">
-                    ${scanStatusMsg || 'Uploading receipt image...'}
-                  </p>
-                  <div class="progress-bar-bg" style="max-width: 240px; width: 100%; margin: 16px auto 0; height: 6px; border-radius: 9999px; overflow: hidden; background: rgba(148, 163, 184, 0.2);">
-                    <div class="progress-bar-fill" style="width: ${Math.round(scanProgress * 100)}%; height: 100%; background: linear-gradient(90deg, #0d9488, #06b6d4); transition: width 0.3s ease;"></div>
-                  </div>
+          <!-- Right Pane: Extracted / Manual Editable Fields -->
+          <div class="split-right-pane w-full ${isSupermarket ? 'md:col-span-7' : 'max-w-3xl mx-auto'} relative">
+            ${isScanning ? `
+              <div class="active-scanning-overlay">
+                <div class="w-12 h-12 rounded-full border-4 border-teal-500/20 border-t-teal-500 animate-spin mb-3"></div>
+                <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 text-xs font-semibold mb-2">
+                  <span class="animate-pulse">✨</span> Gemini Vision Active
                 </div>
-              ` : ''}
-
-              ${mathAlertHtml}
-              ${duplicateAlertHtml}
-              ${dietBadgeHtml}
-
-              <form id="receipt-verification-form" class="flex flex-col gap-4">
-
-                <!-- 1. Store Name & Purchase Date (2-column responsive subgrid) -->
-                <div class="form-row-grid grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div class="form-group">
-                    <label class="form-label" for="edit-store-name">Store Name</label>
-                    <input type="text" id="edit-store-name" class="form-input w-full min-h-[44px]" value="${escapeHtml(scanData?.storeName || 'SM Supermarket')}" ${isScanning ? 'disabled' : ''} required />
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label" for="edit-purchase-date">Purchase Date</label>
-                    <input type="date" id="edit-purchase-date" class="form-input w-full min-h-[44px]" value="${scanData?.purchaseDate || new Date().toISOString().split('T')[0]}" ${isScanning ? 'disabled' : ''} required />
-                  </div>
+                <h3 class="text-base font-bold text-slate-900 dark:text-white mb-1">Analyzing Supermarket Receipt...</h3>
+                <p id="scan-status-text" class="text-xs sm:text-sm text-teal-800 dark:text-teal-300 text-center max-w-xs font-medium">
+                  ${scanStatusMsg || 'Uploading receipt image...'}
+                </p>
+                <div class="progress-bar-bg" style="max-width: 240px; width: 100%; margin: 16px auto 0; height: 6px; border-radius: 9999px; overflow: hidden; background: rgba(148, 163, 184, 0.2);">
+                  <div class="progress-bar-fill" style="width: ${Math.round(scanProgress * 100)}%; height: 100%; background: linear-gradient(90deg, #0d9488, #06b6d4); transition: width 0.3s ease;"></div>
                 </div>
+              </div>
+            ` : ''}
 
-                <!-- 2. CRITICAL FIELD: Whole-Grocery Scale Weight -->
-                <div class="scale-weight-field">
-                  <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1" for="edit-scale-weight">
-                    ⚖️ Whole-Grocery Scale Weight (kg)
-                  </label>
-                  <div class="scale-weight-wrapper relative flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white focus-within:border-emerald-500">
-                    <input type="number" step="0.01" min="0" id="edit-scale-weight" class="scale-weight-input w-full bg-transparent text-slate-900 dark:text-white font-semibold outline-none border-none focus:ring-0 placeholder-slate-400 dark:placeholder-slate-500" placeholder="0.00" value="${scanData?.totalScaleWeightKg || ''}" ${isScanning ? 'disabled' : ''} required />
-                    <span class="scale-weight-unit ml-2 select-none text-xs font-bold uppercase text-slate-500 dark:text-slate-400">kg</span>
-                  </div>
-                  <p class="scale-weight-help mt-1 text-[11px] leading-tight text-slate-500 dark:text-slate-400">
-                    Measured physical weight of food haul on your home scale before unpacking. Kept separate from receipt item weights for academic rigor.
-                  </p>
+            <!-- Mobile Portrait Orientation Tip -->
+            ${!portraitTipDismissed ? `
+              <div class="portrait-orientation-tip" id="portrait-orientation-tip">
+                <div class="flex items-center gap-2">
+                  <span class="text-base select-none">💡</span>
+                  <span><strong>Tip:</strong> Rotate to landscape for an expanded spreadsheet view.</span>
                 </div>
+                <button type="button" class="tip-dismiss-btn" id="dismiss-portrait-tip-btn" aria-label="Dismiss tip">✕</button>
+              </div>
+            ` : ''}
 
-                <!-- 3. Final Amount Paid & Trip Type (2-column responsive subgrid) -->
-                <div class="form-row-grid grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div class="form-group">
+            <!-- Physical Scale Weight Reconciliation Callout (Wet Market mode) -->
+            ${isWetMarket ? `
+              <div class="scale-reconciliation-card p-3.5 rounded-xl bg-teal-500/10 border border-teal-500/25 text-teal-900 dark:text-teal-200 text-xs flex items-center gap-3 mb-3">
+                <span class="text-2xl select-none">⚖️</span>
+                <div>
+                  <strong>Physical Scale Weight Reconciliation:</strong>
+                  Weigh your whole wet market haul together (in kg). Itemized individual produce weights will reconcile against this physical bulk measurement.
+                </div>
+              </div>
+            ` : ''}
+
+            ${mathAlertHtml}
+            ${duplicateAlertHtml}
+            ${dietBadgeHtml}
+
+            <form id="receipt-verification-form" class="flex flex-col gap-4">
+
+              <!-- 1. Store / Market Stall Name & Purchase Date (2-column responsive subgrid) -->
+              <div class="form-row-grid grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="form-group">
+                  <label class="form-label" for="edit-store-name">${isWetMarket ? 'Store / Market Stall Name' : 'Store Name'}</label>
+                  <input type="text" id="edit-store-name" class="form-input w-full min-h-[44px]" placeholder="${isWetMarket ? 'e.g. Paco Wet Market / Stall #12' : 'SM Supermarket'}" value="${escapeHtml(scanData?.storeName || (isWetMarket ? 'Wet Market / Palengke' : 'SM Supermarket'))}" ${isScanning ? 'disabled' : ''} required />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="edit-purchase-date">Purchase Date</label>
+                  <input type="date" id="edit-purchase-date" class="form-input w-full min-h-[44px]" value="${scanData?.purchaseDate || new Date().toISOString().split('T')[0]}" ${isScanning ? 'disabled' : ''} required />
+                </div>
+              </div>
+
+              <!-- 2. CRITICAL FIELD: Whole-Grocery Scale Weight -->
+              <div class="scale-weight-field">
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1" for="edit-scale-weight">
+                  ⚖️ Whole-Grocery Scale Weight (kg)
+                </label>
+                <div class="scale-weight-wrapper relative flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white focus-within:border-emerald-500">
+                  <input type="number" step="0.01" min="0" id="edit-scale-weight" class="scale-weight-input w-full bg-transparent text-slate-900 dark:text-white font-semibold outline-none border-none focus:ring-0 placeholder-slate-400 dark:placeholder-slate-500" placeholder="0.00" value="${scanData?.totalScaleWeightKg || ''}" ${isScanning ? 'disabled' : ''} required />
+                  <span class="scale-weight-unit ml-2 select-none text-xs font-bold uppercase text-slate-500 dark:text-slate-400">kg</span>
+                </div>
+                <p class="scale-weight-help mt-1 text-[11px] leading-tight text-slate-500 dark:text-slate-400">
+                  Measured physical weight of food haul on your home scale before unpacking. Kept separate from receipt item weights for academic rigor.
+                </p>
+              </div>
+
+              <!-- 3. Final Amount Paid & Trip Type (2-column responsive subgrid) -->
+              <div class="form-row-grid grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="form-group">
+                  <div class="flex items-center justify-between">
                     <label class="form-label" for="edit-total-amount">Final Amount Paid (₱ PHP)</label>
-                    <input type="number" step="0.01" min="0" id="edit-total-amount" class="form-input w-full min-h-[44px]" style="font-size: 1.1rem; font-weight: 800; font-family: var(--font-mono);" value="${scanData?.totalAmountPaid || 0}" required />
-                    <div class="form-help" style="margin-top: 4px; font-size: 0.72rem;">Recorded ONCE as a household food expense.</div>
+                    <button type="button" id="apply-items-sum-btn" class="text-[11px] text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer">⚡ Apply Sum of Items</button>
                   </div>
-                  <div class="form-group">
-                    <label class="form-label" for="edit-trip-type">Trip Type</label>
-                    <select id="edit-trip-type" class="form-input w-full min-h-[44px]">
-                      <option value="Supermarket">Supermarket</option>
-                      <option value="Wet Market / Palengke">Wet Market / Palengke</option>
-                      <option value="Specialty Grocery">Specialty Grocery</option>
-                      <option value="Convenience Store">Convenience Store</option>
-                    </select>
-                    <div class="form-help" style="margin-top: 4px; font-size: 0.72rem;">Classification for shopping venue comparison.</div>
-                  </div>
+                  <input type="number" step="0.01" min="0" id="edit-total-amount" class="form-input w-full min-h-[44px]" style="font-size: 1.1rem; font-weight: 800; font-family: var(--font-mono);" value="${scanData?.totalAmountPaid || 0}" required />
+                  <div class="form-help" style="margin-top: 4px; font-size: 0.72rem;">Recorded ONCE as a household food expense.</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="edit-trip-type">Trip Type</label>
+                  <select id="edit-trip-type" class="form-input w-full min-h-[44px]">
+                    <option value="supermarket" ${isSupermarket ? 'selected' : ''}>Supermarket</option>
+                    <option value="wet_market" ${isWetMarket ? 'selected' : ''}>Wet Market / Palengke</option>
+                    <option value="Specialty Grocery">Specialty Grocery</option>
+                    <option value="Convenience Store">Convenience Store</option>
+                  </select>
+                  <div class="form-help" style="margin-top: 4px; font-size: 0.72rem;">Classification for shopping venue comparison.</div>
+                </div>
+              </div>
+
+              <!-- 4. Extracted Items / Market Purchases Table -->
+              <div class="extracted-items-box">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="font-weight: 700; font-size: 0.85rem;">
+                    ${isWetMarket ? '🥬 Itemized Purchases' : 'Extracted Items'} (${items.length}):
+                  </span>
+                  <button type="button" class="btn-text" id="add-receipt-item-row" style="color: var(--safe-green, #10b981); font-size: 0.8rem; font-weight: 600;">
+                    ➕ Add Item Row
+                  </button>
                 </div>
 
-                <!-- 4. Extracted Items Table -->
-                <div class="extracted-items-box">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-weight: 700; font-size: 0.85rem;">Extracted Items (${(scanData?.items || []).length}):</span>
-                    <button type="button" class="btn-text" id="add-receipt-item-row" style="color: var(--safe-green); font-size: 0.8rem; font-weight: 600;">
-                      ➕ Add Item Row
-                    </button>
-                  </div>
-
-                  <div class="receipt-items-table-wrapper">
-                    <table class="receipt-items-table" id="receipt-items-table">
-                      <thead>
-                        <tr>
-                          <th>Item Name</th>
-                          <th style="width: 60px;">Qty</th>
-                          <th style="width: 60px;">Unit</th>
-                          <th style="width: 80px;">Price (₱)</th>
-                          <th style="width: 85px;">Line Total</th>
-                          <th style="width: 36px;"></th>
-                        </tr>
-                      </thead>
-                      <tbody id="receipt-items-tbody">
-                        ${(scanData?.items && scanData.items.length > 0) ? scanData.items.map((item, idx) => `
-                          <tr data-row-idx="${idx}" data-item-category="${escapeHtml(item.category || 'General Food')}" data-item-status="${escapeHtml(item.lidStatus || item.status || 'SAFE')}" data-item-reason="${escapeHtml(item.lidReason || item.clinicalReason || '')}">
-                            <td>
-                              <div style="display: flex; flex-direction: column; gap: 4px;">
-                                <input type="text" class="table-input item-name-val" value="${escapeHtml(item.name)}" required />
-                                ${(item.isSafeForDiet === false || item.dietStatus === 'AVOID') ? `
-                                  <div class="text-[11px] text-rose-700 dark:text-rose-300 flex flex-wrap items-center gap-1 font-medium bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
-                                    <span>⚠️ ${escapeHtml(item.dietFlagReason || 'Flagged for ' + dietProfile.shortName)}</span>
-                                    ${item.suggestedSwap ? `<span>• Swap: <strong>${escapeHtml(item.suggestedSwap)}</strong></span>` : ''}
-                                  </div>
-                                ` : ''}
-                              </div>
-                            </td>
-                            <td>
-                              <input type="number" step="0.1" min="0.1" class="table-input item-qty-val" value="${item.quantity || 1}" style="width: 100%; text-align: center;" />
-                            </td>
-                            <td>
-                              <input type="text" class="table-input item-unit-val" value="${escapeHtml(item.unit || 'pcs')}" style="width: 100%; text-align: center;" />
-                            </td>
-                            <td>
-                              <input type="number" step="0.01" class="table-input item-price-val" value="${item.unitPrice || item.totalPrice || 0}" style="width: 100%; text-align: right;" />
-                            </td>
-                            <td>
-                              <input type="number" step="0.01" class="table-input item-total-val" value="${item.totalPrice || item.unitPrice || 0}" style="width: 100%; text-align: right;" />
-                            </td>
-                            <td style="text-align: center;">
-                              <button type="button" class="btn-icon remove-item-row-btn" title="Remove row">✕</button>
-                            </td>
-                          </tr>
-                        `).join('') : `
-                          <tr data-row-idx="0">
-                            <td><input type="text" class="table-input item-name-val" placeholder="Chicken Breast" required /></td>
-                            <td><input type="number" step="0.1" class="table-input item-qty-val" value="1" style="width: 100%; text-align: center;" /></td>
-                            <td><input type="text" class="table-input item-unit-val" value="kg" style="width: 100%; text-align: center;" /></td>
-                            <td><input type="number" step="0.01" class="table-input item-price-val" placeholder="0.00" style="width: 100%; text-align: right;" /></td>
-                            <td><input type="number" step="0.01" class="table-input item-total-val" placeholder="0.00" style="width: 100%; text-align: right;" /></td>
-                            <td style="text-align: center;"><button type="button" class="btn-icon remove-item-row-btn">✕</button></td>
-                          </tr>
-                        `}
-                      </tbody>
-                    </table>
-                  </div>
+                <div class="receipt-items-table-wrapper">
+                  <table class="receipt-items-table" id="receipt-items-table">
+                    <thead>
+                      <tr>
+                        <th>Item Name</th>
+                        <th style="width: 70px;">Qty</th>
+                        <th style="width: 70px;">Unit</th>
+                        <th style="width: 90px; text-align: right;">Price (₱)</th>
+                        <th style="width: 95px; text-align: right;">Line Total</th>
+                        <th style="width: 36px; text-align: center;"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="receipt-items-tbody">
+                      ${itemsHtml}
+                    </tbody>
+                  </table>
                 </div>
+              </div>
 
-                <div class="modal-footer-actions">
-                  <button type="button" class="btn-secondary" id="cancel-receipt-modal-btn" ${isScanning ? 'disabled' : ''} style="min-height: 44px; padding: 0 18px;">Cancel</button>
-                  <button type="submit" class="btn-primary" id="save-receipt-trip-btn" ${isScanning ? 'disabled' : ''} style="min-height: 44px; padding: 0 22px;">💾 Save Verified Shopping Trip</button>
-                </div>
-              </form>
-            </div>
+              <div class="modal-footer-actions">
+                <button type="button" class="btn-secondary" id="cancel-receipt-modal-btn" ${isScanning ? 'disabled' : ''} style="min-height: 44px; padding: 0 18px;">Cancel</button>
+                <button type="submit" class="btn-primary" id="save-receipt-trip-btn" ${isScanning ? 'disabled' : ''} style="min-height: 44px; padding: 0 22px;">💾 Save Verified Shopping Trip</button>
+              </div>
+            </form>
           </div>
+        </div>
       </div>
     </div>
   `;

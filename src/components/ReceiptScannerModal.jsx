@@ -81,11 +81,35 @@ export default function ReceiptScannerModal({
   const [scaleWeight, setScaleWeight] = useState('');
   const [totalAmount, setTotalAmount] = useState('0.00');
   const [tripType, setTripType] = useState('Supermarket');
+  const [venueMode, setVenueMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('kosherai_venue_mode') || 'supermarket';
+    }
+    return 'supermarket';
+  });
+  const [portraitTipDismissed, setPortraitTipDismissed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('kosherai_portrait_tip_dismissed') === '1';
+    }
+    return false;
+  });
   const [previewUrl, setPreviewUrl] = useState(initialImage);
   const [currentImageBlob, setCurrentImageBlob] = useState(null);
   const [items, setItems] = useState([
     { id: 1, name: 'Chicken Breast (Fresh)', quantity: 1.2, unit: 'kg', unitPrice: 280, totalPrice: 336 }
   ]);
+
+  const handleVenueChange = (mode) => {
+    setVenueMode(mode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('kosherai_venue_mode', mode);
+    }
+    if (mode === 'wet_market' && storeName === 'SM Supermarket') {
+      setStoreName('Wet Market / Palengke');
+    } else if (mode === 'supermarket' && storeName === 'Wet Market / Palengke') {
+      setStoreName('SM Supermarket');
+    }
+  };
 
   // On-Device OCR & Scanner Execution State Coordination
   const [internalScanning, setInternalScanning] = useState(false);
@@ -341,14 +365,18 @@ export default function ReceiptScannerModal({
   // Form Submission
   const handleSubmit = (e) => {
     e.preventDefault();
+    const trip_type = venueMode === 'wet_market' ? 'wet_market' : 'supermarket';
     const tripData = {
-      storeName: storeName.trim(),
+      storeName: storeName.trim() || (venueMode === 'wet_market' ? 'Wet Market / Palengke' : 'Supermarket'),
       date: purchaseDate,
       totalScaleWeightKg: parseFloat(scaleWeight) || 0,
       totalAmountPaid: parsedTotal,
-      tripType,
-      receiptImageUrl: previewUrl,
-      notes: `Receipt scanned (${items.length} items verified)`
+      tripType: trip_type,
+      trip_type,
+      receiptImageUrl: venueMode === 'wet_market' ? null : previewUrl,
+      notes: venueMode === 'wet_market'
+        ? (items.length > 0 ? `Wet market trip (${items.length} item${items.length === 1 ? '' : 's'} recorded)` : 'Manual wet market entry')
+        : `Receipt scanned (${items.length} items verified)`
     };
 
     if (onSave) {
@@ -370,33 +398,31 @@ export default function ReceiptScannerModal({
     >
       {/* Modal Surface */}
       <div
-        className={`relative w-full max-w-5xl my-auto rounded-2xl shadow-2xl transition-colors duration-200 overflow-hidden flex flex-col max-h-[92vh] ${
-          theme === 'dark'
-            ? 'bg-slate-950 text-white border border-teal-500/30 shadow-teal-950/40'
-            : 'bg-slate-50 text-slate-900 border border-slate-200 shadow-slate-300/50'
-        }`}
+        className={`relative w-full max-w-5xl my-auto rounded-2xl shadow-2xl transition-colors duration-200 overflow-hidden flex flex-col max-h-[92vh] ${theme === 'dark'
+          ? 'bg-slate-950 text-white border border-teal-500/30 shadow-teal-950/40'
+          : 'bg-slate-50 text-slate-900 border border-slate-200 shadow-slate-300/50'
+          }`}
       >
         {/* Header Bar */}
         <div
-          className={`flex items-center justify-between px-4 sm:px-6 py-4 border-b shrink-0 ${
-            theme === 'dark' ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200 bg-white'
-          }`}
+          className={`flex items-center justify-between px-4 sm:px-6 py-4 border-b shrink-0 ${theme === 'dark' ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200 bg-white'
+            }`}
         >
           <div className="flex-1 pr-4 min-w-0">
             <h2
               id="receipt-modal-heading"
-              className={`text-lg sm:text-xl font-bold truncate ${
-                theme === 'dark' ? 'text-white' : 'text-slate-900'
-              }`}
+              className={`text-lg sm:text-xl font-bold truncate ${theme === 'dark' ? 'text-white' : 'text-slate-900'
+                }`}
             >
-              Intelligent Supermarket Receipt Scanner
+              {venueMode === 'wet_market' ? 'Wet Market Food Intake & Manual Log' : 'Intelligent Supermarket Receipt Scanner'}
             </h2>
             <p
-              className={`text-xs sm:text-sm mt-0.5 line-clamp-1 ${
-                theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-              }`}
+              className={`text-xs sm:text-sm mt-0.5 line-clamp-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
+                }`}
             >
-              AI document OCR extracts store details, itemized purchases, and final amount paid for side-by-side verification.
+              {venueMode === 'wet_market'
+                ? 'Record palengke and receipt-less produce, scale weights, and itemized batch purchases.'
+                : 'AI document OCR extracts store details, itemized purchases, and final amount paid for side-by-side verification.'}
             </p>
           </div>
 
@@ -406,11 +432,10 @@ export default function ReceiptScannerModal({
             <button
               type="button"
               onClick={toggleTheme}
-              className={`p-2.5 rounded-lg border transition-all duration-150 flex items-center justify-center ${
-                theme === 'dark'
-                  ? 'bg-slate-900 text-amber-300 border-slate-700 hover:bg-slate-800 hover:border-slate-600 focus:ring-2 focus:ring-amber-400/30'
-                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100 hover:text-slate-900 focus:ring-2 focus:ring-teal-500/30'
-              }`}
+              className={`p-2.5 rounded-lg border transition-all duration-150 flex items-center justify-center ${theme === 'dark'
+                ? 'bg-slate-900 text-amber-300 border-slate-700 hover:bg-slate-800 hover:border-slate-600 focus:ring-2 focus:ring-amber-400/30'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100 hover:text-slate-900 focus:ring-2 focus:ring-teal-500/30'
+                }`}
               title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
               aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
@@ -439,17 +464,40 @@ export default function ReceiptScannerModal({
             <button
               type="button"
               onClick={onClose}
-              className={`p-2.5 rounded-lg border transition-all duration-150 flex items-center justify-center ${
-                theme === 'dark'
-                  ? 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-800 hover:text-white'
-                  : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-100 hover:text-slate-800'
-              }`}
+              className={`p-2.5 rounded-lg border transition-all duration-150 flex items-center justify-center ${theme === 'dark'
+                ? 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-800 hover:text-white'
+                : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-100 hover:text-slate-800'
+                }`}
               title="Close modal"
               aria-label="Close modal"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* In-Modal Venue Mode Toggle (Segmented Switch) */}
+        <div className="venue-mode-toggle-container pt-3">
+          <div className="venue-mode-toggle" role="tablist" aria-label="Grocery Venue Mode">
+            <button
+              type="button"
+              onClick={() => handleVenueChange('supermarket')}
+              className={`venue-toggle-btn ${venueMode === 'supermarket' ? 'active' : ''}`}
+              role="tab"
+              aria-selected={venueMode === 'supermarket'}
+            >
+              🛒 Supermarket
+            </button>
+            <button
+              type="button"
+              onClick={() => handleVenueChange('wet_market')}
+              className={`venue-toggle-btn ${venueMode === 'wet_market' ? 'active' : ''}`}
+              role="tab"
+              aria-selected={venueMode === 'wet_market'}
+            >
+              🥬 Wet Market
             </button>
           </div>
         </div>
@@ -473,138 +521,131 @@ export default function ReceiptScannerModal({
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-            {/* Main responsive grid: Single column stacked on mobile (<md), Side-by-Side (5-7 cols) on >=md */}
-            <div className="flex flex-col md:grid md:grid-cols-12 gap-6">
-              {/* Left Column / Upload Card (Full width on mobile, 5 cols on desktop) */}
-              <div className="w-full md:col-span-5 flex flex-col">
-                {/* Persistently mounted file input - never unmounted, ref-triggered */}
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept="image/*"
-                  capture="environment"
-                  disabled={isScanning}
-                  onChange={handleFileChange}
-                  className="sr-only hidden"
-                  tabIndex={-1}
-                  aria-hidden="true"
-                />
+            {/* Main responsive grid: Split 5/7 on Supermarket, centered max-w-3xl on Wet Market */}
+            <div className={`flex flex-col ${venueMode === 'supermarket' ? 'md:grid md:grid-cols-12' : 'max-w-3xl mx-auto'} gap-6`}>
+              {/* Left Column / Upload Card: only shown when venueMode === 'supermarket' */}
+              {venueMode === 'supermarket' && (
+                <div className="w-full md:col-span-5 flex flex-col">
+                  {/* Persistently mounted file input - never unmounted, ref-triggered */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*"
+                    capture="environment"
+                    disabled={isScanning}
+                    onChange={handleFileChange}
+                    className="sr-only hidden"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
 
-                <div
-                  className={`w-full h-full min-h-[280px] sm:min-h-[340px] md:min-h-[440px] rounded-xl border flex flex-col items-center justify-center p-4 transition-colors ${
-                    theme === 'dark'
+                  <div
+                    className={`w-full h-full min-h-[280px] sm:min-h-[340px] md:min-h-[440px] rounded-xl border flex flex-col items-center justify-center p-4 transition-colors ${theme === 'dark'
                       ? 'bg-slate-900/60 border-slate-800'
                       : 'bg-white border-slate-200 shadow-sm'
-                  }`}
-                >
-                  {previewUrl ? (
-                    <div className="w-full h-full flex flex-col justify-between items-center gap-3">
-                      <div className={`relative w-full flex-1 max-h-[380px] rounded-lg overflow-hidden bg-black/90 flex items-center justify-center border border-slate-700/50 ${
-                        isScanning ? 'scanning-thumbnail-box' : ''
-                      }`}>
-                        <img
-                          src={previewUrl}
-                          alt="Scanned Receipt Preview"
-                          className={`max-h-full max-w-full object-contain transition-opacity duration-300 ${
-                            isScanning ? 'opacity-80' : 'opacity-100'
-                          }`}
-                        />
-                        {isScanning && <div className="scanning-laser-beam" />}
-                      </div>
-
-                      {/* Toast / Status Badge for OCR Engine */}
-                      {ocrStatusBadge && (
-                        <div className="w-full py-1.5 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5 animate-fadeIn">
-                          <span>✓</span>
-                          <span>{ocrStatusBadge}</span>
+                      }`}
+                  >
+                    {previewUrl ? (
+                      <div className="w-full h-full flex flex-col justify-between items-center gap-3">
+                        <div className={`relative w-full flex-1 max-h-[380px] rounded-lg overflow-hidden bg-black/90 flex items-center justify-center border border-slate-700/50 ${isScanning ? 'scanning-thumbnail-box' : ''
+                          }`}>
+                          <img
+                            src={previewUrl}
+                            alt="Scanned Receipt Preview"
+                            className={`max-h-full max-w-full object-contain transition-opacity duration-300 ${isScanning ? 'opacity-80' : 'opacity-100'
+                              }`}
+                          />
+                          {isScanning && <div className="scanning-laser-beam" />}
                         </div>
-                      )}
 
-                      {/* Receipt Action Toolbar */}
-                      <div className="w-full flex flex-wrap items-center gap-2">
+                        {/* Toast / Status Badge for OCR Engine */}
+                        {ocrStatusBadge && (
+                          <div className="w-full py-1.5 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5 animate-fadeIn">
+                            <span>✓</span>
+                            <span>{ocrStatusBadge}</span>
+                          </div>
+                        )}
+
+                        {/* Receipt Action Toolbar */}
+                        <div className="w-full flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleRetake}
+                            disabled={isScanning}
+                            className={`flex-1 min-w-[110px] min-h-[38px] flex items-center justify-center gap-1.5 rounded-xl text-xs font-semibold border transition-all ${isScanning ? 'opacity-50 pointer-events-none' : 'cursor-pointer'
+                              } ${theme === 'dark'
+                                ? 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                                : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                              }`}
+                          >
+                            🔄 Retake Photo
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleRescanGemini}
+                            disabled={isScanning || !previewUrl}
+                            title="Re-scan receipt using Gemini Flash Vision"
+                            className={`min-h-[38px] px-3 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 ${isScanning || !previewUrl
+                              ? 'opacity-50 pointer-events-none'
+                              : 'cursor-pointer hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-700 bg-teal-50/50 dark:bg-teal-950/20'
+                              }`}
+                          >
+                            {activeEngine === 'gemini' ? (
+                              <span className="spinner-micro"></span>
+                            ) : (
+                              <span>✨</span>
+                            )}
+                            <span>Re-scan with Gemini</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleManualPaddleScan}
+                            disabled={isScanning || !previewUrl}
+                            title="Force local on-device PaddleOCR extraction without Gemini"
+                            className={`border border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors min-h-[38px] ${isScanning || !previewUrl
+                              ? 'opacity-50 pointer-events-none'
+                              : 'cursor-pointer'
+                              }`}
+                          >
+                            {activeEngine === 'paddle' ? (
+                              <span className="spinner-micro"></span>
+                            ) : (
+                              <span>⚡</span>
+                            )}
+                            <span>On-Device OCR</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-full h-full border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center border-cyan-500/40 bg-teal-500/5">
+                        <div className="text-4xl sm:text-5xl mb-3">📷</div>
+                        <div
+                          className={`font-bold text-base sm:text-lg mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-900'
+                            }`}
+                        >
+                          Take Photo or Upload Receipt
+                        </div>
+                        <p
+                          className={`text-xs sm:text-sm max-w-xs mb-5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
+                            }`}
+                        >
+                          Supports high-resolution JPG or PNG directly from your mobile camera
+                        </p>
                         <button
                           type="button"
                           onClick={handleRetake}
                           disabled={isScanning}
-                          className={`flex-1 min-w-[110px] min-h-[38px] flex items-center justify-center gap-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                            isScanning ? 'opacity-50 pointer-events-none' : 'cursor-pointer'
-                          } ${
-                            theme === 'dark'
-                              ? 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
-                              : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-                          }`}
+                          className="min-h-[44px] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm transition-all flex items-center justify-center bg-teal-600 hover:bg-teal-500 text-white cursor-pointer"
                         >
-                          🔄 Retake Photo
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={handleRescanGemini}
-                          disabled={isScanning || !previewUrl}
-                          title="Re-scan receipt using Gemini Flash Vision"
-                          className={`min-h-[38px] px-3 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 ${
-                            isScanning || !previewUrl
-                              ? 'opacity-50 pointer-events-none'
-                              : 'cursor-pointer hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-700 bg-teal-50/50 dark:bg-teal-950/20'
-                          }`}
-                        >
-                          {activeEngine === 'gemini' ? (
-                            <span className="spinner-micro"></span>
-                          ) : (
-                            <span>✨</span>
-                          )}
-                          <span>Re-scan with Gemini</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={handleManualPaddleScan}
-                          disabled={isScanning || !previewUrl}
-                          title="Force local on-device PaddleOCR extraction without Gemini"
-                          className={`border border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors min-h-[38px] ${
-                            isScanning || !previewUrl
-                              ? 'opacity-50 pointer-events-none'
-                              : 'cursor-pointer'
-                          }`}
-                        >
-                          {activeEngine === 'paddle' ? (
-                            <span className="spinner-micro"></span>
-                          ) : (
-                            <span>⚡</span>
-                          )}
-                          <span>On-Device OCR</span>
+                          Choose File or Camera
                         </button>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="w-full h-full border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center border-cyan-500/40 bg-teal-500/5">
-                      <div className="text-4xl sm:text-5xl mb-3">📷</div>
-                      <div
-                        className={`font-bold text-base sm:text-lg mb-1 ${
-                          theme === 'dark' ? 'text-white' : 'text-slate-900'
-                        }`}
-                      >
-                        Take Photo or Upload Receipt
-                      </div>
-                      <p
-                        className={`text-xs sm:text-sm max-w-xs mb-5 ${
-                          theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-                        }`}
-                      >
-                        Supports high-resolution JPG or PNG directly from your mobile camera
-                      </p>
-                      <button
-                        type="button"
-                        onClick={handleRetake}
-                        disabled={isScanning}
-                        className="min-h-[44px] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm transition-all flex items-center justify-center bg-teal-600 hover:bg-teal-500 text-white cursor-pointer"
-                      >
-                        Choose File or Camera
-                      </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Right Column / Extracted Editable Form (Full width on mobile, 7 cols on desktop) */}
               <div className="relative w-full md:col-span-7 flex flex-col">
@@ -643,9 +684,8 @@ export default function ReceiptScannerModal({
                     <div className="flex flex-col gap-1.5">
                       <label
                         htmlFor={storeNameId}
-                        className={`text-xs sm:text-sm font-semibold truncate ${
-                          theme === 'dark' ? 'text-slate-200' : 'text-slate-700'
-                        }`}
+                        className={`text-xs sm:text-sm font-semibold truncate ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'
+                          }`}
                       >
                         Store Name
                       </label>
@@ -657,20 +697,18 @@ export default function ReceiptScannerModal({
                         value={storeName}
                         onChange={e => setStoreName(e.target.value)}
                         placeholder="e.g. SM Supermarket"
-                        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-lg text-sm transition-colors border outline-none ${
-                          theme === 'dark'
-                            ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
-                            : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500'
-                        }`}
+                        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-lg text-sm transition-colors border outline-none ${theme === 'dark'
+                          ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
+                          : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500'
+                          }`}
                       />
                     </div>
 
                     <div className="flex flex-col gap-1.5">
                       <label
                         htmlFor={purchaseDateId}
-                        className={`text-xs sm:text-sm font-semibold truncate ${
-                          theme === 'dark' ? 'text-slate-200' : 'text-slate-700'
-                        }`}
+                        className={`text-xs sm:text-sm font-semibold truncate ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'
+                          }`}
                       >
                         Purchase Date
                       </label>
@@ -681,39 +719,35 @@ export default function ReceiptScannerModal({
                         disabled={isScanning}
                         value={purchaseDate}
                         onChange={e => setPurchaseDate(e.target.value)}
-                        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-lg text-sm transition-colors border outline-none ${
-                          theme === 'dark'
-                            ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
-                            : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500'
-                        }`}
+                        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-lg text-sm transition-colors border outline-none ${theme === 'dark'
+                          ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
+                          : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500'
+                          }`}
                       />
                     </div>
                   </div>
 
                   {/* 2. Whole-Grocery Scale Weight Card */}
                   <div
-                    className={`rounded-2xl p-4 transition-colors w-full border ${
-                      theme === 'dark'
-                        ? 'bg-slate-900/60 border-slate-700/60'
-                        : 'bg-emerald-50/70 border-emerald-200/80'
-                    } dark:bg-slate-900/60 dark:border-slate-700/60`}
+                    className={`rounded-2xl p-4 transition-colors w-full border ${theme === 'dark'
+                      ? 'bg-slate-900/60 border-slate-700/60'
+                      : 'bg-emerald-50/70 border-emerald-200/80'
+                      } dark:bg-slate-900/60 dark:border-slate-700/60`}
                   >
                     <label
                       htmlFor={scaleWeightId}
-                      className={`text-xs sm:text-sm font-semibold flex items-center gap-1.5 mb-1.5 ${
-                        theme === 'dark' ? 'text-emerald-400' : 'text-emerald-800'
-                      } dark:text-emerald-400`}
+                      className={`text-xs sm:text-sm font-semibold flex items-center gap-1.5 mb-1.5 ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-800'
+                        } dark:text-emerald-400`}
                     >
                       ⚖️ Whole-Grocery Scale Weight (kg)
                     </label>
 
                     {/* Padded input group with embedded trailing unit badge */}
                     <div
-                      className={`relative mt-1 flex items-center rounded-lg border px-3 py-2 transition-colors focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 ${
-                        theme === 'dark'
-                          ? 'border-slate-700 bg-slate-800/80 text-white'
-                          : 'border-slate-300 bg-white text-slate-900'
-                      } dark:border-slate-700 dark:bg-slate-800/80 dark:text-white`}
+                      className={`relative mt-1 flex items-center rounded-lg border px-3 py-2 transition-colors focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500 ${theme === 'dark'
+                        ? 'border-slate-700 bg-slate-800/80 text-white'
+                        : 'border-slate-300 bg-white text-slate-900'
+                        } dark:border-slate-700 dark:bg-slate-800/80 dark:text-white`}
                     >
                       <input
                         id={scaleWeightId}
@@ -725,25 +759,22 @@ export default function ReceiptScannerModal({
                         value={scaleWeight}
                         onChange={e => setScaleWeight(e.target.value)}
                         placeholder="e.g. 2.20"
-                        className={`w-full bg-transparent text-base font-semibold outline-none ${
-                          theme === 'dark'
-                            ? 'text-white placeholder-slate-500'
-                            : 'text-slate-900 placeholder-slate-400'
-                        } dark:text-white dark:placeholder-slate-500`}
+                        className={`w-full bg-transparent text-base font-semibold outline-none ${theme === 'dark'
+                          ? 'text-white placeholder-slate-500'
+                          : 'text-slate-900 placeholder-slate-400'
+                          } dark:text-white dark:placeholder-slate-500`}
                       />
                       <span
-                        className={`ml-2 select-none text-sm font-semibold ${
-                          theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
-                        } dark:text-slate-400`}
+                        className={`ml-2 select-none text-sm font-semibold ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                          } dark:text-slate-400`}
                       >
                         kg
                       </span>
                     </div>
 
                     <p
-                      className={`text-[11px] sm:text-xs mt-2 font-normal leading-relaxed ${
-                        theme === 'dark' ? 'text-slate-400' : 'text-emerald-900/80'
-                      } dark:text-slate-400`}
+                      className={`text-[11px] sm:text-xs mt-2 font-normal leading-relaxed ${theme === 'dark' ? 'text-slate-400' : 'text-emerald-900/80'
+                        } dark:text-slate-400`}
                     >
                       Measured physical weight of food haul on your home scale before unpacking. Kept separate from receipt item weights for academic rigor.
                     </p>
@@ -754,9 +785,8 @@ export default function ReceiptScannerModal({
                     <div className="flex flex-col gap-1.5">
                       <label
                         htmlFor={totalAmountId}
-                        className={`text-xs sm:text-sm font-semibold truncate ${
-                          theme === 'dark' ? 'text-slate-200' : 'text-slate-700'
-                        }`}
+                        className={`text-xs sm:text-sm font-semibold truncate ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'
+                          }`}
                       >
                         Final Amount Paid (₱ PHP)
                       </label>
@@ -768,16 +798,14 @@ export default function ReceiptScannerModal({
                         required
                         value={totalAmount}
                         onChange={e => setTotalAmount(e.target.value)}
-                        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-lg text-base font-bold font-mono transition-colors border outline-none ${
-                          theme === 'dark'
-                            ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
-                            : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500'
-                        }`}
+                        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-lg text-base font-bold font-mono transition-colors border outline-none ${theme === 'dark'
+                          ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
+                          : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500'
+                          }`}
                       />
                       <span
-                        className={`text-[11px] ${
-                          theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
-                        }`}
+                        className={`text-[11px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                          }`}
                       >
                         Recorded ONCE as household food expense.
                       </span>
@@ -786,9 +814,8 @@ export default function ReceiptScannerModal({
                     <div className="flex flex-col gap-1.5">
                       <label
                         htmlFor={tripTypeId}
-                        className={`text-xs sm:text-sm font-semibold truncate ${
-                          theme === 'dark' ? 'text-slate-200' : 'text-slate-700'
-                        }`}
+                        className={`text-xs sm:text-sm font-semibold truncate ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'
+                          }`}
                       >
                         Trip Type
                       </label>
@@ -796,15 +823,13 @@ export default function ReceiptScannerModal({
                         id={tripTypeId}
                         value={tripType}
                         onChange={e => setTripType(e.target.value)}
-                        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-lg text-sm transition-colors border outline-none appearance-none bg-no-repeat bg-[right_12px_center] cursor-pointer ${
-                          theme === 'dark'
-                            ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
-                            : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500'
-                        }`}
+                        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-lg text-sm transition-colors border outline-none appearance-none bg-no-repeat bg-[right_12px_center] cursor-pointer ${theme === 'dark'
+                          ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500'
+                          : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500'
+                          }`}
                         style={{
-                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='${
-                            theme === 'dark' ? '%2394a3b8' : '%2364748b'
-                          }' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='${theme === 'dark' ? '%2394a3b8' : '%2364748b'
+                            }' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
                           backgroundSize: '16px'
                         }}
                       >
@@ -814,9 +839,8 @@ export default function ReceiptScannerModal({
                         <option value="Convenience Store">Convenience Store</option>
                       </select>
                       <span
-                        className={`text-[11px] ${
-                          theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
-                        }`}
+                        className={`text-[11px] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                          }`}
                       >
                         Venue classification for cost density analysis.
                       </span>
@@ -825,15 +849,13 @@ export default function ReceiptScannerModal({
 
                   {/* 4. Extracted Items Table */}
                   <div
-                    className={`rounded-xl border p-3.5 sm:p-4 flex flex-col gap-3 transition-colors ${
-                      theme === 'dark' ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
-                    }`}
+                    className={`rounded-xl border p-3.5 sm:p-4 flex flex-col gap-3 transition-colors ${theme === 'dark' ? 'bg-slate-900/40 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <span
-                        className={`text-xs sm:text-sm font-bold ${
-                          theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
-                        }`}
+                        className={`text-xs sm:text-sm font-bold ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
+                          }`}
                       >
                         Extracted Line Items ({items.length})
                       </span>
@@ -850,11 +872,10 @@ export default function ReceiptScannerModal({
                       <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[500px]">
                         <thead>
                           <tr
-                            className={`border-b ${
-                              theme === 'dark'
-                                ? 'bg-slate-900 text-slate-400 border-slate-800'
-                                : 'bg-slate-100 text-slate-600 border-slate-200'
-                            }`}
+                            className={`border-b ${theme === 'dark'
+                              ? 'bg-slate-900 text-slate-400 border-slate-800'
+                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                              }`}
                           >
                             <th className="py-2.5 px-3 font-semibold">Item Name</th>
                             <th className="py-2.5 px-2 font-semibold w-20">Qty</th>
@@ -881,11 +902,10 @@ export default function ReceiptScannerModal({
                                     placeholder="Item name"
                                     value={item.name}
                                     onChange={e => handleUpdateItem(item.id, 'name', e.target.value)}
-                                    className={`w-full min-h-[36px] px-2.5 py-1.5 text-xs rounded border outline-none ${
-                                      theme === 'dark'
-                                        ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
-                                        : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
-                                    }`}
+                                    className={`w-full min-h-[36px] px-2.5 py-1.5 text-xs rounded border outline-none ${theme === 'dark'
+                                      ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
+                                      : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
+                                      }`}
                                   />
                                 </td>
                                 <td className="py-2 px-1">
@@ -895,11 +915,10 @@ export default function ReceiptScannerModal({
                                     min="0.1"
                                     value={item.quantity}
                                     onChange={e => handleUpdateItem(item.id, 'quantity', e.target.value)}
-                                    className={`w-full min-h-[36px] px-2 py-1.5 text-xs text-center rounded border outline-none font-mono ${
-                                      theme === 'dark'
-                                        ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
-                                        : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
-                                    }`}
+                                    className={`w-full min-h-[36px] px-2 py-1.5 text-xs text-center rounded border outline-none font-mono ${theme === 'dark'
+                                      ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
+                                      : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
+                                      }`}
                                   />
                                 </td>
                                 <td className="py-2 px-1">
@@ -907,11 +926,10 @@ export default function ReceiptScannerModal({
                                     type="text"
                                     value={item.unit}
                                     onChange={e => handleUpdateItem(item.id, 'unit', e.target.value)}
-                                    className={`w-full min-h-[36px] px-2 py-1.5 text-xs text-center rounded border outline-none ${
-                                      theme === 'dark'
-                                        ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
-                                        : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
-                                    }`}
+                                    className={`w-full min-h-[36px] px-2 py-1.5 text-xs text-center rounded border outline-none ${theme === 'dark'
+                                      ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
+                                      : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
+                                      }`}
                                   />
                                 </td>
                                 <td className="py-2 px-1">
@@ -921,11 +939,10 @@ export default function ReceiptScannerModal({
                                     min="0"
                                     value={item.unitPrice}
                                     onChange={e => handleUpdateItem(item.id, 'unitPrice', e.target.value)}
-                                    className={`w-full min-h-[36px] px-2 py-1.5 text-xs text-right rounded border outline-none font-mono ${
-                                      theme === 'dark'
-                                        ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
-                                        : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
-                                    }`}
+                                    className={`w-full min-h-[36px] px-2 py-1.5 text-xs text-right rounded border outline-none font-mono ${theme === 'dark'
+                                      ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
+                                      : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
+                                      }`}
                                   />
                                 </td>
                                 <td className="py-2 px-1">
@@ -935,11 +952,10 @@ export default function ReceiptScannerModal({
                                     min="0"
                                     value={item.totalPrice}
                                     onChange={e => handleUpdateItem(item.id, 'totalPrice', e.target.value)}
-                                    className={`w-full min-h-[36px] px-2 py-1.5 text-xs text-right rounded border outline-none font-mono font-semibold ${
-                                      theme === 'dark'
-                                        ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
-                                        : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
-                                    }`}
+                                    className={`w-full min-h-[36px] px-2 py-1.5 text-xs text-right rounded border outline-none font-mono font-semibold ${theme === 'dark'
+                                      ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
+                                      : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
+                                      }`}
                                   />
                                 </td>
                                 <td className="py-2 px-1 text-center">
@@ -962,30 +978,26 @@ export default function ReceiptScannerModal({
 
                   {/* Footer Actions */}
                   <div
-                    className={`flex items-center justify-end gap-3 pt-4 border-t ${
-                      theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
-                    }`}
+                    className={`flex items-center justify-end gap-3 pt-4 border-t ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
+                      }`}
                   >
                     <button
                       type="button"
                       onClick={onClose}
                       disabled={isScanning}
-                      className={`min-h-[44px] px-5 py-2.5 rounded-lg text-sm font-semibold border transition-all ${
-                        isScanning ? 'opacity-50 cursor-not-allowed' : ''
-                      } ${
-                        theme === 'dark'
+                      className={`min-h-[44px] px-5 py-2.5 rounded-lg text-sm font-semibold border transition-all ${isScanning ? 'opacity-50 cursor-not-allowed' : ''
+                        } ${theme === 'dark'
                           ? 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
                           : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
-                      }`}
+                        }`}
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={isScanning}
-                      className={`min-h-[44px] px-6 py-2.5 rounded-lg text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white shadow-teal-900/30 ${
-                        isScanning ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''
-                      }`}
+                      className={`min-h-[44px] px-6 py-2.5 rounded-lg text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white shadow-teal-900/30 ${isScanning ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''
+                        }`}
                     >
                       <span>💾</span> Save Verified Shopping Trip
                     </button>
