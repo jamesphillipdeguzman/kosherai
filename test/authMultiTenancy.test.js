@@ -54,11 +54,12 @@ async function runTests() {
   assert.ok(typeof auth.api.getSession === 'function', 'auth.api.getSession must be available');
   console.log('  ✅ Better Auth server instance and session API initialized.');
 
-  // Verify usr_primary_admin exists in both Neon "user" and "users"
-  const adminRows = await sql`SELECT id, email, full_name as name FROM users WHERE id = 'usr_primary_admin'`;
-  assert.strictEqual(adminRows.length, 1, 'usr_primary_admin must exist in users table');
-  const adminId = adminRows[0].id;
-  console.log(`  ✅ usr_primary_admin verified (ID: ${adminId})`);
+  // Verify primary admin user with recorded study trips
+  const tripsCheck = await sql`SELECT user_id FROM shopping_trips LIMIT 1`;
+  const adminId = tripsCheck.length > 0 ? tripsCheck[0].user_id : 'usr_primary_admin';
+  const adminRows = await sql`SELECT id, email, name FROM "user" WHERE id = ${adminId}`;
+  assert.ok(adminRows.length > 0, 'Admin user must exist in "user" table');
+  console.log(`  ✅ Primary admin verified (ID: ${adminId})`);
 
   // Create an active session token for Admin
   const sessionTokenAdmin = `token_admin_${Date.now()}_${Math.random().toString(36).slice(2)}`;

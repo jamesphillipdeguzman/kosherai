@@ -546,9 +546,9 @@ function attachEventHandlers() {
               name: userRecord.name || (state.authModalMode === 'signup' ? name : email.split('@')[0]),
               ...(userRecord.token ? { token: userRecord.token } : {})
             },
-            token: userRecord.token,
+            token: userRecord.token || null,
             session: {
-              token: userRecord.token || 'tok_' + Date.now(),
+              token: userRecord.token || null,
               createdAt: new Date().toISOString()
             }
           };

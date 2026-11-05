@@ -99,54 +99,76 @@ export async function getAuthenticatedUser(reqOrHeaders: any) {
         // Ignore session parse error and proceed to headers check
       }
 
-      // 2. Direct session token from Authorization Bearer header or Cookie
-      const authHeader = fetchHeaders.get('authorization') || fetchHeaders.get('Authorization');
-      let token = null;
-      if (authHeader) {
-        const m = authHeader.match(/^Bearer\s+(.*)$/i);
-        token = m ? m[1].trim() : authHeader.trim();
-      }
+      // 2. Direct session token fallback lookup from Cookie or Authorization Bearer header
+      const cookieHeader = fetchHeaders.get('cookie') || (reqOrHeaders?.headers && reqOrHeaders.headers.cookie) || '';
+      const cookieTokens: string[] = [];
 
-      if (!token) {
-        const cookieHeader = fetchHeaders.get('cookie') || fetchHeaders.get('Cookie');
-        if (cookieHeader) {
-          const match = cookieHeader.match(/(?:(?:__Secure-)?better-auth\.session_token|better-auth_session_token|session_token)=([^;]+)/);
-          if (match) {
-            token = decodeURIComponent(match[1].trim()).replace(/^"|"$/g, '');
-          }
+      if (cookieHeader) {
+        // Check for __Secure-better-auth.session_token
+        const secureMatch = cookieHeader.match(/__Secure-better-auth\.session_token=([^;]+)/);
+        if (secureMatch) {
+          cookieTokens.push(decodeURIComponent(secureMatch[1].trim()).replace(/^"|"$/g, ''));
+        }
+        // Check for better-auth.session_token
+        const standardMatch = cookieHeader.match(/(?:^|;\s*)better-auth\.session_token=([^;]+)/);
+        if (standardMatch) {
+          cookieTokens.push(decodeURIComponent(standardMatch[1].trim()).replace(/^"|"$/g, ''));
+        }
+        // Check for generic session_token
+        const genericMatch = cookieHeader.match(/(?:^|;\s*)session_token=([^;]+)/);
+        if (genericMatch) {
+          cookieTokens.push(decodeURIComponent(genericMatch[1].trim()).replace(/^"|"$/g, ''));
         }
       }
 
-      let cleanToken = token;
-      if (token) {
-        // Strip Express/Better-Auth signed cookie prefix (s:) and signature (.sig) if present
-        cleanToken = token.replace(/^s%3A|^s:/, '').split('.')[0].trim();
+      const authHeader = fetchHeaders.get('authorization') || fetchHeaders.get('Authorization') || '';
+      let bearerToken: string | null = null;
+      if (authHeader) {
+        const m = authHeader.match(/^Bearer\s+(.*)$/i);
+        const candidate = m ? m[1].trim() : authHeader.trim();
+        // Do NOT abort or override if Authorization: Bearer starts with "tok_" (legacy mock prefix)
+        if (!candidate.startsWith('tok_') && candidate.length > 5) {
+          bearerToken = candidate;
+        }
       }
 
-      if ((token || cleanToken) && databaseUrl) {
+      // Prioritize cookies (__Secure-better-auth.session_token / better-auth.session_token) first, then non-mock Bearer tokens
+      const candidateTokens = [...cookieTokens];
+      if (bearerToken) {
+        candidateTokens.push(bearerToken);
+      }
+
+      if (candidateTokens.length > 0 && databaseUrl) {
         try {
           const sql = neon(databaseUrl);
-          const sessionRows = await sql`
-            SELECT 
-              s.id as session_id,
-              COALESCE(s."userId", s.user_id) as user_id,
-              s.token,
-              u.name,
-              u.email
-            FROM "session" s
-            JOIN "user" u ON (u.id = s."userId" OR u.id = s.user_id)
-            WHERE (s.token = ${token} OR s.token = ${cleanToken})
-              AND (s."expiresAt" > NOW() OR s.expires_at > NOW() OR s."expiresAt" IS NULL)
-            LIMIT 1;
-          `;
-          if (sessionRows.length > 0) {
-            const s = sessionRows[0];
-            return {
-              id: s.user_id,
-              email: s.email,
-              name: s.name || s.email,
-              session: s
-            };
+          for (const cand of candidateTokens) {
+            const raw = cand;
+            // Strip Express/Better-Auth signed cookie prefix (s:) and signature (.sig)
+            const clean = cand.replace(/^s%3A|^s:/, '').split('.')[0].trim();
+
+            const sessionRows = await sql`
+              SELECT 
+                s.id AS session_id,
+                COALESCE(s.user_id, s."userId") AS uid,
+                s.token,
+                u.name,
+                u.email
+              FROM "session" s
+              JOIN "user" u ON (u.id = COALESCE(s.user_id, s."userId"))
+              WHERE (s.token = ${clean} OR s.token = ${raw})
+                AND (s.expires_at > NOW() OR s."expiresAt" > NOW() OR s.expires_at IS NULL OR s."expiresAt" IS NULL)
+              LIMIT 1;
+            `;
+
+            if (sessionRows.length > 0) {
+              const s = sessionRows[0];
+              return {
+                id: s.uid,
+                email: s.email,
+                name: s.name || s.email,
+                session: s
+              };
+            }
           }
         } catch (dbErr: any) {
           console.warn('[getAuthenticatedUser] Session lookup query error:', dbErr?.message || dbErr);

@@ -93,6 +93,17 @@ await tripsApiHandler(r5, s5);
 assert.strictEqual(status5(), 401, 'Request without credentials must return 401');
 console.log('  ✅ 401 UNAUTHORIZED correctly returned for unauthenticated request.');
 
+// 6. Test Legacy mock Bearer token (tok_...) does NOT override __Secure-better-auth.session_token cookie
+console.log('\nTest 6: GET /api/trips with legacy mock Bearer token AND __Secure cookie succeeds with 200 OK');
+const { req: r6, res: s6, getStatus: status6, getData: data6 } = createMockReqRes('GET', {
+  authorization: 'Bearer tok_1793848293021_mock_legacy',
+  cookie: `__Secure-better-auth.session_token=s:${activeSession.token}.signedsignature987; other=123`
+}, '/api/trips');
+await tripsApiHandler(r6, s6);
+assert.strictEqual(status6(), 200, 'Mock Bearer token must not override valid __Secure cookie');
+assert.strictEqual(data6().success, true);
+console.log(`  ✅ 200 OK returned successfully (${data6().trips.length} trips resolved via __Secure cookie).`);
+
 console.log('\n======================================================');
 console.log('🎉 ALL API AUTHENTICATION INJECTION TESTS PASSED!');
 console.log('======================================================\n');

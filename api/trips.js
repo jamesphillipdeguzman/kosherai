@@ -227,7 +227,7 @@ export default async function handler(req, res) {
     } catch (_) {}
 
     const query = parseQueryParams(req);
-    const userId = user?.id;
+    const userId = typeof user === 'string' ? user : user?.id;
 
     if (!userId) {
       return sendJson(res, 401, {
