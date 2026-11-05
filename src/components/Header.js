@@ -3,10 +3,24 @@ import { DIET_PROFILES, getDietProfile, DIET_DESCRIPTIONS, getDietDescription } 
 
 export { DIET_DESCRIPTIONS, getDietDescription };
 
-export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', showProjectTab = true, activeDiet = 'lid', theme = 'dark') {
+export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', showProjectTab = true, activeDiet = 'lid', theme = 'dark', user = null) {
   const currentProfile = getDietProfile(activeDiet);
   const activeDescription = getDietDescription(activeDiet);
   const targetLimit = (currentProfile.target || '').replace(/^Clinical Target:\s*/i, '');
+
+  let currentUser = user;
+  if (!currentUser && typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('kosherai_current_user');
+      if (stored) currentUser = JSON.parse(stored);
+    } catch {
+      currentUser = null;
+    }
+  }
+
+  const initial = currentUser?.name
+    ? currentUser.name.charAt(0).toUpperCase()
+    : (currentUser?.email ? currentUser.email.charAt(0).toUpperCase() : 'U');
 
   return `
     <header class="app-header">
@@ -21,10 +35,36 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
         </div>
       </div>
 
-      <div class="header-actions">
+      <div class="header-actions flex items-center gap-2">
         <div class="status-pill" title="${isOnline ? 'Online - AI Verification Available' : 'Offline Mode - Local Database Active'}">
           <span class="status-dot ${isOnline ? '' : 'offline'}"></span>
           <span class="status-label">${isOnline ? 'Online' : 'Offline'}</span>
+        </div>
+
+        <!-- Dynamic Auth State: Avatar/Sign Out if logged in, Sign In/Get Started if logged out -->
+        <div class="header-auth-controls inline-flex items-center gap-1.5" id="header-auth-container">
+          ${currentUser ? `
+            <div class="relative user-profile-pill flex items-center gap-1.5 p-1 rounded-full border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 shadow-xs" title="Signed in as ${currentUser.email || currentUser.name || 'Tenant User'}">
+              <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                ${initial}
+              </div>
+              <button
+                type="button"
+                id="header-signout-btn"
+                title="Sign out and clear local device cache"
+                class="px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-red-500 transition-colors cursor-pointer"
+              >
+                Sign Out
+              </button>
+            </div>
+          ` : `
+            <a href="/sign-in" class="px-2.5 py-1 text-xs font-semibold rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" id="header-signin-btn">
+              Sign In
+            </a>
+            <a href="/sign-up" class="px-3 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors hidden sm:inline-flex" id="header-signup-btn">
+              Get Started
+            </a>
+          `}
         </div>
 
         <!-- Quick Light / Dark Mode Toggle -->

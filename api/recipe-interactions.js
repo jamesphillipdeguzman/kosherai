@@ -318,17 +318,27 @@ export default async function handler(req, res) {
         }
 
         const commentId = body.id || `comment_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        const userName = (body.userName || 'Caregiver / Cook').trim() || 'Caregiver / Cook';
+        
+        // Extract authenticated tenant user
+        let authUser = null;
+        try {
+          const { getAuthenticatedUser } = await import('../lib/auth.ts');
+          authUser = await getAuthenticatedUser(req);
+        } catch (_) {}
+
+        const userId = authUser?.id || req.headers?.['x-user-id'] || body.userId || (process.env.STRICT_AUTH === 'true' ? null : 'usr_primary_admin');
+        const userName = authUser?.name || (body.userName || 'Caregiver / Cook').trim() || 'Caregiver / Cook';
 
         const rows = await sql`
-          INSERT INTO recipe_comments (id, recipe_id, user_name, comment, created_at)
-          VALUES (${commentId}, ${recipeId}, ${userName}, ${rawComment}, NOW())
-          RETURNING id, recipe_id AS "recipeId", user_name AS "userName", comment, created_at AS "createdAt";
+          INSERT INTO recipe_comments (id, recipe_id, user_id, user_name, comment, created_at)
+          VALUES (${commentId}, ${recipeId}, ${userId}, ${userName}, ${rawComment}, NOW())
+          RETURNING id, recipe_id AS "recipeId", user_id AS "userId", user_name AS "userName", comment, created_at AS "createdAt";
         `;
 
         const inserted = rows[0] || {
           id: commentId,
           recipeId,
+          userId,
           userName,
           comment: rawComment,
           createdAt: new Date().toISOString()
@@ -340,6 +350,7 @@ export default async function handler(req, res) {
           comment: {
             id: inserted.id,
             recipeId: inserted.recipeId,
+            userId: inserted.userId,
             userName: inserted.userName,
             comment: inserted.comment,
             createdAt: inserted.createdAt

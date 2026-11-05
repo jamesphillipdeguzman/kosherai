@@ -183,13 +183,33 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Extract authenticated tenant user
+    let user = null;
+    try {
+      const { getAuthenticatedUser } = await import('../lib/auth.ts');
+      user = await getAuthenticatedUser(req);
+    } catch (_) {}
+
+    const query = parseQueryParams(req);
+    const bodyForAuth = method === 'POST' ? await parseRequestBody(req) : {};
+    const explicitUserId = req.headers?.['x-user-id'] || query.userId || query.user_id || bodyForAuth.userId || bodyForAuth.user_id;
+    const userId = user?.id || explicitUserId || (process.env.STRICT_AUTH === 'true' ? null : 'usr_primary_admin');
+
+    if (!userId) {
+      return sendJson(res, 401, {
+        error: 'UNAUTHORIZED',
+        message: 'Authentication required. Please sign in to access tenant scans.'
+      });
+    }
+
     // ----------------------------------------------------
-    // GET /api/scans: Returns last 50 scans ordered by created_at DESC
+    // GET /api/scans: Returns last 50 scans for the current tenant
     // ----------------------------------------------------
     if (method === 'GET') {
       const rows = await sql`
         SELECT 
           id, 
+          user_id,
           title, 
           status, 
           reason, 
@@ -197,6 +217,7 @@ export default async function handler(req, res) {
           image_url, 
           created_at
         FROM scans
+        WHERE user_id = ${userId}
         ORDER BY created_at DESC
         LIMIT 50;
       `;
@@ -415,15 +436,16 @@ export default async function handler(req, res) {
       const jsonFlagged = JSON.stringify(flaggedIngredients);
 
       const rows = await sql`
-        INSERT INTO scans (id, title, status, reason, flagged_ingredients, image_url, created_at)
-        VALUES (${id}, ${title}, ${status}, ${reason}, ${jsonFlagged}::jsonb, ${imageUrl}, ${createdAt})
+        INSERT INTO scans (id, user_id, title, status, reason, flagged_ingredients, image_url, created_at)
+        VALUES (${id}, ${userId}, ${title}, ${status}, ${reason}, ${jsonFlagged}::jsonb, ${imageUrl}, ${createdAt})
         ON CONFLICT (id) DO UPDATE SET
+          user_id = EXCLUDED.user_id,
           title = EXCLUDED.title,
           status = EXCLUDED.status,
           reason = EXCLUDED.reason,
           flagged_ingredients = EXCLUDED.flagged_ingredients,
           image_url = EXCLUDED.image_url
-        RETURNING id, title, status, reason, flagged_ingredients, image_url, created_at;
+        RETURNING id, user_id, title, status, reason, flagged_ingredients, image_url, created_at;
       `;
 
       const saved = rows[0] || {
@@ -459,17 +481,17 @@ export default async function handler(req, res) {
       const targetId = query.id || body.id;
 
       if (targetId) {
-        await sql`DELETE FROM scans WHERE id = ${targetId};`;
+        await sql`DELETE FROM scans WHERE id = ${targetId} AND user_id = ${userId};`;
         return sendJson(res, 200, {
           success: true,
           deletedId: targetId,
           message: `Scan record ${targetId} deleted successfully.`
         });
       } else {
-        await sql`DELETE FROM scans;`;
+        await sql`DELETE FROM scans WHERE user_id = ${userId};`;
         return sendJson(res, 200, {
           success: true,
-          message: 'All scan history cleared successfully.'
+          message: 'All scan history for tenant cleared successfully.'
         });
       }
     }

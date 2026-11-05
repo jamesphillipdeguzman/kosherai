@@ -219,11 +219,29 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Extract authenticated tenant user
+    let user = null;
+    try {
+      const { getAuthenticatedUser } = await import('../lib/auth.ts');
+      user = await getAuthenticatedUser(req);
+    } catch (_) {}
+
+    const query = parseQueryParams(req);
+    const bodyForAuth = method === 'POST' ? await parseRequestBody(req) : {};
+    const explicitUserId = req.headers?.['x-user-id'] || query.userId || query.user_id || bodyForAuth.userId || bodyForAuth.user_id;
+    const userId = user?.id || explicitUserId || (process.env.STRICT_AUTH === 'true' ? null : 'usr_primary_admin');
+
+    if (!userId) {
+      return sendJson(res, 401, {
+        error: 'UNAUTHORIZED',
+        message: 'Authentication required. Please sign in to access tenant data.'
+      });
+    }
+
     // ----------------------------------------------------
     // GET /api/trips: Returns trips with linked grocery items
     // ----------------------------------------------------
     if (method === 'GET') {
-      const query = parseQueryParams(req);
       const targetTripId = query.id || query.tripId;
 
       let tripRows = [];
@@ -231,17 +249,17 @@ export default async function handler(req, res) {
 
       if (targetTripId) {
         tripRows = await sql`
-          SELECT * FROM shopping_trips WHERE id = ${targetTripId};
+          SELECT * FROM shopping_trips WHERE id = ${targetTripId} AND user_id = ${userId};
         `;
         purchaseRows = await sql`
-          SELECT * FROM grocery_purchases WHERE trip_id = ${targetTripId} ORDER BY created_at ASC;
+          SELECT * FROM grocery_purchases WHERE trip_id = ${targetTripId} AND user_id = ${userId} ORDER BY created_at ASC;
         `;
       } else {
         tripRows = await sql`
-          SELECT * FROM shopping_trips ORDER BY date DESC, created_at DESC LIMIT 1000;
+          SELECT * FROM shopping_trips WHERE user_id = ${userId} ORDER BY date DESC, created_at DESC LIMIT 1000;
         `;
         purchaseRows = await sql`
-          SELECT * FROM grocery_purchases ORDER BY created_at ASC;
+          SELECT * FROM grocery_purchases WHERE user_id = ${userId} ORDER BY created_at ASC;
         `;
       }
 
@@ -313,13 +331,14 @@ export default async function handler(req, res) {
 
         await sql`
           INSERT INTO food_waste_logs (
-            id, date, project_week, item_name, measured_weight_g,
+            id, user_id, date, project_week, item_name, measured_weight_g,
             is_estimated, estimated_cost, reason, notes, created_at
           ) VALUES (
-            ${wasteId}, ${wDate}, ${wWeek}, ${wItem}, ${wWeight},
+            ${wasteId}, ${userId}, ${wDate}, ${wWeek}, ${wItem}, ${wWeight},
             ${wEst}, ${wCost}, ${wReason}, ${wNotes}, NOW()
           )
           ON CONFLICT (id) DO UPDATE SET
+            user_id = EXCLUDED.user_id,
             item_name = EXCLUDED.item_name,
             measured_weight_g = EXCLUDED.measured_weight_g,
             is_estimated = EXCLUDED.is_estimated,
@@ -361,20 +380,21 @@ export default async function handler(req, res) {
       const notes = tripData.notes || '';
       const createdAt = tripData.createdAt || tripData.created_at || new Date().toISOString();
 
-      // 1. Insert into shopping_trips
+      // 1. Insert into shopping_trips (Strict user_id scoped)
       await sql`
         INSERT INTO shopping_trips (
-          id, date, project_week, store_name, trip_type, 
+          id, user_id, date, project_week, store_name, trip_type, 
           total_amount_paid, total_scale_weight_kg, 
           receipt_image_url, receipt_raw_text, items_count, 
           notes, created_at, synced
         ) VALUES (
-          ${tripId}, ${date}, ${projectWeek}, ${storeName}, ${tripType},
+          ${tripId}, ${userId}, ${date}, ${projectWeek}, ${storeName}, ${tripType},
           ${totalAmountPaid}, ${totalScaleWeightKg},
           ${receiptImageUrl}, ${receiptRawText}, ${rawItems.length},
           ${notes}, ${createdAt}, true
         )
         ON CONFLICT (id) DO UPDATE SET
+          user_id = EXCLUDED.user_id,
           date = EXCLUDED.date,
           project_week = EXCLUDED.project_week,
           store_name = EXCLUDED.store_name,
@@ -392,7 +412,7 @@ export default async function handler(req, res) {
       const savedItems = [];
       if (rawItems && rawItems.length > 0) {
         // Clean out existing purchases for idempotent replacement on edits
-        await sql`DELETE FROM grocery_purchases WHERE trip_id = ${tripId};`;
+        await sql`DELETE FROM grocery_purchases WHERE trip_id = ${tripId} AND user_id = ${userId};`;
 
         for (let idx = 0; idx < rawItems.length; idx++) {
           const item = rawItems[idx];
@@ -410,15 +430,16 @@ export default async function handler(req, res) {
 
           await sql`
             INSERT INTO grocery_purchases (
-              id, trip_id, purchase_date, project_week, name,
+              id, user_id, trip_id, purchase_date, project_week, name,
               raw_receipt_text, quantity, unit, unit_price,
               total_price, weight_grams, category, lid_status, lid_reason, created_at
             ) VALUES (
-              ${itemId}, ${tripId}, ${date}, ${projectWeek}, ${itemName},
+              ${itemId}, ${userId}, ${tripId}, ${date}, ${projectWeek}, ${itemName},
               ${itemRawText}, ${quantity}, ${unit}, ${unitPrice},
               ${totalPrice}, ${weightGrams}, ${category}, ${lidStatus}, ${lidReason}, NOW()
             )
             ON CONFLICT (id) DO UPDATE SET
+              user_id = EXCLUDED.user_id,
               name = EXCLUDED.name,
               quantity = EXCLUDED.quantity,
               unit = EXCLUDED.unit,
@@ -476,7 +497,7 @@ export default async function handler(req, res) {
     }
 
     // ----------------------------------------------------
-    // DELETE /api/trips: Deletes trip and cascades to purchases
+    // DELETE /api/trips: Deletes trip and cascades to purchases (Scoped to user_id)
     // ----------------------------------------------------
     if (method === 'DELETE') {
       const query = parseQueryParams(req);
@@ -487,7 +508,8 @@ export default async function handler(req, res) {
         return sendJson(res, 400, { error: 'MISSING_ID', message: 'Trip ID is required for deletion.' });
       }
 
-      await sql`DELETE FROM shopping_trips WHERE id = ${targetId};`;
+      await sql`DELETE FROM grocery_purchases WHERE trip_id = ${targetId} AND user_id = ${userId};`;
+      await sql`DELETE FROM shopping_trips WHERE id = ${targetId} AND user_id = ${userId};`;
       return sendJson(res, 200, {
         success: true,
         deletedId: targetId,

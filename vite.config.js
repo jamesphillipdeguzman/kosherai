@@ -17,8 +17,28 @@ export default defineConfig({
         server.middlewares.use(async (req, res, next) => {
           const url = new URL(req.url, 'http://localhost');
 
-          // Intercept /api/recipe-interactions route
-          if (url.pathname === '/api/recipe-interactions') {
+          // Intercept Better Auth routes: /api/auth/*
+          if (url.pathname.startsWith('/api/auth')) {
+            try {
+              const { toNodeHandler } = await import('better-auth/node');
+              const { auth } = await import('./lib/auth.ts');
+              return toNodeHandler(auth)(req, res);
+            } catch (err) {
+              console.error('[Vite Better Auth API Error]:', err);
+              if (!res.headersSent) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  error: 'AUTH_SERVER_ERROR',
+                  message: err.message
+                }));
+              }
+            }
+            return;
+          }
+
+          // Intercept /api/recipe-interactions and /api/recipes/comments route
+          if (url.pathname === '/api/recipe-interactions' || url.pathname === '/api/recipes/comments') {
             try {
               await recipeInteractionsHandler(req, res);
             } catch (err) {
@@ -53,8 +73,8 @@ export default defineConfig({
             return;
           }
 
-          // Intercept /api/trips route
-          if (url.pathname === '/api/trips') {
+          // Intercept /api/trips and /api/shopping-trips routes
+          if (url.pathname === '/api/trips' || url.pathname === '/api/shopping-trips') {
             try {
               await tripsApiHandler(req, res);
             } catch (err) {

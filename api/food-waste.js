@@ -148,30 +148,49 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Extract authenticated tenant user
+    let user = null;
+    try {
+      const { getAuthenticatedUser } = await import('../lib/auth.ts');
+      user = await getAuthenticatedUser(req);
+    } catch (_) {}
+
+    const query = parseQueryParams(req);
+    const bodyForAuth = method === 'POST' ? await parseRequestBody(req) : {};
+    const explicitUserId = req.headers?.['x-user-id'] || query.userId || query.user_id || bodyForAuth.userId || bodyForAuth.user_id;
+    const userId = user?.id || explicitUserId || (process.env.STRICT_AUTH === 'true' ? null : 'usr_primary_admin');
+
+    if (!userId) {
+      return sendJson(res, 401, {
+        error: 'UNAUTHORIZED',
+        message: 'Authentication required. Please sign in to access tenant food waste logs.'
+      });
+    }
+
     // ----------------------------------------------------
-    // GET /api/food-waste
+    // GET /api/food-waste (Scoped by user_id)
     // ----------------------------------------------------
     if (method === 'GET') {
-      const query = parseQueryParams(req);
       let rows = [];
 
       if (query.id) {
         rows = await sql`
-          SELECT * FROM food_waste_logs WHERE id = ${query.id};
+          SELECT * FROM food_waste_logs WHERE id = ${query.id} AND user_id = ${userId};
         `;
       } else if (query.week || query.projectWeek) {
         const weekNum = Number(query.week || query.projectWeek);
         rows = await sql`
-          SELECT * FROM food_waste_logs WHERE project_week = ${weekNum} ORDER BY date DESC, created_at DESC;
+          SELECT * FROM food_waste_logs WHERE project_week = ${weekNum} AND user_id = ${userId} ORDER BY date DESC, created_at DESC;
         `;
       } else {
         rows = await sql`
-          SELECT * FROM food_waste_logs ORDER BY date DESC, created_at DESC LIMIT 2000;
+          SELECT * FROM food_waste_logs WHERE user_id = ${userId} ORDER BY date DESC, created_at DESC LIMIT 2000;
         `;
       }
 
       const formatted = rows.map(r => ({
         id: r.id,
+        userId: r.user_id,
         date: r.date,
         projectWeek: Number(r.project_week || 1),
         itemName: r.item_name,
@@ -187,12 +206,13 @@ export default async function handler(req, res) {
       return sendJson(res, 200, {
         success: true,
         synced: true,
+        userId,
         foodWaste: formatted
       });
     }
 
     // ----------------------------------------------------
-    // POST /api/food-waste: Upsert food waste log
+    // POST /api/food-waste: Upsert food waste log (Forced user_id)
     // ----------------------------------------------------
     if (method === 'POST') {
       const body = await parseRequestBody(req);
@@ -210,13 +230,16 @@ export default async function handler(req, res) {
 
       await sql`
         INSERT INTO food_waste_logs (
-          id, date, project_week, item_name, measured_weight_g,
+          id, user_id, date, project_week, item_name, measured_weight_g,
           is_estimated, estimated_cost, reason, notes, created_at
         ) VALUES (
-          ${id}, ${date}, ${projectWeek}, ${itemName}, ${measuredWeightG},
+          ${id}, ${userId}, ${date}, ${projectWeek}, ${itemName}, ${measuredWeightG},
           ${isEstimated}, ${estimatedCost}, ${reason}, ${notes}, NOW()
         )
         ON CONFLICT (id) DO UPDATE SET
+          user_id = EXCLUDED.user_id,
+          date = EXCLUDED.date,
+          project_week = EXCLUDED.project_week,
           item_name = EXCLUDED.item_name,
           measured_weight_g = EXCLUDED.measured_weight_g,
           is_estimated = EXCLUDED.is_estimated,
@@ -229,12 +252,13 @@ export default async function handler(req, res) {
         success: true,
         synced: true,
         id,
+        userId,
         message: `Food waste entry ${id} saved to Neon PostgreSQL.`
       });
     }
 
     // ----------------------------------------------------
-    // DELETE /api/food-waste
+    // DELETE /api/food-waste (Scoped by user_id)
     // ----------------------------------------------------
     if (method === 'DELETE') {
       const query = parseQueryParams(req);
@@ -245,7 +269,7 @@ export default async function handler(req, res) {
         return sendJson(res, 400, { error: 'MISSING_ID', message: 'Waste record ID is required for deletion.' });
       }
 
-      await sql`DELETE FROM food_waste_logs WHERE id = ${targetId};`;
+      await sql`DELETE FROM food_waste_logs WHERE id = ${targetId} AND user_id = ${userId};`;
       return sendJson(res, 200, {
         success: true,
         deletedId: targetId,

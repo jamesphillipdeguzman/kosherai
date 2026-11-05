@@ -321,6 +321,35 @@ function attachEventHandlers() {
     });
   }
 
+  // Header Sign Out & Client Tenant Cache Purge
+  const headerSignOutBtn = document.querySelector('#header-signout-btn');
+  if (headerSignOutBtn) {
+    headerSignOutBtn.addEventListener('click', async () => {
+      const keysToClear = [
+        'kosherai_course_trips',
+        'kosherai_course_grocery_items',
+        'kosherai_course_food_waste',
+        'kosherai_course_expenses',
+        'kosherai_course_meal_plans',
+        'kosherai_scan_history',
+        'kosherai_current_user',
+        'kosherai_user_session',
+        'kosherai_venue_mode'
+      ];
+      keysToClear.forEach(k => {
+        try { localStorage.removeItem(k); } catch (_) {}
+      });
+      sessionStorage.clear();
+      if (window.indexedDB) {
+        try { window.indexedDB.deleteDatabase('KosherAICourseDB'); } catch (_) {}
+      }
+      try {
+        await fetch('/api/auth/sign-out', { method: 'POST' }).catch(() => {});
+      } catch (_) {}
+      window.location.href = '/sign-in';
+    });
+  }
+
   // Quick Header Theme Toggle (Sun/Moon)
   const headerThemeToggleBtn = document.querySelector('#header-theme-toggle-btn');
   if (headerThemeToggleBtn) {
