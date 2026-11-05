@@ -102,19 +102,28 @@ export async function getAuthenticatedUser(reqOrHeaders: any) {
       // 2. Direct session token from Authorization Bearer header or Cookie
       const authHeader = fetchHeaders.get('authorization') || fetchHeaders.get('Authorization');
       let token = null;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        token = authHeader.replace(/^Bearer\s+/i, '').trim();
+      if (authHeader) {
+        const m = authHeader.match(/^Bearer\s+(.*)$/i);
+        token = m ? m[1].trim() : authHeader.trim();
       }
 
       if (!token) {
         const cookieHeader = fetchHeaders.get('cookie') || fetchHeaders.get('Cookie');
         if (cookieHeader) {
-          const match = cookieHeader.match(/(?:better-auth\.session_token|__Secure-better-auth\.session_token)=([^;]+)/);
-          if (match) token = decodeURIComponent(match[1].trim());
+          const match = cookieHeader.match(/(?:(?:__Secure-)?better-auth\.session_token|better-auth_session_token|session_token)=([^;]+)/);
+          if (match) {
+            token = decodeURIComponent(match[1].trim()).replace(/^"|"$/g, '');
+          }
         }
       }
 
-      if (token && databaseUrl) {
+      let cleanToken = token;
+      if (token) {
+        // Strip Express/Better-Auth signed cookie prefix (s:) and signature (.sig) if present
+        cleanToken = token.replace(/^s%3A|^s:/, '').split('.')[0].trim();
+      }
+
+      if ((token || cleanToken) && databaseUrl) {
         try {
           const sql = neon(databaseUrl);
           const sessionRows = await sql`
@@ -126,7 +135,7 @@ export async function getAuthenticatedUser(reqOrHeaders: any) {
               u.email
             FROM "session" s
             JOIN "user" u ON (u.id = s."userId" OR u.id = s.user_id)
-            WHERE s.token = ${token} 
+            WHERE (s.token = ${token} OR s.token = ${cleanToken})
               AND (s."expiresAt" > NOW() OR s.expires_at > NOW() OR s."expiresAt" IS NULL)
             LIMIT 1;
           `;

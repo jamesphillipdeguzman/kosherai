@@ -90,6 +90,7 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(formData)
       });
 
@@ -98,19 +99,31 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
         throw new Error(errorData.message || (mode === 'signin' ? 'Invalid credentials' : 'Registration failed'));
       }
 
-      const user = await res.json();
-      localStorage.setItem('kosherai_user_session', JSON.stringify(user));
-      try {
-        localStorage.setItem('kosherai_current_user', JSON.stringify(user?.user || user));
-      } catch (_) {}
+      const sessionData = await res.json();
+      const token = sessionData.token || sessionData.session?.token;
+      const userObj = sessionData.user || sessionData;
+      const fullUser = {
+        ...userObj,
+        ...(token ? { token } : {})
+      };
+      const sessionPayload = {
+        token: token,
+        session: { token },
+        user: fullUser
+      };
+      localStorage.setItem('kosherai_user_session', JSON.stringify(sessionPayload));
+      localStorage.setItem('kosherai_current_user', JSON.stringify(fullUser));
+      if (token) {
+        try { localStorage.setItem('better-auth.session_token', token); } catch (_) {}
+      }
 
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: user }));
+        window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: sessionPayload }));
         window.dispatchEvent(new CustomEvent('kosherai:sync-data'));
       }
 
-      if (onAuthSuccess) onAuthSuccess(user);
-      if (onSuccess) onSuccess(user);
+      if (onAuthSuccess) onAuthSuccess(sessionPayload);
+      if (onSuccess) onSuccess(sessionPayload);
       onClose();
     } catch (err) {
       setErrorMsg(err.message || 'Unable to authenticate. Please check your details.');

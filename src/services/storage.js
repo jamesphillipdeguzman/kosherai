@@ -1,4 +1,5 @@
 // Local Storage & State Management for KosherAI (Offline First)
+import { getAuthHeaders } from './authHeaders.js';
 
 const KEYS = {
   SETTINGS: 'kosherai_settings',
@@ -91,7 +92,8 @@ export async function getScanHistory() {
       const timeoutId = setTimeout(() => controller.abort(), 4000);
 
       const res = await fetch('/api/scans', {
-        headers: { 'Accept': 'application/json' },
+        headers: getAuthHeaders({ 'Accept': 'application/json' }),
+        credentials: 'include',
         signal: controller.signal
       });
       clearTimeout(timeoutId);
@@ -176,9 +178,10 @@ export function saveScanResult(scanRecord) {
 
       fetch('/api/scans', {
         method: 'POST',
-        headers: {
+        headers: getAuthHeaders({
           'Content-Type': 'application/json'
-        },
+        }),
+        credentials: 'include',
         body: JSON.stringify(payload)
       })
         .then(async (res) => {
@@ -224,7 +227,11 @@ export async function clearScanHistory(id = null) {
   if (isOnline) {
     try {
       const url = id ? `/api/scans?id=${encodeURIComponent(id)}` : '/api/scans';
-      await fetch(url, { method: 'DELETE' });
+      await fetch(url, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+        credentials: 'include'
+      });
       console.log(`[Storage] Remote scan history ${id ? 'record ' + id : 'all'} cleared.`);
     } catch (err) {
       console.warn('[Storage] Remote DELETE /api/scans failed:', err);

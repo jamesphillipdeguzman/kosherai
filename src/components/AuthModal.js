@@ -52,6 +52,7 @@ export async function authenticateUser(mode, credentials) {
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(bodyPayload)
   });
 
@@ -63,11 +64,18 @@ export async function authenticateUser(mode, credentials) {
       : 'Failed to create account. Email may already be in use.'));
   }
 
-  return data.user || data.data?.user || {
+  const userObj = data.user || data.data?.user || {
     id: data.id || 'usr_' + Date.now(),
     email: email.trim().toLowerCase(),
     name: name || email.split('@')[0]
   };
+  const token = data.token || data.session?.token;
+  if (token) {
+    userObj.token = token;
+    try { localStorage.setItem('better-auth.session_token', token); } catch (_) {}
+  }
+
+  return userObj;
 }
 
 function escapeAttr(value) {

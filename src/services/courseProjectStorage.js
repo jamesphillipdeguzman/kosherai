@@ -1,5 +1,6 @@
 import { searchDatabase } from './ruleEngine.js';
 import { LID_DATABASE, STATUS } from '../data/lidDatabase.js';
+import { getAuthHeaders } from './authHeaders.js';
 import {
   saveTripToIndexedDB,
   getTripsFromIndexedDB,
@@ -274,7 +275,8 @@ export async function saveShoppingTrip(tripData, items = []) {
 
         const res = await fetch('/api/trips', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          credentials: 'include',
           body: JSON.stringify(payload),
           signal: controller.signal
         });
@@ -418,7 +420,8 @@ export async function syncPendingTrips() {
       try {
         const res = await fetch('/api/trips', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          credentials: 'include',
           body: JSON.stringify(payload)
         });
 
@@ -577,7 +580,12 @@ async function fetchJsonWithTimeout(url, timeoutMs = 8000) {
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
   try {
-    const res = await fetch(url, { method: 'GET', signal: controller?.signal });
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: getAuthHeaders({ 'Accept': 'application/json' }),
+      credentials: 'include',
+      signal: controller?.signal
+    });
     if (!res || !res.ok) return null;
     return await res.json().catch(() => null);
   } catch (err) {
@@ -688,7 +696,11 @@ export async function deleteShoppingTrip(tripId) {
     // Remote DELETE if online
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     if (isOnline && typeof fetch === 'function') {
-      fetch(`/api/trips?id=${encodeURIComponent(tripId)}`, { method: 'DELETE' }).catch(() => {});
+      fetch(`/api/trips?id=${encodeURIComponent(tripId)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+        credentials: 'include'
+      }).catch(() => {});
     }
 
     return true;
@@ -832,7 +844,8 @@ export async function syncPendingFoodWaste() {
       try {
         const res = await fetch('/api/food-waste', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          credentials: 'include',
           body: JSON.stringify(wasteEntry)
         });
 

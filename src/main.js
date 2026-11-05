@@ -14,6 +14,7 @@ import { renderItemDetailModal } from './components/ItemDetailModal.js';
 import { renderCourseProjectView, createReceiptItemRowHtml } from './components/CourseProjectView.js';
 import { parseQuantityAndUnit, createManualItemRowHtml } from './components/ManualTripModal.js';
 import { renderAuthModalHtml, authenticateUser, isValidEmail } from './components/AuthModal.jsx';
+import { getAuthHeaders } from './services/authHeaders.js';
 import {
   toggleRecipeLike,
   recordRecipeView,
@@ -377,7 +378,11 @@ function attachEventHandlers() {
         try { window.indexedDB.deleteDatabase('KosherAICourseDB'); } catch (_) {}
       }
       try {
-        await fetch('/api/auth/sign-out', { method: 'POST' }).catch(() => {});
+        await fetch('/api/auth/sign-out', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          credentials: 'include'
+        }).catch(() => {});
       } catch (_) {}
       showToast?.('Signed out successfully.');
       render();
@@ -514,8 +519,10 @@ function attachEventHandlers() {
             user: {
               id: userRecord.id || userRecord.userId || 'usr_' + Date.now(),
               email,
-              name: userRecord.name || (state.authModalMode === 'signup' ? name : email.split('@')[0])
+              name: userRecord.name || (state.authModalMode === 'signup' ? name : email.split('@')[0]),
+              ...(userRecord.token ? { token: userRecord.token } : {})
             },
+            token: userRecord.token,
             session: {
               token: userRecord.token || 'tok_' + Date.now(),
               createdAt: new Date().toISOString()
@@ -524,6 +531,9 @@ function attachEventHandlers() {
 
           localStorage.setItem('kosherai_user_session', JSON.stringify(sessionPayload));
           localStorage.setItem('kosherai_current_user', JSON.stringify(sessionPayload.user));
+          if (userRecord.token) {
+            try { localStorage.setItem('better-auth.session_token', userRecord.token); } catch (_) {}
+          }
 
           state.authModalOpen = false;
           state.authModalLoading = false;
@@ -2065,7 +2075,8 @@ Cracked black pepper`;
       try {
         const res = await fetch('/api/food-waste', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          credentials: 'include',
           body: JSON.stringify(wasteEntry)
         });
 
@@ -2091,7 +2102,11 @@ Cracked black pepper`;
       const id = e.currentTarget.getAttribute('data-delete-waste');
       if (confirm('Delete this food waste record?')) {
         deleteFoodWasteRecord(id);
-        fetch(`/api/food-waste?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
+        fetch(`/api/food-waste?id=${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          headers: getAuthHeaders(),
+          credentials: 'include'
+        }).catch(() => {});
         render();
       }
     });

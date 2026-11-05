@@ -137,7 +137,10 @@ export function Header({
         try { window.indexedDB.deleteDatabase('KosherAICourseDB'); } catch (_) {}
       }
       try {
-        await fetch('/api/auth/sign-out', { method: 'POST' }).catch(() => {});
+        await fetch('/api/auth/sign-out', {
+          method: 'POST',
+          credentials: 'include'
+        }).catch(() => {});
       } catch (_) {}
     } finally {
       setCurrentUser(null);

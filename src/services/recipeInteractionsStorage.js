@@ -1,5 +1,6 @@
 // Client-Side Recipe Interactions Service (Views, Likes & Comments with Offline Queue)
 // Handles optimistic updates, localStorage caching, and synchronization with /api/recipe-interactions
+import { getAuthHeaders } from './authHeaders.js';
 
 export const STORAGE_KEYS = {
   LIKED_RECIPES: 'kosherai_liked_recipes',
@@ -125,7 +126,8 @@ export async function fetchAllRecipeInteractions() {
 
     const res = await fetch('/api/recipe-interactions', {
       method: 'GET',
-      headers: { 'Accept': 'application/json' },
+      headers: getAuthHeaders({ 'Accept': 'application/json' }),
+      credentials: 'include',
       signal: controller.signal
     });
     clearTimeout(timer);
@@ -168,7 +170,8 @@ export async function fetchRecipeDetails(recipeId) {
 
     const res = await fetch(`/api/recipe-interactions?recipeId=${encodeURIComponent(recipeId)}`, {
       method: 'GET',
-      headers: { 'Accept': 'application/json' },
+      headers: getAuthHeaders({ 'Accept': 'application/json' }),
+      credentials: 'include',
       signal: controller.signal
     });
     clearTimeout(timer);
@@ -213,7 +216,8 @@ export async function recordRecipeView(recipeId) {
   try {
     const res = await fetch('/api/recipe-interactions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'include',
       body: JSON.stringify({ action: 'view', recipeId })
     });
     if (res && res.ok) {
@@ -268,7 +272,8 @@ export async function toggleRecipeLike(recipeId) {
   try {
     const res = await fetch('/api/recipe-interactions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'include',
       body: JSON.stringify({ action: 'like', recipeId, delta })
     });
     if (res && res.ok) {
@@ -324,7 +329,8 @@ export async function postRecipeComment(recipeId, userName, comment) {
   try {
     const res = await fetch('/api/recipe-interactions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'include',
       body: JSON.stringify({
         action: 'comment',
         id: commentObj.id,
@@ -365,7 +371,8 @@ export async function syncPendingRecipeInteractions() {
     try {
       const res = await fetch('/api/recipe-interactions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        credentials: 'include',
         body: JSON.stringify(actionItem)
       });
       if (res && res.ok) {

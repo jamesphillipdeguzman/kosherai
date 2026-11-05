@@ -489,6 +489,7 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => { }, cl
     const res = await fetch('/api/receipt-scan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         imageBase64: dataUrl,
         mimeType: 'image/jpeg',
