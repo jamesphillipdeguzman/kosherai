@@ -30,12 +30,12 @@ export function Header({
     return getDietDescription(activeDiet);
   }, [activeDiet]);
 
-  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authInitialMode, setAuthInitialMode] = useState('signin');
 
   // Backwards-compatible aliases
-  const isAuthModalOpen = authModalOpen;
-  const setIsAuthModalOpen = setAuthModalOpen;
+  const authModalOpen = isAuthModalOpen;
+  const setAuthModalOpen = setIsAuthModalOpen;
   const authMode = authInitialMode;
   const setAuthMode = setAuthInitialMode;
 
@@ -43,7 +43,7 @@ export function Header({
   useEffect(() => {
     const externalOpen = propAuthModalOpen !== undefined ? propAuthModalOpen : propIsAuthModalOpen;
     if (externalOpen !== undefined) {
-      setAuthModalOpen(externalOpen);
+      setIsAuthModalOpen(externalOpen);
     }
   }, [propAuthModalOpen, propIsAuthModalOpen]);
 
@@ -56,7 +56,7 @@ export function Header({
 
   const handleOpenAuth = (mode = 'signin') => {
     setAuthInitialMode(mode);
-    setAuthModalOpen(true);
+    setIsAuthModalOpen(true);
     if (propSetAuthModalOpen) propSetAuthModalOpen(true);
     if (propSetIsAuthModalOpen) propSetIsAuthModalOpen(true);
     if (onOpenAuthModal) onOpenAuthModal(mode);
@@ -65,7 +65,7 @@ export function Header({
   const openAuthModal = handleOpenAuth;
 
   const handleCloseAuth = () => {
-    setAuthModalOpen(false);
+    setIsAuthModalOpen(false);
     if (propSetAuthModalOpen) propSetAuthModalOpen(false);
     if (propSetIsAuthModalOpen) propSetIsAuthModalOpen(false);
     if (onCloseAuthModal) onCloseAuthModal();
@@ -198,15 +198,21 @@ export function Header({
                 <button
                   type="button"
                   id="header-signin-btn"
-                  onClick={() => handleOpenAuth('signin')}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white rounded-lg transition-colors cursor-pointer"
+                  onClick={() => {
+                    setAuthInitialMode('signin');
+                    setIsAuthModalOpen(true);
+                  }}
+                  className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                 >
                   Sign In
                 </button>
                 <button
                   type="button"
                   id="header-signup-btn"
-                  onClick={() => handleOpenAuth('signup')}
+                  onClick={() => {
+                    setAuthInitialMode('signup');
+                    setIsAuthModalOpen(true);
+                  }}
                   className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors shadow-sm cursor-pointer"
                 >
                   Get Started
@@ -335,12 +341,16 @@ export function Header({
 
       {/* Global Auth Modal Overlay */}
       <AuthModal
-        isOpen={authModalOpen}
+        isOpen={isAuthModalOpen}
         initialMode={authInitialMode}
-        onClose={handleCloseAuth}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthSuccess={(user) => {
+          setCurrentUser(user?.user || user);
+          setIsAuthModalOpen(false);
+        }}
         onSuccess={(sessionPayload) => {
-          setCurrentUser(sessionPayload.user);
-          handleCloseAuth();
+          setCurrentUser(sessionPayload?.user || sessionPayload);
+          setIsAuthModalOpen(false);
         }}
       />
     </div>

@@ -1,140 +1,73 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { isValidEmail, authenticateUser, renderAuthModalHtml } from './AuthModal.js';
 
 export { isValidEmail, authenticateUser, renderAuthModalHtml };
 
-/**
- * AuthModal Component
- *
- * Responsive modal overlay matching KosherAI dark slate design system (bg-slate-900, border-slate-800, emerald/teal accents).
- *
- * @param {Object} props
- * @param {boolean} props.isOpen - Controls modal visibility
- * @param {Function} props.onClose - Dismiss callback
- * @param {Function} [props.onSuccess] - Callback executed on successful auth with session data
- * @param {'signin'|'signup'} [props.initialMode='signin'] - Default mode to display
- */
-export default function AuthModal({
-  isOpen = false,
-  onClose,
-  onSuccess,
-  initialMode = 'signin'
-}) {
-  const [mode, setMode] = useState(initialMode);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onAuthSuccess, onSuccess }) {
+  const [mode, setMode] = useState(initialMode); // 'signin' | 'signup'
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: ''
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Sync mode whenever initialMode or isOpen changes
-  useEffect(() => {
-    if (isOpen) {
-      setMode(initialMode);
-      setErrorMsg('');
-    }
-  }, [isOpen, initialMode]);
-
-  // Handle escape key to dismiss
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && !isLoading) {
-        onClose?.();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isLoading, onClose]);
-
   if (!isOpen) return null;
 
-  const handleModeSwitch = (newMode) => {
-    setMode(newMode);
-    setErrorMsg('');
+  const handleChange = (e) => {
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    if (errorMsg) setErrorMsg('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
 
-    // Common email validation
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setErrorMsg('Please enter your email address.');
+    if (mode === 'signup' && formData.password !== formData.confirmPassword) {
+      setErrorMsg('Passwords do not match');
       return;
-    }
-
-    if (!isValidEmail(trimmedEmail)) {
-      setErrorMsg('Please enter a valid email address (e.g., user@example.com).');
-      return;
-    }
-
-    // Password validation
-    if (!password) {
-      setErrorMsg('Please enter your password.');
-      return;
-    }
-
-    if (mode === 'signup') {
-      if (!fullName.trim()) {
-        setErrorMsg('Please enter your full name.');
-        return;
-      }
-
-      if (password.length < 6) {
-        setErrorMsg('Password must be at least 6 characters in length.');
-        return;
-      }
-
-      if (password !== confirmPassword) {
-        setErrorMsg('Passwords do not match. Please verify and try again.');
-        return;
-      }
     }
 
     setIsLoading(true);
-
     try {
-      const userRecord = await authenticateUser(mode, {
-        email: trimmedEmail,
-        password,
-        name: fullName.trim()
+      // Primary endpoint as specified, with graceful email sub-path fallback
+      let endpoint = mode === 'signin' ? '/api/auth/sign-in' : '/api/auth/sign-up';
+      let res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
       });
 
-      const sessionPayload = {
-        user: {
-          id: userRecord.id || userRecord.userId || 'usr_' + Date.now(),
-          email: trimmedEmail,
-          name: userRecord.name || (mode === 'signup' ? fullName.trim() : trimmedEmail.split('@')[0])
-        },
-        session: {
-          token: userRecord.token || 'tok_' + Date.now(),
-          createdAt: new Date().toISOString()
-        }
-      };
+      if (!res.ok && res.status === 404) {
+        endpoint = mode === 'signin' ? '/api/auth/sign-in/email' : '/api/auth/sign-up/email';
+        res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+      }
 
-      // 1. Save session info to localStorage
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || (mode === 'signin' ? 'Failed to sign in' : 'Failed to register'));
+      }
+
+      const user = await res.json();
+      localStorage.setItem('kosherai_user_session', JSON.stringify(user));
       try {
-        localStorage.setItem('kosherai_user_session', JSON.stringify(sessionPayload));
-        localStorage.setItem('kosherai_current_user', JSON.stringify(sessionPayload.user));
-      } catch (storageErr) {
-        console.warn('[AuthModal] LocalStorage save warning:', storageErr);
-      }
+        localStorage.setItem('kosherai_current_user', JSON.stringify(user?.user || user));
+      } catch (_) {}
 
-      // 2. Trigger global custom events to refresh user's trips and scans
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: sessionPayload }));
-        window.dispatchEvent(new CustomEvent('kosherai:sync-data', { detail: { userId: sessionPayload.user.id } }));
+        window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: user }));
+        window.dispatchEvent(new CustomEvent('kosherai:sync-data'));
       }
 
-      // 3. Callback and close
-      onSuccess?.(sessionPayload);
-      onClose?.();
+      if (onAuthSuccess) onAuthSuccess(user);
+      if (onSuccess) onSuccess(user);
+      onClose();
     } catch (err) {
       setErrorMsg(err.message || 'An unexpected error occurred. Please try again.');
     } finally {
@@ -143,57 +76,52 @@ export default function AuthModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 modal-overlay bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !isLoading) onClose?.();
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="auth-modal-title"
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm transition-opacity modal-overlay"
+      onClick={onClose}
     >
-      <div
-        className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 text-slate-100 overflow-hidden"
+      <div 
+        className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden p-6 text-slate-100 animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
         <button
           type="button"
           onClick={onClose}
-          disabled={isLoading}
+          className="absolute top-4 right-4 p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
           aria-label="Close"
-          className="absolute top-4 right-4 text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800/80 transition-colors cursor-pointer disabled:opacity-50"
         >
-          ✕
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
         </button>
 
-        {/* Modal Branding Header */}
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
-            🌿
+        {/* Header Title */}
+        <div className="mb-6">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium mb-3">
+            <span>🛡️</span> Multi-Tenant Isolation
           </div>
-          <h2 id="auth-modal-title" className="text-xl font-black tracking-tight text-white">
-            KosherAI
+          <h2 className="text-xl font-bold tracking-tight text-white">
+            {mode === 'signin' ? 'Welcome Back' : 'Create an Account'}
           </h2>
+          <p className="text-xs text-slate-400 mt-1">
+            {mode === 'signin' 
+              ? 'Sign in to access your synchronized trips, scans, and LID study records.' 
+              : 'Register to start tracking personal food costs, receipts, and nutrition data.'}
+          </p>
         </div>
-        <p className="text-xs text-slate-400 mb-5">
-          {mode === 'signin'
-            ? 'Sign in to access your personal shopping trips, scans, and clinical diet records.'
-            : 'Create your account to sync your multi-tenant clinical diet history across devices.'}
-        </p>
 
-        {/* Segmented Toggle: Sign In vs Create Account */}
-        <div className="grid grid-cols-2 p-1 bg-slate-950/80 border border-slate-800 rounded-xl mb-5" role="tablist">
+        {/* Tab Toggle */}
+        <div className="grid grid-cols-2 p-1 mb-5 bg-slate-950/60 rounded-xl border border-slate-800" role="tablist">
           <button
             type="button"
-            role="tab"
             id="auth-tab-signin"
+            role="tab"
             aria-selected={mode === 'signin'}
-            onClick={() => handleModeSwitch('signin')}
-            disabled={isLoading}
-            className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-              mode === 'signin'
-                ? 'bg-emerald-600 text-white shadow-sm'
+            onClick={() => { setMode('signin'); setErrorMsg(''); }}
+            className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              mode === 'signin' 
+                ? 'bg-emerald-600 text-white shadow-sm' 
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -201,14 +129,13 @@ export default function AuthModal({
           </button>
           <button
             type="button"
-            role="tab"
             id="auth-tab-signup"
+            role="tab"
             aria-selected={mode === 'signup'}
-            onClick={() => handleModeSwitch('signup')}
-            disabled={isLoading}
-            className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-              mode === 'signup'
-                ? 'bg-emerald-600 text-white shadow-sm'
+            onClick={() => { setMode('signup'); setErrorMsg(''); }}
+            className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              mode === 'signup' 
+                ? 'bg-emerald-600 text-white shadow-sm' 
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -216,144 +143,110 @@ export default function AuthModal({
           </button>
         </div>
 
-        {/* Inline Error Alert */}
+        {/* Error Alert */}
         {errorMsg && (
-          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-medium flex items-start gap-2 mb-4" role="alert">
-            <span className="flex-shrink-0 text-rose-400 font-bold">⚠️</span>
-            <span className="flex-1">{errorMsg}</span>
+          <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-300 text-xs flex items-center gap-2" role="alert">
+            <span>⚠️</span>
+            <span>{errorMsg}</span>
           </div>
         )}
 
-        {/* Auth Form */}
+        {/* Form Body */}
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === 'signup' && (
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5" htmlFor="auth-modal-name">
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
                 Full Name
               </label>
               <input
-                id="auth-modal-name"
                 type="text"
-                autoComplete="name"
-                placeholder="Maria Santos"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                disabled={isLoading}
-                className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-slate-700/80 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                name="name"
                 required
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="e.g. Maria Santos"
+                className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5" htmlFor="auth-modal-email">
+            <label className="block text-xs font-medium text-slate-300 mb-1.5">
               Email Address
             </label>
             <input
-              id="auth-modal-email"
               type="email"
-              autoComplete="email"
-              placeholder="patient@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={isLoading}
-              className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-slate-700/80 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+              name="email"
               required
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="patient@example.com"
+              className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
             />
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-semibold text-slate-300" htmlFor="auth-modal-password">
-                {mode === 'signup' ? 'Password (min 6 chars)' : 'Password'}
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="text-[11px] text-teal-400 hover:underline cursor-pointer"
-                tabIndex={-1}
-              >
-                {showPassword ? 'Hide' : 'Show'}
-              </button>
-            </div>
+            <label className="block text-xs font-medium text-slate-300 mb-1.5">
+              Password
+            </label>
             <input
-              id="auth-modal-password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={isLoading}
-              className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-slate-700/80 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+              type="password"
+              name="password"
               required
-              minLength={mode === 'signup' ? 6 : undefined}
+              minLength={6}
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="••••••••"
+              className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
             />
           </div>
 
           {mode === 'signup' && (
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5" htmlFor="auth-modal-confirm-password">
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
                 Confirm Password
               </label>
               <input
-                id="auth-modal-confirm-password"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="new-password"
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                disabled={isLoading}
-                className="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-slate-700/80 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
+                type="password"
+                name="confirmPassword"
                 required
+                minLength={6}
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                placeholder="••••••••"
+                className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
               />
             </div>
           )}
 
-          {/* Submit CTA */}
           <button
             type="submit"
-            id="auth-modal-submit-btn"
             disabled={isLoading}
-            className="w-full min-h-[44px] py-3 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-900/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+            className="w-full mt-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
-            {isLoading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>{mode === 'signin' ? 'Signing In...' : 'Creating Account...'}</span>
-              </>
-            ) : (
-              <span>{mode === 'signin' ? 'Sign In' : 'Create Account'}</span>
+            {isLoading && (
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             )}
+            <span>{mode === 'signin' ? 'Sign In' : 'Create Account'}</span>
           </button>
         </form>
 
-        {/* Mode Switch Prompt */}
-        <div className="text-center text-xs text-slate-400 mt-5">
-          {mode === 'signin' ? (
-            <>
-              Don&apos;t have an account?{' '}
-              <button
-                type="button"
-                onClick={() => handleModeSwitch('signup')}
-                disabled={isLoading}
-                className="text-emerald-400 hover:underline font-semibold cursor-pointer"
-              >
-                Sign up
-              </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{' '}
-              <button
-                type="button"
-                onClick={() => handleModeSwitch('signin')}
-                disabled={isLoading}
-                className="text-emerald-400 hover:underline font-semibold cursor-pointer"
-              >
-                Sign in
-              </button>
-            </>
-          )}
+        {/* Footer Switch */}
+        <div className="mt-5 text-center">
+          <p className="text-xs text-slate-400">
+            {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}
+            {' '}
+            <button
+              type="button"
+              onClick={() => {
+                setMode(mode === 'signin' ? 'signup' : 'signin');
+                setErrorMsg('');
+              }}
+              className="font-medium text-emerald-400 hover:text-emerald-300 underline underline-offset-2 ml-1 cursor-pointer"
+            >
+              {mode === 'signin' ? 'Sign up' : 'Sign in'}
+            </button>
+          </p>
         </div>
       </div>
     </div>
