@@ -71,7 +71,7 @@ export function clearClientTenantData() {
 /**
  * Wrapped signOut helper that guarantees client cache purge
  */
-export async function signOut(options) {
+export async function signOut(options?: any) {
   try {
     clearClientTenantData();
     const result = await authClient.signOut(options);

@@ -16,7 +16,7 @@ const appBaseUrl =
 
 /**
  * Server Authentication Instance
- * Configures Email/Password, optional Google OAuth, and keeps Neon users table synced.
+ * Configures Email/Password, optional Google OAuth, and handles Better Auth sessions.
  */
 export const auth = betterAuth({
   database: pool || {
@@ -44,30 +44,6 @@ export const auth = betterAuth({
           }
         }
       : {})
-  },
-  databaseHooks: {
-    user: {
-      create: {
-        after: async (user) => {
-          // Connect auth user store directly to the `users` table created in Neon
-          if (databaseUrl) {
-            try {
-              const sql = neon(databaseUrl);
-              await sql`
-                INSERT INTO users (id, email, full_name, created_at, updated_at)
-                VALUES (${user.id}, ${user.email}, ${user.name || user.email}, NOW(), NOW())
-                ON CONFLICT (id) DO UPDATE SET
-                  email = EXCLUDED.email,
-                  full_name = EXCLUDED.full_name,
-                  updated_at = NOW();
-              `;
-            } catch (err) {
-              console.warn('[Better Auth Hook] Syncing users table:', err.message);
-            }
-          }
-        }
-      }
-    }
   }
 });
 
@@ -75,10 +51,10 @@ export const auth = betterAuth({
  * Helper to extract session and authenticated user across Next.js App Router,
  * Vercel Serverless, and standard Node/Connect HTTP requests.
  */
-export async function getAuthenticatedUser(reqOrHeaders) {
+export async function getAuthenticatedUser(reqOrHeaders: any) {
   try {
     // 1. Check Better Auth session via request headers
-    let headersObj = null;
+    let headersObj: any = null;
 
     if (reqOrHeaders) {
       if (typeof reqOrHeaders.get === 'function') {
@@ -96,7 +72,7 @@ export async function getAuthenticatedUser(reqOrHeaders) {
       // Convert Node headers object or Headers object to fetch Headers for Better Auth
       const fetchHeaders = new Headers();
       if (typeof headersObj.forEach === 'function') {
-        headersObj.forEach((val, key) => fetchHeaders.set(key, val));
+        headersObj.forEach((val: any, key: string) => fetchHeaders.set(key, val));
       } else {
         for (const [key, val] of Object.entries(headersObj)) {
           if (val) fetchHeaders.set(key, String(val));
@@ -158,8 +134,8 @@ export async function getAuthenticatedUser(reqOrHeaders) {
               session: s
             };
           }
-        } catch (dbErr) {
-          console.warn('[getAuthenticatedUser] Session lookup query error:', dbErr.message);
+        } catch (dbErr: any) {
+          console.warn('[getAuthenticatedUser] Session lookup query error:', dbErr?.message || dbErr);
         }
       }
 
@@ -167,11 +143,11 @@ export async function getAuthenticatedUser(reqOrHeaders) {
       const tenantHeader = fetchHeaders.get('x-user-id');
       if (tenantHeader && tenantHeader.trim()) {
         const tenantId = tenantHeader.trim();
-        // Verify tenant exists in Neon users / user
+        // Verify tenant exists in Neon user table
         if (databaseUrl) {
           try {
             const sql = neon(databaseUrl);
-            const userRows = await sql`SELECT id, email, full_name as name FROM users WHERE id = ${tenantId} LIMIT 1`;
+            const userRows = await sql`SELECT id, email, name FROM "user" WHERE id = ${tenantId} LIMIT 1`;
             if (userRows.length > 0) {
               return {
                 id: userRows[0].id,
@@ -189,8 +165,8 @@ export async function getAuthenticatedUser(reqOrHeaders) {
     }
 
     return null;
-  } catch (err) {
-    console.warn('[getAuthenticatedUser] Authentication check failed:', err);
+  } catch (err: any) {
+    console.warn('[getAuthenticatedUser] Authentication check failed:', err?.message || err);
     return null;
   }
 }
