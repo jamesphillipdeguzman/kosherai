@@ -3,7 +3,22 @@ import { DIET_PROFILES, getDietProfile, DIET_DESCRIPTIONS, getDietDescription } 
 
 export { DIET_DESCRIPTIONS, getDietDescription };
 
-export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', showProjectTab = true, activeDiet = 'lid', theme = 'dark', user = null) {
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeAttr(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', showProjectTab = true, activeDiet = 'lid', theme = 'dark', user = null, isSyncing = false, justSynced = false) {
   const currentProfile = getDietProfile(activeDiet);
   const activeDescription = getDietDescription(activeDiet);
   const targetLimit = (currentProfile.target || '').replace(/^Clinical Target:\s*/i, '');
@@ -11,25 +26,38 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
   let currentUser = user;
   if (!currentUser && typeof window !== 'undefined') {
     try {
-      const stored = localStorage.getItem('kosherai_current_user');
-      if (stored) currentUser = JSON.parse(stored);
+      const stored = localStorage.getItem('kosherai_current_user') || localStorage.getItem('kosherai_user_session');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        currentUser = parsed.user || parsed;
+      }
     } catch {
       currentUser = null;
     }
   }
 
-  const initial = currentUser?.name
-    ? currentUser.name.charAt(0).toUpperCase()
-    : (currentUser?.email ? currentUser.email.charAt(0).toUpperCase() : 'U');
+  const rawName = (currentUser?.name || '').trim();
+  const firstName = rawName
+    ? rawName.split(' ')[0]
+    : (currentUser?.email ? currentUser.email.split('@')[0] : 'User');
 
   return `
     <header class="app-header">
-      <div class="brand-wrapper inline-flex items-center gap-2 bg-slate-100/90 dark:bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-200/70 dark:border-slate-700/60 shadow-sm backdrop-blur-md" id="brand-logo-btn">
-        <img src="/favicon.svg" alt="KosherAI Logo" class="brand-icon" />
+      <div class="brand-wrapper inline-flex items-center gap-2 bg-slate-100/90 dark:bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-200/70 dark:border-slate-700/60 shadow-sm backdrop-blur-md cursor-pointer hover:border-emerald-500/50 transition-all select-none group" id="brand-logo-btn" role="button" tabindex="0" title="Click to synchronize cloud data (/api/scans, /api/trips, /api/food-waste)">
+        <img src="/favicon.svg" alt="KosherAI Logo" class="brand-icon ${isSyncing ? 'syncing animate-spin' : 'group-hover:scale-105'} transition-transform duration-300" />
         <div>
-          <div class="brand-title text-slate-900 dark:text-white font-black text-xl tracking-tight">
-            KosherAI
-            <span class="brand-badge">${appMode === 'course' ? 'SUSTAIN' : currentProfile.badge}</span>
+          <div class="brand-title text-slate-900 dark:text-white font-black text-xl tracking-tight flex items-center gap-1.5 leading-none">
+            <span>KosherAI</span>
+            <span class="brand-badge leading-none">${appMode === 'course' ? 'SUSTAIN' : currentProfile.badge}</span>
+            ${isSyncing ? `
+              <span class="inline-flex items-center gap-1 text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 dark:bg-teal-500/20 px-1.5 py-0.5 rounded-full border border-teal-500/30 animate-pulse leading-none">
+                Syncing...
+              </span>
+            ` : (justSynced ? `
+              <span class="synced-badge inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 px-1.5 py-0.5 rounded-full border border-emerald-500/30 animate-fade-in shadow-xs leading-none">
+                ✓ Synced!
+              </span>
+            ` : '')}
           </div>
           <div class="brand-subtitle text-slate-600 dark:text-slate-400 text-xs font-medium">${appMode === 'course' ? 'Six-Week Food Cost & Waste Study' : currentProfile.name}</div>
         </div>
@@ -44,15 +72,19 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
         <!-- Dynamic Auth State: Avatar/Sign Out if logged in, Sign In/Get Started if logged out -->
         <div class="header-auth-controls inline-flex items-center gap-1.5" id="header-auth-container">
           ${currentUser ? `
-            <div class="relative user-profile-pill flex items-center gap-1.5 p-1 rounded-full border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 shadow-xs" title="Signed in as ${currentUser.email || currentUser.name || 'Tenant User'}">
-              <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-bold text-xs flex items-center justify-center shadow-xs">
-                ${initial}
-              </div>
+            <div class="relative user-profile-pill inline-flex items-center gap-2 pl-2.5 pr-1.5 py-1 rounded-full border border-slate-200/80 dark:border-slate-700/80 bg-white/90 dark:bg-slate-900/90 shadow-xs backdrop-blur-md" title="Signed in as ${escapeAttr(currentUser.name || currentUser.email || 'Tenant User')}${currentUser.email ? ` (${escapeAttr(currentUser.email)})` : ''}">
+              <span class="inline-flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-xs flex-shrink-0" title="Online session"></span>
+                <span class="user-first-name text-xs font-bold text-slate-800 dark:text-slate-100 tracking-tight">
+                  ${escapeHtml(firstName)}
+                </span>
+              </span>
+              <span class="text-slate-300 dark:text-slate-700 select-none text-xs">|</span>
               <button
                 type="button"
                 id="header-signout-btn"
                 title="Sign out and clear local device cache"
-                class="px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-red-500 transition-colors cursor-pointer"
+                class="px-1.5 py-0.5 text-[11px] font-semibold text-slate-500 hover:text-rose-500 dark:text-slate-400 dark:hover:text-rose-400 transition-colors cursor-pointer rounded"
               >
                 Sign Out
               </button>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DIET_PROFILES, getDietProfile, DIET_DESCRIPTIONS, getDietDescription } from '../data/dietProfiles.js';
 import AuthModal from './AuthModal.jsx';
+import { getAuthHeaders } from '../services/authHeaders.js';
 
 export { DIET_DESCRIPTIONS, getDietDescription };
 
@@ -11,6 +12,9 @@ export function Header({
   activeDiet = 'lid',
   theme = 'dark',
   user = undefined,
+  isSyncing: propIsSyncing,
+  justSynced: propJustSynced,
+  onSync,
   authModalOpen: propAuthModalOpen,
   isAuthModalOpen: propIsAuthModalOpen,
   authInitialMode: propAuthInitialMode,
@@ -151,21 +155,80 @@ export function Header({
     }
   };
 
+  const [internalSyncing, setInternalSyncing] = useState(false);
+  const [internalJustSynced, setInternalJustSynced] = useState(false);
+
+  const isSyncing = propIsSyncing !== undefined ? propIsSyncing : internalSyncing;
+  const justSynced = propJustSynced !== undefined ? propJustSynced : internalJustSynced;
+
+  const rawName = (currentUser?.name || '').trim();
+  const firstName = rawName
+    ? rawName.split(' ')[0]
+    : (currentUser?.email ? currentUser.email.split('@')[0] : 'User');
+
+  const handleLogoClick = async (e) => {
+    e.preventDefault();
+    if (isSyncing) return;
+    setInternalSyncing(true);
+    setInternalJustSynced(false);
+
+    try {
+      if (onSync) {
+        await onSync();
+      } else {
+        const headers = getAuthHeaders({ 'Accept': 'application/json' });
+        await Promise.allSettled([
+          fetch('/api/scans', { method: 'GET', headers, credentials: 'include' }),
+          fetch('/api/trips', { method: 'GET', headers, credentials: 'include' }),
+          fetch('/api/food-waste', { method: 'GET', headers, credentials: 'include' })
+        ]);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('kosherai:sync-data'));
+        }
+      }
+      setInternalJustSynced(true);
+      setTimeout(() => setInternalJustSynced(false), 2500);
+    } catch (err) {
+      console.warn('[Header] Sync error:', err);
+    } finally {
+      setInternalSyncing(false);
+    }
+  };
+
   return (
     <div className="header-wrapper">
       <header className="app-header">
-        <div className="brand-wrapper inline-flex items-center gap-2 bg-slate-100/90 dark:bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-200/70 dark:border-slate-700/60 shadow-sm backdrop-blur-md">
-          <img src="/favicon.svg" alt="KosherAI Logo" className="brand-icon" />
+        <button
+          type="button"
+          id="brand-logo-btn"
+          onClick={handleLogoClick}
+          title="Click to synchronize cloud data (/api/scans, /api/trips, /api/food-waste)"
+          className="brand-wrapper inline-flex items-center gap-2 bg-slate-100/90 dark:bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-200/70 dark:border-slate-700/60 shadow-sm backdrop-blur-md cursor-pointer hover:border-emerald-500/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left select-none group"
+        >
+          <img
+            src="/favicon.svg"
+            alt="KosherAI Logo"
+            className={`brand-icon ${isSyncing ? 'syncing animate-spin' : 'group-hover:scale-105'} transition-transform duration-300`}
+          />
           <div>
-            <div className="brand-title text-slate-900 dark:text-white font-black text-xl tracking-tight">
-              KosherAI
-              <span className="brand-badge">{appMode === 'course' ? 'SUSTAIN' : currentProfile.badge}</span>
+            <div className="brand-title text-slate-900 dark:text-white font-black text-xl tracking-tight flex items-center gap-1.5 leading-none">
+              <span>KosherAI</span>
+              <span className="brand-badge leading-none">{appMode === 'course' ? 'SUSTAIN' : currentProfile.badge}</span>
+              {isSyncing ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 dark:bg-teal-500/20 px-1.5 py-0.5 rounded-full border border-teal-500/30 animate-pulse leading-none">
+                  Syncing...
+                </span>
+              ) : justSynced ? (
+                <span className="synced-badge inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 px-1.5 py-0.5 rounded-full border border-emerald-500/30 animate-fade-in shadow-xs leading-none">
+                  ✓ Synced!
+                </span>
+              ) : null}
             </div>
             <div className="brand-subtitle text-slate-600 dark:text-slate-400 text-xs font-medium">
               {appMode === 'course' ? 'Six-Week Food Cost & Waste Study' : currentProfile.name}
             </div>
           </div>
-        </div>
+        </button>
 
         <div className="header-actions flex items-center gap-2">
           <div className="status-pill" title={isOnline ? 'Online - AI Verification Available' : 'Offline Mode - Local Database Active'}>
@@ -177,21 +240,22 @@ export function Header({
           <div className="header-auth-controls inline-flex items-center gap-1.5" id="header-auth-container">
             {currentUser ? (
               <div
-                className="relative user-profile-pill flex items-center gap-1.5 p-1 rounded-full border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 shadow-xs"
-                title={`Signed in as ${currentUser.email || currentUser.name || 'Tenant User'}`}
+                className="relative user-profile-pill inline-flex items-center gap-2 pl-2.5 pr-1.5 py-1 rounded-full border border-slate-200/80 dark:border-slate-700/80 bg-white/90 dark:bg-slate-900/90 shadow-xs backdrop-blur-md"
+                title={`Signed in as ${currentUser.name || currentUser.email || 'Tenant User'}${currentUser.email ? ` (${currentUser.email})` : ''}`}
               >
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-bold text-xs flex items-center justify-center shadow-xs">
-                  {(currentUser.name || currentUser.email || 'U').charAt(0).toUpperCase()}
-                </div>
-                <span className="hidden sm:inline-block text-xs font-semibold text-slate-700 dark:text-slate-200 px-1 truncate max-w-[100px]">
-                  {currentUser.name || currentUser.email?.split('@')[0] || 'User'}
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs flex-shrink-0" title="Online session" />
+                  <span className="user-first-name text-xs font-bold text-slate-800 dark:text-slate-100 tracking-tight">
+                    {firstName}
+                  </span>
                 </span>
+                <span className="text-slate-300 dark:text-slate-700 select-none text-xs">|</span>
                 <button
                   type="button"
                   id="header-signout-btn"
                   onClick={handleSignOut}
                   title="Sign out and clear local device cache"
-                  className="px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-rose-500 transition-colors cursor-pointer"
+                  className="px-1.5 py-0.5 text-[11px] font-semibold text-slate-500 hover:text-rose-500 dark:text-slate-400 dark:hover:text-rose-400 transition-colors cursor-pointer rounded"
                 >
                   Sign Out
                 </button>

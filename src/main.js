@@ -175,7 +175,11 @@ const state = {
   authModalOpen: false,
   authModalMode: 'signin',
   authModalError: '',
-  authModalLoading: false
+  authModalLoading: false,
+
+  // Manual Header Cloud Sync State
+  isSyncing: false,
+  justSynced: false
 };
 
 // Main DOM Render Function
@@ -233,7 +237,7 @@ function render() {
       <div class="ambient-streak ambient-streak-2"></div>
     </div>
 
-    ${renderHeader(state.isOnline, state.appMode, state.showProjectTab, state.activeDiet, state.theme)}
+    ${renderHeader(state.isOnline, state.appMode, state.showProjectTab, state.activeDiet, state.theme, null, state.isSyncing, state.justSynced)}
     
     <main class="app-container pt-24">
       ${activeContentHtml}
@@ -307,17 +311,37 @@ function attachEventHandlers() {
     });
   });
 
-  // Header Brand click -> Home
+  // Header Brand click -> Manual Cloud Re-sync & Home Navigation
   const brandBtn = document.querySelector('#brand-logo-btn');
   if (brandBtn) {
-    brandBtn.addEventListener('click', () => {
-      if (state.appMode === 'course') {
-        state.courseSubTab = 'dashboard';
-      } else {
-        state.activeTab = 'checker';
-        state.searchQuery = '';
-      }
+    brandBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (state.isSyncing) return;
+
+      state.isSyncing = true;
+      state.justSynced = false;
       render();
+
+      try {
+        // Trigger concurrent re-fetch of /api/scans, /api/trips, and /api/food-waste with credentials: 'include'
+        await Promise.allSettled([
+          refreshScanHistory(),
+          pushThenRestoreFromNeon({ manual: true })
+        ]);
+        state.justSynced = true;
+        showToast?.('✓ Cloud sync complete');
+      } catch (err) {
+        console.warn('[Header Sync] Re-sync error:', err);
+      } finally {
+        state.isSyncing = false;
+        render();
+        setTimeout(() => {
+          if (state.justSynced) {
+            state.justSynced = false;
+            render();
+          }
+        }, 2500);
+      }
     });
   }
 
