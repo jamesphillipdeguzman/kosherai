@@ -9,7 +9,7 @@ export { renderAuthModalHtml, authenticateUser, isValidEmail } from './AuthModal
  * (defined in the "AUTH MODAL" section of src/style.css). Both paths render
  * identically. Card: #0b1329 background, #1e293b (slate-800) border.
  */
-function PasswordInput({ id, name, label, value, onChange, autoComplete, minLength }) {
+function PasswordInput({ id, name, label, value, onChange, minLength }) {
   const [visible, setVisible] = useState(false);
   return (
     <div className="auth-field">
@@ -23,7 +23,11 @@ function PasswordInput({ id, name, label, value, onChange, autoComplete, minLeng
           minLength={minLength}
           value={value}
           onChange={onChange}
-          autoComplete={autoComplete}
+          autoComplete="new-password"
+          autoCorrect="off"
+          spellCheck="false"
+          data-form-type="other"
+          data-lpignore="true"
           placeholder="••••••••"
           className="auth-input auth-input--with-toggle"
         />
@@ -82,7 +86,7 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
 
     setIsLoading(true);
     try {
-      const endpoint = mode === 'signin' ? '/api/auth/sign-in' : '/api/auth/sign-up';
+      const endpoint = mode === 'signin' ? '/api/auth/sign-in/email' : '/api/auth/sign-up/email';
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -169,7 +173,7 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="auth-form">
+        <form onSubmit={handleSubmit} className="auth-form" autoComplete="off" autoCorrect="off" spellCheck="false">
           {isSignUp && (
             <div className="auth-field">
               <label className="auth-label" htmlFor="auth-react-name">Full Name</label>
@@ -178,7 +182,11 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
                 type="text"
                 name="name"
                 required
-                autoComplete="name"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck="false"
+                data-form-type="other"
+                data-lpignore="true"
                 value={formData.name}
                 onChange={handleChange}
                 placeholder="e.g. Maria Santos"
@@ -194,7 +202,11 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
               type="email"
               name="email"
               required
-              autoComplete="email"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck="false"
+              data-form-type="other"
+              data-lpignore="true"
               value={formData.email}
               onChange={handleChange}
               placeholder="patient@example.com"
@@ -208,7 +220,6 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
             label={isSignUp ? 'Password (min 6 characters)' : 'Password'}
             value={formData.password}
             onChange={handleChange}
-            autoComplete={isSignUp ? 'new-password' : 'current-password'}
             minLength={6}
           />
 
@@ -219,7 +230,6 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
               label="Confirm Password"
               value={formData.confirmPassword}
               onChange={handleChange}
-              autoComplete="new-password"
               minLength={6}
             />
           )}

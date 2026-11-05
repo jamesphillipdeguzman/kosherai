@@ -1,6 +1,18 @@
-// Vercel Serverless Function handler for Better Auth routes (/api/auth/*)
-import { toNodeHandler } from 'better-auth/node';
-import { auth } from '../../lib/auth.ts';
+import { auth } from "../../lib/auth.ts";
+import { toNodeHandler } from "better-auth/node";
 
-export default toNodeHandler(auth);
+const authHandler = toNodeHandler(auth);
 
+export default async function handler(req, res) {
+  // Set CORS headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") {
+    res.statusCode = 200;
+    return res.end();
+  }
+
+  return authHandler(req, res);
+}

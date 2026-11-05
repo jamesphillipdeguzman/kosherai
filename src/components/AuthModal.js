@@ -80,7 +80,7 @@ function escapeAttr(value) {
 
 const EYE_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>`;
 
-function passwordField({ id, label, autocomplete, minlength = false }) {
+function passwordField({ id, label, minlength = false }) {
   return `
     <div class="auth-field">
       <label class="auth-label" for="${id}">${label}</label>
@@ -89,7 +89,11 @@ function passwordField({ id, label, autocomplete, minlength = false }) {
           id="${id}"
           type="password"
           class="auth-input auth-input--with-toggle"
-          autocomplete="${autocomplete}"
+          autocomplete="new-password"
+          autocorrect="off"
+          spellcheck="false"
+          data-form-type="other"
+          data-lpignore="true"
           placeholder="••••••••"
           ${minlength ? 'minlength="6"' : ''}
           required
@@ -104,11 +108,6 @@ function passwordField({ id, label, autocomplete, minlength = false }) {
 
 /**
  * Pure HTML generator for DOM-based rendering in vanilla main.js.
- *
- * NOTE: This project does NOT ship Tailwind CSS. Only a hand-written subset of
- * utility classes exists in style.css, so this markup uses dedicated, scoped
- * `.auth-*` classes (see "AUTH MODAL" section in src/style.css) instead of
- * Tailwind utilities, which would silently fall back to native browser styles.
  */
 export function renderAuthModalHtml({
   isOpen = false,
@@ -146,30 +145,52 @@ export function renderAuthModalHtml({
           </div>
         ` : ''}
 
-        <form id="auth-modal-form" class="auth-form" novalidate>
+        <form id="auth-modal-form" class="auth-form" autocomplete="off" autocorrect="off" spellcheck="false" novalidate>
           ${isSignUp ? `
             <div class="auth-field">
               <label class="auth-label" for="auth-html-name">Full Name</label>
-              <input id="auth-html-name" type="text" class="auth-input" autocomplete="name" placeholder="e.g. Maria Santos" value="${escapeAttr(values.name)}" required />
+              <input
+                id="auth-html-name"
+                type="text"
+                class="auth-input"
+                autocomplete="off"
+                autocorrect="off"
+                spellcheck="false"
+                data-form-type="other"
+                data-lpignore="true"
+                placeholder="e.g. Maria Santos"
+                value="${escapeAttr(values.name)}"
+                required
+              />
             </div>
           ` : ''}
 
           <div class="auth-field">
             <label class="auth-label" for="auth-html-email">Email Address</label>
-            <input id="auth-html-email" type="email" class="auth-input" autocomplete="email" placeholder="patient@example.com" value="${escapeAttr(values.email)}" required />
+            <input
+              id="auth-html-email"
+              type="email"
+              class="auth-input"
+              autocomplete="off"
+              autocorrect="off"
+              spellcheck="false"
+              data-form-type="other"
+              data-lpignore="true"
+              placeholder="patient@example.com"
+              value="${escapeAttr(values.email)}"
+              required
+            />
           </div>
 
           ${passwordField({
             id: 'auth-html-password',
             label: isSignUp ? 'Password <span class="auth-label-hint">(min 6 characters)</span>' : 'Password',
-            autocomplete: isSignUp ? 'new-password' : 'current-password',
             minlength: isSignUp
           })}
 
           ${isSignUp ? passwordField({
             id: 'auth-html-confirm-password',
             label: 'Confirm Password',
-            autocomplete: 'new-password',
             minlength: true
           }) : ''}
 
@@ -191,4 +212,3 @@ export function renderAuthModalHtml({
     </div>
   `;
 }
-
