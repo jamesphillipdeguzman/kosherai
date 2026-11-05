@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { DIET_PROFILES, getDietProfile, DIET_DESCRIPTIONS, getDietDescription } from '../data/dietProfiles.js';
+import AuthModal from './AuthModal.jsx';
 
 export { DIET_DESCRIPTIONS, getDietDescription };
 
@@ -9,6 +10,7 @@ export function Header({
   showProjectTab = true,
   activeDiet = 'lid',
   theme = 'dark',
+  user = undefined,
   onSelectDiet,
   onToggleTheme,
   onSelectMode,
@@ -19,6 +21,82 @@ export function Header({
   const activeDescription = useMemo(() => {
     return getDietDescription(activeDiet);
   }, [activeDiet]);
+
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(() => {
+    if (user !== undefined) return user;
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('kosherai_user_session') || localStorage.getItem('kosherai_current_user');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return parsed.user || parsed;
+        }
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (user !== undefined) {
+      setCurrentUser(user);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleAuthChange = (e) => {
+      if (e?.detail) {
+        setCurrentUser(e.detail.user || e.detail);
+      } else {
+        try {
+          const stored = localStorage.getItem('kosherai_user_session') || localStorage.getItem('kosherai_current_user');
+          const parsed = stored ? JSON.parse(stored) : null;
+          setCurrentUser(parsed ? (parsed.user || parsed) : null);
+        } catch {
+          setCurrentUser(null);
+        }
+      }
+    };
+
+    window.addEventListener('kosherai:auth-changed', handleAuthChange);
+    return () => window.removeEventListener('kosherai:auth-changed', handleAuthChange);
+  }, []);
+
+  const handleSignOut = async () => {
+    try {
+      const keysToClear = [
+        'kosherai_course_trips',
+        'kosherai_course_grocery_items',
+        'kosherai_course_food_waste',
+        'kosherai_course_expenses',
+        'kosherai_course_meal_plans',
+        'kosherai_scan_history',
+        'kosherai_current_user',
+        'kosherai_user_session',
+        'kosherai_venue_mode'
+      ];
+      keysToClear.forEach((k) => {
+        try { localStorage.removeItem(k); } catch (_) {}
+      });
+      sessionStorage.clear();
+      if (typeof window !== 'undefined' && window.indexedDB) {
+        try { window.indexedDB.deleteDatabase('KosherAICourseDB'); } catch (_) {}
+      }
+      try {
+        await fetch('/api/auth/sign-out', { method: 'POST' }).catch(() => {});
+      } catch (_) {}
+    } finally {
+      setCurrentUser(null);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: null }));
+        window.dispatchEvent(new CustomEvent('kosherai:sync-data', { detail: null }));
+      }
+    }
+  };
 
   return (
     <div className="header-wrapper">
@@ -36,10 +114,47 @@ export function Header({
           </div>
         </div>
 
-        <div className="header-actions">
+        <div className="header-actions flex items-center gap-2">
           <div className="status-pill" title={isOnline ? 'Online - AI Verification Available' : 'Offline Mode - Local Database Active'}>
             <span className={`status-dot ${isOnline ? '' : 'offline'}`}></span>
             <span className="status-label">{isOnline ? 'Online' : 'Offline'}</span>
+          </div>
+
+          {/* Dynamic Auth State: Avatar/Sign Out if logged in, Sign In / Account button if logged out */}
+          <div className="header-auth-controls inline-flex items-center gap-1.5" id="header-auth-container">
+            {currentUser ? (
+              <div
+                className="relative user-profile-pill flex items-center gap-1.5 p-1 rounded-full border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 shadow-xs"
+                title={`Signed in as ${currentUser.email || currentUser.name || 'Tenant User'}`}
+              >
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                  {(currentUser.name || currentUser.email || 'U').charAt(0).toUpperCase()}
+                </div>
+                <span className="hidden sm:inline-block text-xs font-semibold text-slate-700 dark:text-slate-200 px-1 truncate max-w-[100px]">
+                  {currentUser.name || currentUser.email?.split('@')[0] || 'User'}
+                </span>
+                <button
+                  type="button"
+                  id="header-signout-btn"
+                  onClick={handleSignOut}
+                  title="Sign out and clear local device cache"
+                  className="px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-rose-500 transition-colors cursor-pointer"
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                id="header-signin-btn"
+                onClick={() => setIsAuthModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors cursor-pointer"
+                title="Sign In or Create Account"
+              >
+                <span>👤</span>
+                <span>Sign In</span>
+              </button>
+            )}
           </div>
 
           <button
@@ -159,6 +274,16 @@ export function Header({
           </div>
         )}
       </div>
+
+      {/* Global Auth Modal Overlay */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={(sessionPayload) => {
+          setCurrentUser(sessionPayload.user);
+          setIsAuthModalOpen(false);
+        }}
+      />
     </div>
   );
 }

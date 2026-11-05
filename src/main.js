@@ -13,6 +13,7 @@ import { renderSettingsModal } from './components/SettingsModal.js';
 import { renderItemDetailModal } from './components/ItemDetailModal.js';
 import { renderCourseProjectView, createReceiptItemRowHtml } from './components/CourseProjectView.js';
 import { parseQuantityAndUnit, createManualItemRowHtml } from './components/ManualTripModal.js';
+import { renderAuthModalHtml, authenticateUser, isValidEmail } from './components/AuthModal.jsx';
 import {
   toggleRecipeLike,
   recordRecipeView,
@@ -167,7 +168,13 @@ const state = {
 
   // Neon cloud re-hydration status ({ ok, message } | null) and in-flight flag
   neonRestoreStatus: null,
-  neonRestoring: false
+  neonRestoring: false,
+
+  // Global Auth Modal Overlay State
+  authModalOpen: false,
+  authModalMode: 'signin',
+  authModalError: '',
+  authModalLoading: false
 };
 
 // Main DOM Render Function
@@ -235,6 +242,7 @@ function render() {
 
     ${state.selectedItem ? renderItemDetailModal(state.selectedItem, state.activeDiet) : ''}
     ${state.settingsOpen ? renderSettingsModal(state.settings, state.theme, state.showProjectTab, state.activeDiet) : ''}
+    ${state.authModalOpen ? renderAuthModalHtml({ isOpen: true, mode: state.authModalMode, errorMsg: state.authModalError, isLoading: state.authModalLoading }) : ''}
   `;
 
   attachEventHandlers();
@@ -321,6 +329,31 @@ function attachEventHandlers() {
     });
   }
 
+  // Header Sign In / Create Account modal trigger
+  const headerSignInBtn = document.querySelector('#header-signin-btn');
+  if (headerSignInBtn) {
+    headerSignInBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      state.authModalOpen = true;
+      state.authModalMode = 'signin';
+      state.authModalError = '';
+      state.authModalLoading = false;
+      render();
+    });
+  }
+
+  const headerSignUpBtn = document.querySelector('#header-signup-btn');
+  if (headerSignUpBtn) {
+    headerSignUpBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      state.authModalOpen = true;
+      state.authModalMode = 'signup';
+      state.authModalError = '';
+      state.authModalLoading = false;
+      render();
+    });
+  }
+
   // Header Sign Out & Client Tenant Cache Purge
   const headerSignOutBtn = document.querySelector('#header-signout-btn');
   if (headerSignOutBtn) {
@@ -346,8 +379,153 @@ function attachEventHandlers() {
       try {
         await fetch('/api/auth/sign-out', { method: 'POST' }).catch(() => {});
       } catch (_) {}
-      window.location.href = '/sign-in';
+      showToast?.('Signed out successfully.');
+      render();
+      window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: null }));
     });
+  }
+
+  // Auth Modal Event Handlers
+  if (state.authModalOpen) {
+    const authCloseBtn = document.querySelector('#auth-modal-close-btn');
+    if (authCloseBtn) {
+      authCloseBtn.addEventListener('click', () => {
+        state.authModalOpen = false;
+        state.authModalError = '';
+        render();
+      });
+    }
+
+    const authOverlay = document.querySelector('#auth-modal-overlay');
+    if (authOverlay) {
+      authOverlay.addEventListener('click', (e) => {
+        if (e.target === authOverlay && !state.authModalLoading) {
+          state.authModalOpen = false;
+          state.authModalError = '';
+          render();
+        }
+      });
+    }
+
+    const tabSignIn = document.querySelector('#auth-html-tab-signin');
+    const switchSignIn = document.querySelector('#auth-html-switch-signin');
+    [tabSignIn, switchSignIn].forEach(btn => {
+      if (btn) {
+        btn.addEventListener('click', () => {
+          state.authModalMode = 'signin';
+          state.authModalError = '';
+          render();
+        });
+      }
+    });
+
+    const tabSignUp = document.querySelector('#auth-html-tab-signup');
+    const switchSignUp = document.querySelector('#auth-html-switch-signup');
+    [tabSignUp, switchSignUp].forEach(btn => {
+      if (btn) {
+        btn.addEventListener('click', () => {
+          state.authModalMode = 'signup';
+          state.authModalError = '';
+          render();
+        });
+      }
+    });
+
+    const authForm = document.querySelector('#auth-modal-form');
+    if (authForm) {
+      authForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        state.authModalError = '';
+
+        const emailInput = document.querySelector('#auth-html-email');
+        const passInput = document.querySelector('#auth-html-password');
+        const nameInput = document.querySelector('#auth-html-name');
+        const confirmPassInput = document.querySelector('#auth-html-confirm-password');
+
+        const email = (emailInput?.value || '').trim();
+        const password = passInput?.value || '';
+        const name = (nameInput?.value || '').trim();
+        const confirmPassword = confirmPassInput?.value || '';
+
+        if (!email) {
+          state.authModalError = 'Please enter your email address.';
+          render();
+          return;
+        }
+
+        if (!isValidEmail(email)) {
+          state.authModalError = 'Please enter a valid email address (e.g., patient@example.com).';
+          render();
+          return;
+        }
+
+        if (!password) {
+          state.authModalError = 'Please enter your password.';
+          render();
+          return;
+        }
+
+        if (state.authModalMode === 'signup') {
+          if (!name) {
+            state.authModalError = 'Please enter your full name.';
+            render();
+            return;
+          }
+          if (password.length < 6) {
+            state.authModalError = 'Password must be at least 6 characters in length.';
+            render();
+            return;
+          }
+          if (password !== confirmPassword) {
+            state.authModalError = 'Passwords do not match. Please verify and try again.';
+            render();
+            return;
+          }
+        }
+
+        state.authModalLoading = true;
+        render();
+
+        try {
+          const userRecord = await authenticateUser(state.authModalMode, {
+            email,
+            password,
+            name
+          });
+
+          const sessionPayload = {
+            user: {
+              id: userRecord.id || userRecord.userId || 'usr_' + Date.now(),
+              email,
+              name: userRecord.name || (state.authModalMode === 'signup' ? name : email.split('@')[0])
+            },
+            session: {
+              token: userRecord.token || 'tok_' + Date.now(),
+              createdAt: new Date().toISOString()
+            }
+          };
+
+          localStorage.setItem('kosherai_user_session', JSON.stringify(sessionPayload));
+          localStorage.setItem('kosherai_current_user', JSON.stringify(sessionPayload.user));
+
+          state.authModalOpen = false;
+          state.authModalLoading = false;
+          state.authModalError = '';
+          render();
+
+          // Trigger refresh of user's trips and scans
+          showToast?.(`✓ Signed in as ${sessionPayload.user.name}`);
+          window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: sessionPayload }));
+          window.dispatchEvent(new CustomEvent('kosherai:sync-data', { detail: { userId: sessionPayload.user.id } }));
+          pushThenRestoreFromNeon({ manual: true }).catch(() => {});
+          refreshScanHistory().catch(() => {});
+        } catch (err) {
+          state.authModalLoading = false;
+          state.authModalError = err.message || 'Authentication failed. Please verify credentials.';
+          render();
+        }
+      });
+    }
   }
 
   // Quick Header Theme Toggle (Sun/Moon)
@@ -2225,11 +2403,22 @@ window.addEventListener('kosherai-trips-synced', () => {
 window.addEventListener('kosherai-food-waste-synced', () => {
   render();
 });
+window.addEventListener('kosherai:auth-changed', () => {
+  render();
+});
+window.addEventListener('kosherai:sync-data', () => {
+  pushThenRestoreFromNeon({ manual: true }).catch(() => {});
+  refreshScanHistory().catch(() => {});
+});
 
 // Global Escape Key Listener for Modals
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    if (state.scannedReceiptAudit) {
+    if (state.authModalOpen) {
+      state.authModalOpen = false;
+      state.authModalError = '';
+      render();
+    } else if (state.scannedReceiptAudit) {
       state.scannedReceiptAudit = null;
       render();
     } else if (state.selectedScanItem) {
