@@ -6,7 +6,7 @@ const sql = neon(process.env.DATABASE_URL);
 export async function initAuthDatabase() {
   console.log('[Auth DB] Ensuring Better Auth tables in Neon PostgreSQL with exact schema...');
 
-  // 1. User table
+  // 1. User table (Better Auth) and legacy users table
   await sql`
     CREATE TABLE IF NOT EXISTS "user" (
       id TEXT PRIMARY KEY,
@@ -16,6 +16,16 @@ export async function initAuthDatabase() {
       image TEXT,
       "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      full_name TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `;
 
@@ -99,19 +109,18 @@ export async function initAuthDatabase() {
   await sql`ALTER TABLE "verification" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();`;
   await sql`ALTER TABLE "verification" ALTER COLUMN expires_at DROP NOT NULL;`;
 
-  // 5. Sync existing usr_primary_admin from users into "user"
-  const existingUsers = await sql`SELECT * FROM users WHERE id = 'usr_primary_admin'`;
-  if (existingUsers.length > 0) {
-    const admin = existingUsers[0];
-    await sql`
-      INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
-      VALUES (${admin.id}, ${admin.full_name || 'Primary Admin'}, ${admin.email || 'admin@kosherai.local'}, true, NOW(), NOW())
-      ON CONFLICT (id) DO UPDATE SET
-        name = EXCLUDED.name,
-        email = EXCLUDED.email;
-    `;
-    console.log('[Auth DB] Synchronized usr_primary_admin into "user" table.');
-  }
+  // 5. Ensure usr_primary_admin exists in both "user" and users tables
+  await sql`
+    INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
+    VALUES ('usr_primary_admin', 'Primary Admin', 'admin@kosherai.local', true, NOW(), NOW())
+    ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
+  `;
+  await sql`
+    INSERT INTO users (id, email, full_name, created_at, updated_at)
+    VALUES ('usr_primary_admin', 'admin@kosherai.local', 'Primary Admin', NOW(), NOW())
+    ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
+  `;
+  console.log('[Auth DB] Synchronized usr_primary_admin into both tables.');
 
   console.log('[Auth DB] Tables created and synchronized successfully.');
 }

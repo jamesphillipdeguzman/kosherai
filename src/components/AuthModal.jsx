@@ -144,7 +144,7 @@ export default function AuthModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
+      className="fixed inset-0 z-50 modal-overlay bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isLoading) onClose?.();
       }}

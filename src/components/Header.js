@@ -62,14 +62,14 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
               <button
                 type="button"
                 id="header-signin-btn"
-                class="text-xs font-medium text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                class="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white rounded-lg transition-colors cursor-pointer"
               >
                 Sign In
               </button>
               <button
                 type="button"
                 id="header-signup-btn"
-                class="text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm cursor-pointer"
+                class="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors shadow-sm cursor-pointer"
               >
                 Get Started
               </button>

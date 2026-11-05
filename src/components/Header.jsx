@@ -11,8 +11,11 @@ export function Header({
   activeDiet = 'lid',
   theme = 'dark',
   user = undefined,
+  authModalOpen: propAuthModalOpen,
   isAuthModalOpen: propIsAuthModalOpen,
+  authInitialMode: propAuthInitialMode,
   authMode: propAuthMode,
+  setAuthModalOpen: propSetAuthModalOpen,
   setIsAuthModalOpen: propSetIsAuthModalOpen,
   onOpenAuthModal,
   onCloseAuthModal,
@@ -27,34 +30,48 @@ export function Header({
     return getDietDescription(activeDiet);
   }, [activeDiet]);
 
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState('signin');
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authInitialMode, setAuthInitialMode] = useState('signin');
+
+  // Backwards-compatible aliases
+  const isAuthModalOpen = authModalOpen;
+  const setIsAuthModalOpen = setAuthModalOpen;
+  const authMode = authInitialMode;
+  const setAuthMode = setAuthInitialMode;
 
   // Synchronize with external props if provided
   useEffect(() => {
-    if (propIsAuthModalOpen !== undefined) {
-      setIsAuthModalOpen(propIsAuthModalOpen);
+    const externalOpen = propAuthModalOpen !== undefined ? propAuthModalOpen : propIsAuthModalOpen;
+    if (externalOpen !== undefined) {
+      setAuthModalOpen(externalOpen);
     }
-  }, [propIsAuthModalOpen]);
+  }, [propAuthModalOpen, propIsAuthModalOpen]);
 
   useEffect(() => {
-    if (propAuthMode !== undefined) {
-      setAuthMode(propAuthMode);
+    const externalMode = propAuthInitialMode !== undefined ? propAuthInitialMode : propAuthMode;
+    if (externalMode !== undefined) {
+      setAuthInitialMode(externalMode);
     }
-  }, [propAuthMode]);
+  }, [propAuthInitialMode, propAuthMode]);
 
-  const openAuthModal = (mode = 'signin') => {
-    setAuthMode(mode);
-    setIsAuthModalOpen(true);
+  const handleOpenAuth = (mode = 'signin') => {
+    setAuthInitialMode(mode);
+    setAuthModalOpen(true);
+    if (propSetAuthModalOpen) propSetAuthModalOpen(true);
     if (propSetIsAuthModalOpen) propSetIsAuthModalOpen(true);
     if (onOpenAuthModal) onOpenAuthModal(mode);
   };
 
-  const closeAuthModal = () => {
-    setIsAuthModalOpen(false);
+  const openAuthModal = handleOpenAuth;
+
+  const handleCloseAuth = () => {
+    setAuthModalOpen(false);
+    if (propSetAuthModalOpen) propSetAuthModalOpen(false);
     if (propSetIsAuthModalOpen) propSetIsAuthModalOpen(false);
     if (onCloseAuthModal) onCloseAuthModal();
   };
+
+  const closeAuthModal = handleCloseAuth;
 
   const [currentUser, setCurrentUser] = useState(() => {
     if (user !== undefined) return user;
@@ -181,16 +198,16 @@ export function Header({
                 <button
                   type="button"
                   id="header-signin-btn"
-                  onClick={() => openAuthModal('signin')}
-                  className="text-xs font-medium text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                  onClick={() => handleOpenAuth('signin')}
+                  className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white rounded-lg transition-colors cursor-pointer"
                 >
                   Sign In
                 </button>
                 <button
                   type="button"
                   id="header-signup-btn"
-                  onClick={() => openAuthModal('signup')}
-                  className="text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm cursor-pointer"
+                  onClick={() => handleOpenAuth('signup')}
+                  className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors shadow-sm cursor-pointer"
                 >
                   Get Started
                 </button>
@@ -318,12 +335,12 @@ export function Header({
 
       {/* Global Auth Modal Overlay */}
       <AuthModal
-        isOpen={isAuthModalOpen}
-        initialMode={authMode}
-        onClose={closeAuthModal}
+        isOpen={authModalOpen}
+        initialMode={authInitialMode}
+        onClose={handleCloseAuth}
         onSuccess={(sessionPayload) => {
           setCurrentUser(sessionPayload.user);
-          closeAuthModal();
+          handleCloseAuth();
         }}
       />
     </div>

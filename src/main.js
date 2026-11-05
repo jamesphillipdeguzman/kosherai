@@ -2411,6 +2411,39 @@ window.addEventListener('kosherai:sync-data', () => {
   refreshScanHistory().catch(() => {});
 });
 
+// Document-level fallback listener ensuring header auth buttons and modal backdrop remain 100% responsive
+document.addEventListener('click', (e) => {
+  const signinBtn = e.target.closest('#header-signin-btn');
+  if (signinBtn) {
+    e.preventDefault();
+    state.authModalOpen = true;
+    state.authModalMode = 'signin';
+    state.authModalError = '';
+    state.authModalLoading = false;
+    render();
+    return;
+  }
+
+  const signupBtn = e.target.closest('#header-signup-btn');
+  if (signupBtn) {
+    e.preventDefault();
+    state.authModalOpen = true;
+    state.authModalMode = 'signup';
+    state.authModalError = '';
+    state.authModalLoading = false;
+    render();
+    return;
+  }
+
+  const authOverlay = e.target.closest('#auth-modal-overlay');
+  if (authOverlay && e.target === authOverlay && !state.authModalLoading) {
+    state.authModalOpen = false;
+    state.authModalError = '';
+    render();
+    return;
+  }
+});
+
 // Global Escape Key Listener for Modals
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {

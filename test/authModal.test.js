@@ -107,16 +107,16 @@ console.log('Test 4: Header.jsx Auth Integration');
 const headerJsxSource = fs.readFileSync(path.resolve('src/components/Header.jsx'), 'utf8');
 
 assert.ok(headerJsxSource.includes("import AuthModal from './AuthModal.jsx'"), 'Header.jsx must import AuthModal');
-assert.ok(headerJsxSource.includes('const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)'), 'Header.jsx must declare isAuthModalOpen state');
-assert.ok(headerJsxSource.includes("const [authMode, setAuthMode] = useState('signin')"), 'Header.jsx must declare authMode state');
-assert.ok(headerJsxSource.includes("openAuthModal('signin')"), 'Header.jsx must trigger openAuthModal("signin") on Sign In click');
-assert.ok(headerJsxSource.includes("openAuthModal('signup')"), 'Header.jsx must trigger openAuthModal("signup") on Get Started click');
+assert.ok(headerJsxSource.includes('const [authModalOpen, setAuthModalOpen] = useState(false)'), 'Header.jsx must declare authModalOpen state');
+assert.ok(headerJsxSource.includes("const [authInitialMode, setAuthInitialMode] = useState('signin')"), 'Header.jsx must declare authInitialMode state');
+assert.ok(headerJsxSource.includes("handleOpenAuth('signin')"), 'Header.jsx must trigger handleOpenAuth("signin") on Sign In click');
+assert.ok(headerJsxSource.includes("handleOpenAuth('signup')"), 'Header.jsx must trigger handleOpenAuth("signup") on Get Started click');
 assert.ok(headerJsxSource.includes('id="header-signin-btn"'), 'Header.jsx must render #header-signin-btn when logged out');
 assert.ok(headerJsxSource.includes('id="header-signup-btn"'), 'Header.jsx must render #header-signup-btn when logged out');
 assert.ok(headerJsxSource.includes('id="header-signout-btn"'), 'Header.jsx must render #header-signout-btn when logged in');
 assert.ok(headerJsxSource.includes('<AuthModal'), 'Header.jsx must mount <AuthModal component');
-assert.ok(headerJsxSource.includes('isOpen={isAuthModalOpen}'), 'Header.jsx must bind isOpen={isAuthModalOpen}');
-assert.ok(headerJsxSource.includes('initialMode={authMode}'), 'Header.jsx must bind initialMode={authMode}');
+assert.ok(headerJsxSource.includes('isOpen={authModalOpen}'), 'Header.jsx must bind isOpen={authModalOpen}');
+assert.ok(headerJsxSource.includes('initialMode={authInitialMode}'), 'Header.jsx must bind initialMode={authInitialMode}');
 console.log('  ✅ Header.jsx modal state, auth controls, mode toggles, and child mounting verified.\n');
 
 // ----------------------------------------------------
