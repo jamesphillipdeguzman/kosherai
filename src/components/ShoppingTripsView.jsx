@@ -32,7 +32,8 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
       totalAmountPaid: trip.totalAmountPaid || 0,
       totalScaleWeightKg: trip.totalScaleWeightKg || 0,
       date: trip.date || '',
-      notes: trip.notes || ''
+      notes: trip.notes || '',
+      itemName: trip.itemName || trip.name || ''
     });
     if (onEdit) onEdit(trip);
   };
@@ -112,6 +113,16 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
                     name="notes"
                     value={editForm.notes}
                     onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor={`edit-item-name-${trip.id}`}>Item Name / Extracted Item</label>
+                  <input
+                    id={`edit-item-name-${trip.id}`}
+                    name="itemName"
+                    value={editForm.itemName}
+                    placeholder="Item Name / Product"
+                    onChange={e => setEditForm({ ...editForm, itemName: e.target.value })}
                   />
                 </div>
                 <div className="trip-card-footer">

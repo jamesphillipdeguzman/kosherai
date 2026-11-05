@@ -2111,13 +2111,37 @@ Cracked black pepper`;
       const date = document.querySelector('#edit-trip-date')?.value || new Date().toISOString().split('T')[0];
       const notes = document.querySelector('#edit-notes')?.value?.trim() || '';
 
+      // Item Name / Extracted Item
+      const itemNameInput = document.querySelector('#edit-item-name');
+      const itemName = itemNameInput?.value?.trim() || '';
+      const itemQty = parseFloat(document.querySelector('#edit-item-qty')?.value || 1);
+      const itemUnit = document.querySelector('#edit-item-unit')?.value?.trim() || 'pcs';
+
+      // Multiple items support if .edit-item-row exists
+      const itemRows = document.querySelectorAll('.edit-item-row');
+      let items = null;
+      if (itemRows.length > 0) {
+        items = [];
+        itemRows.forEach(row => {
+          const id = row.getAttribute('data-item-id');
+          const name = row.querySelector('.edit-item-name')?.value?.trim();
+          const quantity = parseFloat(row.querySelector('.edit-item-qty')?.value || 1);
+          const unit = row.querySelector('.edit-item-unit')?.value?.trim() || 'pcs';
+          if (name) items.push({ id, name, quantity, unit });
+        });
+      }
+
       await updateShoppingTrip(tripId, {
         storeName,
         tripType,
         totalAmountPaid,
         totalScaleWeightKg,
         date,
-        notes
+        notes,
+        itemName,
+        itemQty,
+        itemUnit,
+        items
       });
 
       state.editTripModalOpen = false;
@@ -2153,6 +2177,9 @@ Cracked black pepper`;
       const totalScaleWeightKg = parseFloat(card.querySelector('.edit-scale-weight')?.value || 0);
       const date = card.querySelector('.edit-trip-date')?.value || new Date().toISOString().split('T')[0];
       const notes = card.querySelector('.edit-notes')?.value?.trim() || '';
+      const itemName = card.querySelector('.edit-item-name')?.value?.trim() || '';
+      const itemQty = parseFloat(card.querySelector('.edit-item-qty')?.value || 1);
+      const itemUnit = card.querySelector('.edit-item-unit')?.value?.trim() || 'pcs';
 
       await updateShoppingTrip(tripId, {
         storeName,
@@ -2160,7 +2187,10 @@ Cracked black pepper`;
         totalAmountPaid,
         totalScaleWeightKg,
         date,
-        notes
+        notes,
+        itemName,
+        itemQty,
+        itemUnit
       });
 
       state.editingTripId = null;

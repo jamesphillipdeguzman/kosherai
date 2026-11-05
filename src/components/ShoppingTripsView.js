@@ -34,6 +34,8 @@ export function renderEditTripModal(state = {}) {
   const trip = state.editingTrip || trips.find(t => t.id === tripId);
   if (!trip) return '';
 
+  const items = getGroceryItems(trip.id);
+
   return `
     <div class="modal-overlay" id="edit-trip-overlay">
       <div class="modal-content" id="edit-trip-modal" role="dialog" aria-modal="true" style="max-width: 620px;">
@@ -85,6 +87,31 @@ export function renderEditTripModal(state = {}) {
           <div class="form-group">
             <label class="form-label" for="edit-total-amount">Total Amount Paid (₱ PHP)</label>
             <input type="number" step="0.01" min="0" id="edit-total-amount" name="totalAmountPaid" class="form-input" value="${trip.totalAmountPaid}" required />
+          </div>
+
+          <!-- Item Name / Extracted Item -->
+          <div class="form-group mb-3">
+            <label class="form-label" for="edit-item-name">Item Name / Extracted Item</label>
+            ${items.length > 1 ? `
+              <div class="edit-items-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; padding-right: 4px; margin-top: 4px;">
+                ${items.map((item, idx) => `
+                  <div class="edit-item-row" data-item-id="${item.id}" style="display: flex; gap: 6px; align-items: center;">
+                    <input type="text" ${idx === 0 ? 'id="edit-item-name"' : ''} name="itemName" class="form-input edit-item-name" style="flex: 2;" value="${escapeHtml(item.name)}" placeholder="Item Name / Product" required />
+                    <input type="number" step="any" min="0" name="itemQty" class="form-input edit-item-qty" style="width: 70px; text-align: center;" value="${item.quantity || 1}" placeholder="Qty" title="Quantity" />
+                    <input type="text" name="itemUnit" class="form-input edit-item-unit" style="width: 70px; text-align: center;" value="${escapeHtml(item.unit || 'pcs')}" placeholder="Unit" title="Unit" />
+                  </div>
+                `).join('')}
+              </div>
+            ` : `
+              <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">
+                <input type="text" id="edit-item-name" name="itemName" class="form-input edit-item-name" style="flex: 2;" value="${escapeHtml(items[0]?.name || '')}" placeholder="Item Name / Product" />
+                <input type="number" step="any" min="0" id="edit-item-qty" name="itemQty" class="form-input edit-item-qty" style="width: 70px; text-align: center;" value="${items[0]?.quantity || 1}" placeholder="Qty" title="Quantity" />
+                <input type="text" id="edit-item-unit" name="itemUnit" class="form-input edit-item-unit" style="width: 70px; text-align: center;" value="${escapeHtml(items[0]?.unit || 'pcs')}" placeholder="Unit" title="Unit" />
+              </div>
+            `}
+            <p class="mt-1 text-[11px] leading-tight text-slate-500 dark:text-slate-400">
+              Modifies itemized grocery purchase records linked to this trip.
+            </p>
           </div>
 
           <!-- Notes -->
@@ -147,6 +174,15 @@ export function renderTripCard(trip, isEditing = false) {
             <div class="form-group">
               <label class="form-label" for="edit-scale-weight-${trip.id}">Scale Weight (kg)</label>
               <input type="number" step="0.01" min="0" id="edit-scale-weight-${trip.id}" name="totalScaleWeightKg" class="form-input edit-scale-weight" value="${trip.totalScaleWeightKg || 0}" required />
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 10px;">
+            <label class="form-label" for="edit-item-name-${trip.id}">Item Name / Extracted Item</label>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <input type="text" id="edit-item-name-${trip.id}" name="itemName" class="form-input edit-item-name" style="flex: 2;" value="${escapeHtml(items[0]?.name || '')}" placeholder="Item Name / Product" />
+              <input type="number" step="any" min="0" name="itemQty" class="form-input edit-item-qty" style="width: 65px; text-align: center;" value="${items[0]?.quantity || 1}" placeholder="Qty" title="Quantity" />
+              <input type="text" name="itemUnit" class="form-input edit-item-unit" style="width: 65px; text-align: center;" value="${escapeHtml(items[0]?.unit || 'pcs')}" placeholder="Unit" title="Unit" />
             </div>
           </div>
 

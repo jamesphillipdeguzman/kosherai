@@ -50,9 +50,14 @@ export async function ensureTripsTables(sql) {
       category TEXT DEFAULT 'General Food',
       lid_status TEXT DEFAULT 'SAFE',
       lid_reason TEXT,
-      created_at TIMESTAMPTZ DEFAULT NOW()
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
     );
   `;
+
+  try {
+    await sql`ALTER TABLE grocery_purchases ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`;
+  } catch (_) {}
 
   await sql`
     CREATE TABLE IF NOT EXISTS food_waste_logs (
@@ -575,6 +580,58 @@ export default async function handler(req, res) {
         project_week: projectWeek
       };
 
+      // Update grocery_purchases if itemName or items provided
+      const itemName = tripData.itemName || tripData.item_name || body.itemName || body.item_name || null;
+      const rawItems = (Array.isArray(body.items) && body.items.length > 0) ? body.items : (Array.isArray(tripData.items) ? tripData.items : null);
+
+      if (rawItems && rawItems.length > 0) {
+        for (const item of rawItems) {
+          if (item.id && item.name) {
+            const iQty = item.quantity !== undefined ? Number(item.quantity) : 1;
+            const iUnit = item.unit || 'pcs';
+            await sql`
+              UPDATE grocery_purchases
+              SET name = ${item.name},
+                  raw_receipt_text = ${item.name},
+                  quantity = ${iQty},
+                  unit = ${iUnit},
+                  updated_at = NOW()
+              WHERE id = ${item.id} AND trip_id = ${targetId} AND user_id = ${userId};
+            `;
+          }
+        }
+      }
+
+      if (itemName) {
+        await sql`
+          UPDATE grocery_purchases 
+          SET name = ${itemName}, raw_receipt_text = ${itemName}, updated_at = NOW() 
+          WHERE trip_id = ${targetId} AND user_id = ${userId};
+        `;
+      }
+
+      // Query updated purchases for this trip to return in response
+      const updatedPurchases = await sql`
+        SELECT * FROM grocery_purchases WHERE trip_id = ${targetId} AND user_id = ${userId} ORDER BY created_at ASC;
+      `;
+
+      const formattedItems = updatedPurchases.map(p => ({
+        id: p.id,
+        tripId: p.trip_id,
+        purchaseDate: p.purchase_date,
+        projectWeek: Number(p.project_week || 1),
+        name: p.name,
+        rawReceiptText: p.raw_receipt_text || '',
+        quantity: Number(p.quantity || 1),
+        unit: p.unit || 'pcs',
+        unitPrice: Number(p.unit_price || 0),
+        totalPrice: Number(p.total_price || 0),
+        weightGrams: Number(p.weight_grams || 0),
+        category: p.category || 'General Food',
+        lidStatus: p.lid_status || 'SAFE',
+        lidReason: p.lid_reason || ''
+      }));
+
       const updatedTrip = {
         id: row.id,
         date: row.date,
@@ -585,18 +642,20 @@ export default async function handler(req, res) {
         totalScaleWeightKg: Number(row.total_scale_weight_kg || 0),
         receiptImageUrl: row.receipt_image_url || null,
         receiptRawText: row.receipt_raw_text || '',
-        itemsCount: Number(row.items_count || 0),
+        itemsCount: formattedItems.length || Number(row.items_count || 0),
         notes: row.notes || '',
         createdAt: row.created_at,
         updatedAt: row.updated_at,
-        synced: true
+        synced: true,
+        items: formattedItems
       };
 
       return sendJson(res, 200, {
         success: true,
         synced: true,
         trip: updatedTrip,
-        message: `Shopping trip ${targetId} updated successfully in Neon PostgreSQL.`
+        items: formattedItems,
+        message: `Shopping trip ${targetId} and grocery purchases updated successfully in Neon PostgreSQL.`
       });
     }
 

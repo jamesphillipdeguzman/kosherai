@@ -771,7 +771,79 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
     trips[index] = updatedTrip;
     localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(trips));
 
-    // 2. Synchronize linked expense record (exp_trip_${tripId})
+    // 2. Update matching record(s) in kosherai_course_grocery_items where item.tripId === tripId
+    const allGroceryItems = getGroceryItems();
+    let groceryItemsUpdated = false;
+
+    const newItemName = updatedFields.itemName || updatedFields.name;
+    const newQuantity = (updatedFields.itemQty !== undefined && updatedFields.itemQty !== null && updatedFields.itemQty !== '')
+      ? Number(updatedFields.itemQty)
+      : ((updatedFields.quantity !== undefined && updatedFields.quantity !== null && updatedFields.quantity !== '') ? Number(updatedFields.quantity) : null);
+    const newUnit = updatedFields.itemUnit || updatedFields.unit || null;
+
+    if (Array.isArray(updatedFields.items) && updatedFields.items.length > 0) {
+      const itemUpdatesMap = new Map(updatedFields.items.map(i => [i.id, i]));
+      allGroceryItems.forEach(item => {
+        if (item.tripId === tripId) {
+          const update = itemUpdatesMap.get(item.id);
+          if (update) {
+            if (update.name) {
+              item.name = update.name;
+              item.rawReceiptText = update.name;
+            }
+            if (update.quantity !== undefined && !isNaN(update.quantity)) item.quantity = Number(update.quantity);
+            if (update.unit) item.unit = update.unit;
+            groceryItemsUpdated = true;
+          }
+        }
+      });
+    } else if (newItemName) {
+      let foundMatching = false;
+      allGroceryItems.forEach(item => {
+        if (item.tripId === tripId) {
+          foundMatching = true;
+          item.name = newItemName;
+          item.rawReceiptText = newItemName;
+          if (newQuantity !== null && !isNaN(newQuantity)) item.quantity = newQuantity;
+          if (newUnit) item.unit = newUnit;
+          groceryItemsUpdated = true;
+        }
+      });
+
+      if (!foundMatching) {
+        // If trip had no line items yet, create one matching the updated item name
+        const newItemId = `item_${tripId}_0_${Math.random().toString(36).slice(2, 6)}`;
+        allGroceryItems.push({
+          id: newItemId,
+          tripId,
+          purchaseDate: date,
+          projectWeek,
+          name: newItemName,
+          rawReceiptText: newItemName,
+          quantity: (newQuantity !== null && !isNaN(newQuantity)) ? newQuantity : 1,
+          unit: newUnit || 'pcs',
+          unitPrice: totalAmountPaid,
+          totalPrice: totalAmountPaid,
+          weightGrams: 0,
+          category: 'General Food',
+          lidStatus: 'SAFE',
+          lidReason: '',
+          synced: false
+        });
+        groceryItemsUpdated = true;
+      }
+    }
+
+    if (groceryItemsUpdated) {
+      localStorage.setItem(STORAGE_KEYS.GROCERY_ITEMS, JSON.stringify(allGroceryItems));
+    }
+
+    const tripItems = allGroceryItems.filter(i => i.tripId === tripId);
+    updatedTrip.itemsCount = tripItems.length || Number(existing.itemsCount || 0);
+    trips[index] = updatedTrip;
+    localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(trips));
+
+    // 3. Synchronize linked expense record (exp_trip_${tripId})
     try {
       const expenses = getExpenses();
       const tripExpenseId = `exp_trip_${tripId}`;
@@ -792,22 +864,22 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
       console.warn('[Storage] Error updating linked trip expense:', expErr);
     }
 
-    // 3. Persist to IndexedDB
+    // 4. Persist to IndexedDB
     try {
-      const items = getGroceryItems(tripId);
-      await saveTripToIndexedDB(updatedTrip, items, false);
+      await saveTripToIndexedDB(updatedTrip, tripItems, false);
     } catch (idbErr) {
       console.warn('[Storage] IndexedDB trip update error:', idbErr);
     }
 
-    // 4. Trigger a UI store refresh
+    // 5. Trigger a UI store refresh
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('kosherai-trips-updated', { detail: { tripId, updatedTrip } }));
+      window.dispatchEvent(new CustomEvent('kosherai-groceries-updated', { detail: { tripId, items: tripItems } }));
       window.dispatchEvent(new CustomEvent('kosherai-trips-synced', { detail: { tripId } }));
       window.dispatchEvent(new CustomEvent('kosherai-store-refresh', { detail: { type: 'trips', tripId } }));
     }
 
-    // 5. If online, send a PATCH request to /api/trips with credentials: "include" and Authorization: Bearer <token>
+    // 6. If online, send a PATCH request to /api/trips with credentials: "include" and Authorization: Bearer <token>
     let isSynced = false;
     const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
     if (isOnline && typeof fetch === 'function') {
@@ -821,7 +893,9 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
           totalScaleWeightKg,
           date,
           notes,
-          projectWeek
+          projectWeek,
+          itemName: newItemName || (tripItems[0]?.name || null),
+          items: tripItems
         };
 
         const res = await fetch('/api/trips', {
@@ -837,8 +911,7 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
           trips[index] = updatedTrip;
           localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(trips));
           try {
-            const items = getGroceryItems(tripId);
-            await saveTripToIndexedDB(updatedTrip, items, true);
+            await saveTripToIndexedDB(updatedTrip, tripItems, true);
           } catch (_) {}
           console.info('[Storage] Successfully persisted trip update to Neon PostgreSQL:', tripId);
         } else {

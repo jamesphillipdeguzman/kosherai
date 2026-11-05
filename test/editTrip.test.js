@@ -109,6 +109,17 @@ const sampleTrip = {
 // Seed into localStorage so renderShoppingTripsView can pick it up
 mockStorage.set('kosherai_course_trips', JSON.stringify([sampleTrip]));
 
+// Seed sample grocery items for this trip into localStorage
+const sampleItem = {
+  id: 'item_test_101_1',
+  tripId: 'trip_test_101',
+  name: 'Bok Choy Cabbage',
+  quantity: 2,
+  unit: 'bundle',
+  price: 60
+};
+mockStorage.set('kosherai_course_grocery_items', JSON.stringify([sampleItem]));
+
 // 1.1 renderTripCard standard mode has Edit and Delete buttons
 const cardHtml = renderTripCard(sampleTrip, false);
 assert.ok(cardHtml.includes('edit-trip-btn'), 'Card must have .edit-trip-btn');
@@ -127,9 +138,10 @@ assert.ok(inlineEditCardHtml.includes('2450.5'), 'Inline form must pre-populate 
 assert.ok(inlineEditCardHtml.includes('5.75'), 'Inline form must pre-populate totalScaleWeightKg');
 assert.ok(inlineEditCardHtml.includes('2026-11-02'), 'Inline form must pre-populate date');
 assert.ok(inlineEditCardHtml.includes('Weekly baseline vegetable haul'), 'Inline form must pre-populate notes');
+assert.ok(inlineEditCardHtml.includes('Bok Choy Cabbage'), 'Inline form must pre-populate item name');
 assert.ok(inlineEditCardHtml.includes('save-edit-trip-btn') && inlineEditCardHtml.includes('Save Changes'), 'Inline form must have Save Changes button');
 assert.ok(inlineEditCardHtml.includes('cancel-edit-trip-btn') && inlineEditCardHtml.includes('Cancel'), 'Inline form must have Cancel button');
-console.log('  ✅ Inline editing card is pre-populated with all 6 fields and Save/Cancel buttons.');
+console.log('  ✅ Inline editing card is pre-populated with all fields including Item Name.');
 
 // 1.3 renderEditTripModal
 const modalHtml = renderEditTripModal({ editTripModalOpen: true, editingTripId: 'trip_test_101', editingTrip: sampleTrip });
@@ -140,19 +152,29 @@ assert.ok(modalHtml.includes('id="edit-total-amount"'), 'Modal must have #edit-t
 assert.ok(modalHtml.includes('id="edit-scale-weight"'), 'Modal must have #edit-scale-weight input');
 assert.ok(modalHtml.includes('id="edit-trip-date"'), 'Modal must have #edit-trip-date input');
 assert.ok(modalHtml.includes('id="edit-notes"'), 'Modal must have #edit-notes input');
+assert.ok(modalHtml.includes('Item Name / Extracted Item'), 'Modal must contain Item Name / Extracted Item label');
+assert.ok(modalHtml.includes('id="edit-item-name"'), 'Modal must contain #edit-item-name input');
+assert.ok(modalHtml.includes('Bok Choy Cabbage'), 'Modal must bind to primary item name');
 assert.ok(modalHtml.includes('id="save-edit-trip-btn"'), 'Modal must have #save-edit-trip-btn');
 assert.ok(modalHtml.includes('id="cancel-edit-trip-btn"'), 'Modal must have #cancel-edit-trip-btn');
 assert.ok(modalHtml.includes('Save Changes'), 'Modal must display Save Changes text');
 assert.ok(modalHtml.includes('Cancel'), 'Modal must display Cancel text');
-console.log('  ✅ Edit Modal contains pre-populated inputs for all required trip fields.');
+console.log('  ✅ Edit Modal contains pre-populated inputs for all trip fields and item name.');
 
 // ---------------------------------------------------------------------------
 // Test 2: Storage updateShoppingTrip Function
 // ---------------------------------------------------------------------------
 console.log('\nTest 2: courseProjectStorage updateShoppingTrip()');
 
-// Initialize trip and expense
+// Initialize trip, items, and expense
 mockStorage.set('kosherai_course_trips', JSON.stringify([sampleTrip]));
+mockStorage.set('kosherai_course_grocery_items', JSON.stringify([{
+  id: 'item_test_101_1',
+  tripId: 'trip_test_101',
+  name: 'Bok Choy Cabbage',
+  quantity: 2,
+  unit: 'bundle'
+}]));
 mockStorage.set('kosherai_course_expenses', JSON.stringify([{
   id: 'exp_trip_trip_test_101',
   tripId: 'trip_test_101',
@@ -178,6 +200,7 @@ global.fetch = async (url, opts) => {
     assert.strictEqual(body.storeName, 'SM Hypermarket Updated');
     assert.strictEqual(body.totalAmountPaid, 2800);
     assert.strictEqual(body.totalScaleWeightKg, 6.2);
+    assert.strictEqual(body.itemName, 'Organic Napa Cabbage');
     return {
       ok: true,
       status: 200,
@@ -193,7 +216,10 @@ const updatedResult = await updateShoppingTrip('trip_test_101', {
   totalAmountPaid: 2800,
   totalScaleWeightKg: 6.2,
   date: '2026-11-03',
-  notes: 'Updated pantry haul notes'
+  notes: 'Updated pantry haul notes',
+  itemName: 'Organic Napa Cabbage',
+  itemQty: 3,
+  itemUnit: 'kg'
 });
 
 assert.strictEqual(remotePatchCalled, true, 'Remote PATCH /api/trips must be invoked');
@@ -206,10 +232,18 @@ assert.strictEqual(updatedResult.totalScaleWeightKg, 6.2);
 assert.strictEqual(updatedResult.date, '2026-11-03');
 assert.strictEqual(updatedResult.notes, 'Updated pantry haul notes');
 
-// Verify localStorage was updated
+// Verify localStorage was updated for trips
 const tripsInStorage = JSON.parse(mockStorage.get('kosherai_course_trips'));
 assert.strictEqual(tripsInStorage[0].storeName, 'SM Hypermarket Updated');
 assert.strictEqual(tripsInStorage[0].totalAmountPaid, 2800);
+
+// Verify localStorage was updated for grocery items
+const groceryItemsInStorage = JSON.parse(mockStorage.get('kosherai_course_grocery_items'));
+const updatedItem = groceryItemsInStorage.find(i => i.tripId === 'trip_test_101');
+assert.ok(updatedItem, 'Matching grocery item must exist');
+assert.strictEqual(updatedItem.name, 'Organic Napa Cabbage', 'Item name must be updated');
+assert.strictEqual(updatedItem.quantity, 3, 'Item quantity must be updated');
+assert.strictEqual(updatedItem.unit, 'kg', 'Item unit must be updated');
 
 // Verify linked expense was updated
 const expensesInStorage = JSON.parse(mockStorage.get('kosherai_course_expenses'));
@@ -219,8 +253,9 @@ assert.strictEqual(expensesInStorage[0].amount, 2800);
 // Verify UI custom events were dispatched
 const refreshedEvents = customEventsDispatched.map(e => e.type);
 assert.ok(refreshedEvents.includes('kosherai-trips-updated'), 'Must dispatch kosherai-trips-updated');
+assert.ok(refreshedEvents.includes('kosherai-groceries-updated'), 'Must dispatch kosherai-groceries-updated');
 assert.ok(refreshedEvents.includes('kosherai-store-refresh'), 'Must dispatch kosherai-store-refresh');
-console.log('  ✅ updateShoppingTrip updates localStorage, linked expense, and dispatches UI refresh events.');
+console.log('  ✅ updateShoppingTrip updates trips, grocery items, linked expense, and dispatches refresh events.');
 
 // ---------------------------------------------------------------------------
 // Test 3: Backend API PUT / PATCH /api/trips
@@ -260,8 +295,9 @@ assert.strictEqual(statusNoId(), 400, 'PATCH without ID must return 400');
 assert.strictEqual(dataNoId().error, 'MISSING_ID');
 console.log('  ✅ Missing trip ID correctly returns 400 MISSING_ID.');
 
-// 3.3 Create a trip in Neon for this user to test updating
+// 3.3 Create a trip and grocery purchase in Neon for this user to test updating
 const testTripId = `trip_patch_test_${Date.now()}`;
+const testItemId = `item_patch_test_${Date.now()}`;
 await sql`
   INSERT INTO shopping_trips (
     id, user_id, date, project_week, store_name, trip_type, 
@@ -271,9 +307,20 @@ await sql`
     1500.00, 4.50, 'Initial notes', NOW(), true
   );
 `;
+await sql`
+  INSERT INTO grocery_purchases (
+    id, user_id, trip_id, purchase_date, project_week, name,
+    raw_receipt_text, quantity, unit, unit_price, total_price, weight_grams,
+    category, lid_status, created_at
+  ) VALUES (
+    ${testItemId}, ${activeUserId}, ${testTripId}, '2026-11-01', 1, 'Initial Unedited Item',
+    'Initial Unedited Item', 1, 'pcs', 1500.00, 1500.00, 500,
+    'Meat', 'SAFE', NOW()
+  );
+`;
 
 try {
-  // 3.4 Execute valid PATCH request with updated fields
+  // 3.4 Execute valid PATCH request with updated fields and updated itemName
   const { req: rPatch, res: sPatch, getStatus: statusPatch, getData: dataPatch } = createMockReqRes('PATCH', {
     authorization: `Bearer ${activeSession.token}`
   }, {
@@ -283,7 +330,8 @@ try {
     totalAmountPaid: 2150.75,
     totalScaleWeightKg: 5.80,
     date: '2026-11-04',
-    notes: 'Updated post-audit receipt notes'
+    notes: 'Updated post-audit receipt notes',
+    itemName: 'Robinsons Fresh Pork Tenderloin'
   });
 
   await tripsApiHandler(rPatch, sPatch);
@@ -294,7 +342,9 @@ try {
   assert.strictEqual(dataPatch().trip.totalScaleWeightKg, 5.80);
   assert.strictEqual(dataPatch().trip.date, '2026-11-04');
   assert.strictEqual(dataPatch().trip.notes, 'Updated post-audit receipt notes');
-  console.log('  ✅ PATCH /api/trips returns 200 OK with the updated record.');
+  assert.ok(Array.isArray(dataPatch().items), 'Response must include updated items array');
+  assert.strictEqual(dataPatch().items[0].name, 'Robinsons Fresh Pork Tenderloin');
+  console.log('  ✅ PATCH /api/trips returns 200 OK with the updated trip and grocery items.');
 
   // 3.5 Verify database persistence directly in Neon
   const dbRows = await sql`
@@ -309,7 +359,17 @@ try {
   assert.strictEqual(dbRows[0].date, '2026-11-04');
   assert.strictEqual(dbRows[0].notes, 'Updated post-audit receipt notes');
   assert.ok(dbRows[0].updated_at !== null, 'updated_at timestamp must be set');
-  console.log('  ✅ Database persistence verified directly in Neon PostgreSQL.');
+
+  const purchaseDbRows = await sql`
+    SELECT name, raw_receipt_text, updated_at
+    FROM grocery_purchases
+    WHERE trip_id = ${testTripId} AND user_id = ${activeUserId};
+  `;
+  assert.strictEqual(purchaseDbRows.length, 1);
+  assert.strictEqual(purchaseDbRows[0].name, 'Robinsons Fresh Pork Tenderloin');
+  assert.strictEqual(purchaseDbRows[0].raw_receipt_text, 'Robinsons Fresh Pork Tenderloin');
+  assert.ok(purchaseDbRows[0].updated_at !== null, 'grocery_purchases updated_at timestamp must be set');
+  console.log('  ✅ Database persistence verified directly in Neon for both shopping_trips and grocery_purchases.');
 
   // 3.6 Test PUT method as well
   const { req: rPut, res: sPut, getStatus: statusPut, getData: dataPut } = createMockReqRes('PUT', {
@@ -320,15 +380,18 @@ try {
     totalAmountPaid: 1999.00,
     totalScaleWeightKg: 4.90,
     date: '2026-11-05',
-    notes: 'Updated via PUT'
+    notes: 'Updated via PUT',
+    itemName: 'Puregold Grade A Chicken Breast'
   });
   await tripsApiHandler(rPut, sPut);
   assert.strictEqual(statusPut(), 200, 'Valid PUT must return 200');
   assert.strictEqual(dataPut().trip.storeName, 'Puregold Price Club (PUT)');
-  console.log('  ✅ PUT /api/trips also succeeds with 200 OK.');
+  assert.strictEqual(dataPut().items[0].name, 'Puregold Grade A Chicken Breast');
+  console.log('  ✅ PUT /api/trips also succeeds with 200 OK and updates grocery_purchases.');
 
 } finally {
-  // Clean up test trip
+  // Clean up test trip & purchases
+  await sql`DELETE FROM grocery_purchases WHERE trip_id = ${testTripId};`;
   await sql`DELETE FROM shopping_trips WHERE id = ${testTripId};`;
 }
 
