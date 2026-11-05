@@ -161,6 +161,40 @@ assert.ok(modalHtml.includes('Save Changes'), 'Modal must display Save Changes t
 assert.ok(modalHtml.includes('Cancel'), 'Modal must display Cancel text');
 console.log('  ✅ Edit Modal contains pre-populated inputs for all trip fields and item name.');
 
+// 1.4 Verify ₱42 Wet Market Trip with Cucumber pre-population and layout flex classes
+const wetMarketTrip = {
+  id: 'trip_1793838424359_2gs2',
+  storeName: 'Wet Market',
+  tripType: 'Wet Market / Palengke',
+  totalAmountPaid: 42,
+  totalScaleWeightKg: 0.35,
+  date: '2026-11-05',
+  notes: 'Fresh cucumber purchase'
+};
+const wetMarketItem = {
+  id: 'item_1793838424356_0_gnxx',
+  tripId: 'trip_1793838424359_2gs2',
+  name: 'Cucumber',
+  quantity: 2,
+  unit: 'pc',
+  total_price: 42
+};
+mockStorage.set('kosherai_course_trips', JSON.stringify([sampleTrip, wetMarketTrip]));
+mockStorage.set('kosherai_course_grocery_items', JSON.stringify([sampleItem, wetMarketItem]));
+
+const cucumberModalHtml = renderEditTripModal({
+  editTripModalOpen: true,
+  editingTripId: 'trip_1793838424359_2gs2',
+  editingTrip: wetMarketTrip
+});
+
+assert.ok(cucumberModalHtml.includes('value="Cucumber"'), 'Modal must pre-populate "Cucumber" for the ₱42 trip');
+assert.ok(cucumberModalHtml.includes('value="2"'), 'Modal must pre-populate quantity "2" for the ₱42 trip');
+assert.ok(cucumberModalHtml.includes('value="pc"'), 'Modal must pre-populate unit "pc" for the ₱42 trip');
+assert.ok(cucumberModalHtml.includes('flex-1 min-w-0'), 'Name input must have responsive flex-1 min-w-0 classes');
+assert.ok(cucumberModalHtml.includes('w-20'), 'Quantity and Unit inputs must have fixed w-20 classes');
+console.log('  ✅ ₱42 Wet Market trip correctly pre-populates Cucumber, 2, pc with flex-1 and w-20 width styling.');
+
 // ---------------------------------------------------------------------------
 // Test 2: Storage updateShoppingTrip Function
 // ---------------------------------------------------------------------------

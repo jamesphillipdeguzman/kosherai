@@ -34,7 +34,21 @@ export function renderEditTripModal(state = {}) {
   const trip = state.editingTrip || trips.find(t => t.id === tripId);
   if (!trip) return '';
 
-  const items = getGroceryItems(trip.id);
+  let items = getGroceryItems(trip.id);
+  if (!items || items.length === 0) {
+    if (Array.isArray(trip.items) && trip.items.length > 0) items = trip.items;
+    else if (Array.isArray(trip.rawItems) && trip.rawItems.length > 0) items = trip.rawItems;
+    else if (Array.isArray(trip.extractedItems) && trip.extractedItems.length > 0) items = trip.extractedItems;
+    else if (Array.isArray(trip.groceryItems) && trip.groceryItems.length > 0) items = trip.groceryItems;
+    else items = [];
+  }
+
+  const primaryItem = items[0] || null;
+  const currentItemName = primaryItem?.name || primaryItem?.raw_receipt_text || primaryItem?.rawReceiptText || primaryItem?.itemName || trip?.extractedItemName || '';
+  const currentQuantity = (primaryItem?.quantity !== undefined && primaryItem?.quantity !== null && primaryItem?.quantity !== '')
+    ? primaryItem.quantity
+    : (primaryItem?.qty ?? 1);
+  const currentUnit = primaryItem?.unit || 'pc';
 
   return `
     <div class="modal-overlay" id="edit-trip-overlay">
@@ -94,19 +108,85 @@ export function renderEditTripModal(state = {}) {
             <label class="form-label" for="edit-item-name">Item Name / Extracted Item</label>
             ${items.length > 1 ? `
               <div class="edit-items-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; padding-right: 4px; margin-top: 4px;">
-                ${items.map((item, idx) => `
-                  <div class="edit-item-row" data-item-id="${item.id}" style="display: flex; gap: 6px; align-items: center;">
-                    <input type="text" ${idx === 0 ? 'id="edit-item-name"' : ''} name="itemName" class="form-input edit-item-name" style="flex: 2;" value="${escapeHtml(item.name)}" placeholder="Item Name / Product" required />
-                    <input type="number" step="any" min="0" name="itemQty" class="form-input edit-item-qty" style="width: 70px; text-align: center;" value="${item.quantity || 1}" placeholder="Qty" title="Quantity" />
-                    <input type="text" name="itemUnit" class="form-input edit-item-unit" style="width: 70px; text-align: center;" value="${escapeHtml(item.unit || 'pcs')}" placeholder="Unit" title="Unit" />
-                  </div>
-                `).join('')}
+                ${items.map((item, idx) => {
+                  const rowName = item?.name || item?.raw_receipt_text || item?.rawReceiptText || item?.itemName || '';
+                  const rowQty = (item?.quantity !== undefined && item?.quantity !== null && item?.quantity !== '') ? item.quantity : (item?.qty ?? 1);
+                  const rowUnit = item?.unit || 'pc';
+                  return `
+                    <div class="edit-item-row flex items-center gap-2 w-full" data-item-id="${item.id}" style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                      <!-- 1. Item Name Input (Takes up most of the space) -->
+                      <input
+                        type="text"
+                        ${idx === 0 ? 'id="edit-item-name"' : ''}
+                        name="itemName"
+                        class="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-name"
+                        style="flex: 1 1 auto; min-width: 0; width: 100%;"
+                        placeholder="e.g. Bangus, Garlic, Cucumber"
+                        value="${escapeHtml(rowName)}"
+                        required
+                      />
+
+                      <!-- 2. Quantity Input (Fixed compact width) -->
+                      <input
+                        type="number"
+                        step="any"
+                        ${idx === 0 ? 'id="edit-item-qty"' : ''}
+                        name="itemQty"
+                        class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-qty"
+                        style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
+                        placeholder="Qty"
+                        value="${rowQty}"
+                      />
+
+                      <!-- 3. Unit Input / Selector (Fixed compact width) -->
+                      <input
+                        type="text"
+                        ${idx === 0 ? 'id="edit-item-unit"' : ''}
+                        name="itemUnit"
+                        class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-unit"
+                        style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
+                        placeholder="Unit (pc, kg)"
+                        value="${escapeHtml(rowUnit)}"
+                      />
+                    </div>
+                  `;
+                }).join('')}
               </div>
             ` : `
-              <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">
-                <input type="text" id="edit-item-name" name="itemName" class="form-input edit-item-name" style="flex: 2;" value="${escapeHtml(items[0]?.name || '')}" placeholder="Item Name / Product" />
-                <input type="number" step="any" min="0" id="edit-item-qty" name="itemQty" class="form-input edit-item-qty" style="width: 70px; text-align: center;" value="${items[0]?.quantity || 1}" placeholder="Qty" title="Quantity" />
-                <input type="text" id="edit-item-unit" name="itemUnit" class="form-input edit-item-unit" style="width: 70px; text-align: center;" value="${escapeHtml(items[0]?.unit || 'pcs')}" placeholder="Unit" title="Unit" />
+              <div class="flex items-center gap-2 w-full" style="display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px;">
+                <!-- 1. Item Name Input (Takes up most of the space) -->
+                <input
+                  type="text"
+                  id="edit-item-name"
+                  name="itemName"
+                  class="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-name"
+                  style="flex: 1 1 auto; min-width: 0; width: 100%;"
+                  placeholder="e.g. Bangus, Garlic, Cucumber"
+                  value="${escapeHtml(currentItemName)}"
+                />
+
+                <!-- 2. Quantity Input (Fixed compact width) -->
+                <input
+                  type="number"
+                  step="any"
+                  id="edit-item-qty"
+                  name="itemQty"
+                  class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-qty"
+                  style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
+                  placeholder="Qty"
+                  value="${currentQuantity}"
+                />
+
+                <!-- 3. Unit Input / Selector (Fixed compact width) -->
+                <input
+                  type="text"
+                  id="edit-item-unit"
+                  name="itemUnit"
+                  class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-unit"
+                  style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
+                  placeholder="Unit (pc, kg)"
+                  value="${escapeHtml(currentUnit)}"
+                />
               </div>
             `}
             <p class="mt-1 text-[11px] leading-tight text-slate-500 dark:text-slate-400">
@@ -135,7 +215,20 @@ export function renderEditTripModal(state = {}) {
  * and Edit (pencil icon) & Delete Trip buttons.
  */
 export function renderTripCard(trip, isEditing = false) {
-  const items = getGroceryItems(trip.id);
+  let items = getGroceryItems(trip.id);
+  if (!items || items.length === 0) {
+    if (Array.isArray(trip.items) && trip.items.length > 0) items = trip.items;
+    else if (Array.isArray(trip.rawItems) && trip.rawItems.length > 0) items = trip.rawItems;
+    else if (Array.isArray(trip.extractedItems) && trip.extractedItems.length > 0) items = trip.extractedItems;
+    else if (Array.isArray(trip.groceryItems) && trip.groceryItems.length > 0) items = trip.groceryItems;
+    else items = [];
+  }
+  const primaryItem = items[0] || null;
+  const currentItemName = primaryItem?.name || primaryItem?.raw_receipt_text || primaryItem?.rawReceiptText || primaryItem?.itemName || trip?.extractedItemName || '';
+  const currentQuantity = (primaryItem?.quantity !== undefined && primaryItem?.quantity !== null && primaryItem?.quantity !== '')
+    ? primaryItem.quantity
+    : (primaryItem?.qty ?? 1);
+  const currentUnit = primaryItem?.unit || 'pc';
 
   if (isEditing) {
     return `
@@ -179,10 +272,35 @@ export function renderTripCard(trip, isEditing = false) {
 
           <div class="form-group" style="margin-bottom: 10px;">
             <label class="form-label" for="edit-item-name-${trip.id}">Item Name / Extracted Item</label>
-            <div style="display: flex; gap: 6px; align-items: center;">
-              <input type="text" id="edit-item-name-${trip.id}" name="itemName" class="form-input edit-item-name" style="flex: 2;" value="${escapeHtml(items[0]?.name || '')}" placeholder="Item Name / Product" />
-              <input type="number" step="any" min="0" name="itemQty" class="form-input edit-item-qty" style="width: 65px; text-align: center;" value="${items[0]?.quantity || 1}" placeholder="Qty" title="Quantity" />
-              <input type="text" name="itemUnit" class="form-input edit-item-unit" style="width: 65px; text-align: center;" value="${escapeHtml(items[0]?.unit || 'pcs')}" placeholder="Unit" title="Unit" />
+            <div class="flex items-center gap-2 w-full" style="display: flex; align-items: center; gap: 8px; width: 100%;">
+              <input
+                type="text"
+                id="edit-item-name-${trip.id}"
+                name="itemName"
+                class="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-name"
+                style="flex: 1 1 auto; min-width: 0; width: 100%;"
+                value="${escapeHtml(currentItemName)}"
+                placeholder="e.g. Bangus, Garlic, Cucumber"
+              />
+              <input
+                type="number"
+                step="any"
+                id="edit-item-qty-${trip.id}"
+                name="itemQty"
+                class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-qty"
+                style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
+                value="${currentQuantity}"
+                placeholder="Qty"
+              />
+              <input
+                type="text"
+                id="edit-item-unit-${trip.id}"
+                name="itemUnit"
+                class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-unit"
+                style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
+                value="${escapeHtml(currentUnit)}"
+                placeholder="Unit (pc, kg)"
+              />
             </div>
           </div>
 

@@ -582,6 +582,14 @@ export default async function handler(req, res) {
 
       // Update grocery_purchases if itemName or items provided
       const itemName = tripData.itemName || tripData.item_name || body.itemName || body.item_name || null;
+      const itemQuantity = tripData.quantity !== undefined
+        ? Number(tripData.quantity)
+        : (body.quantity !== undefined
+          ? Number(body.quantity)
+          : (tripData.itemQuantity !== undefined
+            ? Number(tripData.itemQuantity)
+            : (tripData.itemQty !== undefined ? Number(tripData.itemQty) : null)));
+      const itemUnit = tripData.unit || body.unit || tripData.itemUnit || null;
       const rawItems = (Array.isArray(body.items) && body.items.length > 0) ? body.items : (Array.isArray(tripData.items) ? tripData.items : null);
 
       if (rawItems && rawItems.length > 0) {
@@ -603,11 +611,42 @@ export default async function handler(req, res) {
       }
 
       if (itemName) {
-        await sql`
-          UPDATE grocery_purchases 
-          SET name = ${itemName}, raw_receipt_text = ${itemName}, updated_at = NOW() 
-          WHERE trip_id = ${targetId} AND user_id = ${userId};
-        `;
+        const cleanName = itemName.trim();
+        if (itemQuantity !== null && itemUnit) {
+          await sql`
+            UPDATE grocery_purchases 
+            SET name = ${cleanName}, 
+                raw_receipt_text = ${cleanName}, 
+                quantity = ${itemQuantity},
+                unit = ${itemUnit},
+                updated_at = NOW() 
+            WHERE trip_id = ${targetId} AND user_id = ${userId};
+          `;
+        } else if (itemQuantity !== null) {
+          await sql`
+            UPDATE grocery_purchases 
+            SET name = ${cleanName}, 
+                raw_receipt_text = ${cleanName}, 
+                quantity = ${itemQuantity},
+                updated_at = NOW() 
+            WHERE trip_id = ${targetId} AND user_id = ${userId};
+          `;
+        } else if (itemUnit) {
+          await sql`
+            UPDATE grocery_purchases 
+            SET name = ${cleanName}, 
+                raw_receipt_text = ${cleanName}, 
+                unit = ${itemUnit},
+                updated_at = NOW() 
+            WHERE trip_id = ${targetId} AND user_id = ${userId};
+          `;
+        } else {
+          await sql`
+            UPDATE grocery_purchases 
+            SET name = ${cleanName}, raw_receipt_text = ${cleanName}, updated_at = NOW() 
+            WHERE trip_id = ${targetId} AND user_id = ${userId};
+          `;
+        }
       }
 
       // Query updated purchases for this trip to return in response

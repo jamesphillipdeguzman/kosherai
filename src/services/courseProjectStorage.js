@@ -151,7 +151,7 @@ export function getGroceryItems(tripId = null) {
     const raw = localStorage.getItem(STORAGE_KEYS.GROCERY_ITEMS);
     const items = raw ? JSON.parse(raw) : [];
     if (tripId) {
-      return items.filter(item => item.tripId === tripId);
+      return items.filter(item => item.tripId === tripId || item.trip_id === tripId);
     }
     return items;
   } catch (e) {
@@ -775,37 +775,43 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
     const allGroceryItems = getGroceryItems();
     let groceryItemsUpdated = false;
 
-    const newItemName = updatedFields.itemName || updatedFields.name;
-    const newQuantity = (updatedFields.itemQty !== undefined && updatedFields.itemQty !== null && updatedFields.itemQty !== '')
-      ? Number(updatedFields.itemQty)
-      : ((updatedFields.quantity !== undefined && updatedFields.quantity !== null && updatedFields.quantity !== '') ? Number(updatedFields.quantity) : null);
-    const newUnit = updatedFields.itemUnit || updatedFields.unit || null;
+    const rawItemName = updatedFields.itemName ?? updatedFields.name ?? '';
+    const cleanName = typeof rawItemName === 'string' ? rawItemName.trim() : (rawItemName ? String(rawItemName).trim() : '');
+    const rawItemQty = (updatedFields.itemQuantity !== undefined && updatedFields.itemQuantity !== null && updatedFields.itemQuantity !== '')
+      ? Number(updatedFields.itemQuantity)
+      : ((updatedFields.itemQty !== undefined && updatedFields.itemQty !== null && updatedFields.itemQty !== '')
+        ? Number(updatedFields.itemQty)
+        : ((updatedFields.quantity !== undefined && updatedFields.quantity !== null && updatedFields.quantity !== '') ? Number(updatedFields.quantity) : null));
+    const cleanUnit = (updatedFields.itemUnit || updatedFields.unit || 'pc').trim();
 
     if (Array.isArray(updatedFields.items) && updatedFields.items.length > 0) {
       const itemUpdatesMap = new Map(updatedFields.items.map(i => [i.id, i]));
       allGroceryItems.forEach(item => {
-        if (item.tripId === tripId) {
+        if (item.tripId === tripId || item.trip_id === tripId) {
           const update = itemUpdatesMap.get(item.id);
           if (update) {
             if (update.name) {
-              item.name = update.name;
-              item.rawReceiptText = update.name;
+              const uName = update.name.trim();
+              item.name = uName;
+              item.raw_receipt_text = uName;
+              item.rawReceiptText = uName;
             }
             if (update.quantity !== undefined && !isNaN(update.quantity)) item.quantity = Number(update.quantity);
-            if (update.unit) item.unit = update.unit;
+            if (update.unit) item.unit = update.unit.trim();
             groceryItemsUpdated = true;
           }
         }
       });
-    } else if (newItemName) {
+    } else if (cleanName) {
       let foundMatching = false;
       allGroceryItems.forEach(item => {
-        if (item.tripId === tripId) {
+        if (item.tripId === tripId || item.trip_id === tripId) {
           foundMatching = true;
-          item.name = newItemName;
-          item.rawReceiptText = newItemName;
-          if (newQuantity !== null && !isNaN(newQuantity)) item.quantity = newQuantity;
-          if (newUnit) item.unit = newUnit;
+          item.name = cleanName;
+          item.raw_receipt_text = cleanName;
+          item.rawReceiptText = cleanName;
+          if (rawItemQty !== null && !isNaN(rawItemQty)) item.quantity = rawItemQty;
+          if (cleanUnit) item.unit = cleanUnit;
           groceryItemsUpdated = true;
         }
       });
@@ -818,10 +824,11 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
           tripId,
           purchaseDate: date,
           projectWeek,
-          name: newItemName,
-          rawReceiptText: newItemName,
-          quantity: (newQuantity !== null && !isNaN(newQuantity)) ? newQuantity : 1,
-          unit: newUnit || 'pcs',
+          name: cleanName,
+          raw_receipt_text: cleanName,
+          rawReceiptText: cleanName,
+          quantity: (rawItemQty !== null && !isNaN(rawItemQty)) ? rawItemQty : 1,
+          unit: cleanUnit,
           unitPrice: totalAmountPaid,
           totalPrice: totalAmountPaid,
           weightGrams: 0,
@@ -838,7 +845,7 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
       localStorage.setItem(STORAGE_KEYS.GROCERY_ITEMS, JSON.stringify(allGroceryItems));
     }
 
-    const tripItems = allGroceryItems.filter(i => i.tripId === tripId);
+    const tripItems = allGroceryItems.filter(i => i.tripId === tripId || i.trip_id === tripId);
     updatedTrip.itemsCount = tripItems.length || Number(existing.itemsCount || 0);
     trips[index] = updatedTrip;
     localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(trips));
@@ -894,7 +901,11 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
           date,
           notes,
           projectWeek,
-          itemName: newItemName || (tripItems[0]?.name || null),
+          itemName: cleanName || (tripItems[0]?.name || null),
+          quantity: rawItemQty !== null ? rawItemQty : (tripItems[0]?.quantity ?? 1),
+          unit: cleanUnit || (tripItems[0]?.unit || 'pc'),
+          itemQuantity: rawItemQty !== null ? rawItemQty : (tripItems[0]?.quantity ?? 1),
+          itemUnit: cleanUnit || (tripItems[0]?.unit || 'pc'),
           items: tripItems
         };
 

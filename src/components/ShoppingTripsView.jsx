@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getGroceryItems } from '../services/courseProjectStorage.js';
 import {
   escapeHtml,
   formatNumber,
@@ -18,14 +19,34 @@ export {
 };
 
 /**
- * Optional React component representation for React-based harnesses
+ * React component representation for React-based harnesses
  */
 export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave, editingTripId }) {
   const [editingId, setEditingId] = useState(editingTripId || null);
   const [editForm, setEditForm] = useState({});
+  const [itemName, setItemName] = useState('');
+  const [itemQuantity, setItemQuantity] = useState(1);
+  const [itemUnit, setItemUnit] = useState('pc');
 
   const startEdit = (trip) => {
     setEditingId(trip.id);
+    let allItems = getGroceryItems(trip.id);
+    if (!allItems || allItems.length === 0) {
+      if (Array.isArray(trip.items) && trip.items.length > 0) allItems = trip.items;
+      else if (Array.isArray(trip.rawItems) && trip.rawItems.length > 0) allItems = trip.rawItems;
+      else if (Array.isArray(trip.extractedItems) && trip.extractedItems.length > 0) allItems = trip.extractedItems;
+      else if (Array.isArray(trip.groceryItems) && trip.groceryItems.length > 0) allItems = trip.groceryItems;
+      else allItems = [];
+    }
+    const item = allItems[0] || {};
+    const currentItemName = item?.name || item?.raw_receipt_text || item?.rawReceiptText || item?.itemName || trip?.extractedItemName || '';
+    const currentQty = item?.quantity ?? item?.qty ?? 1;
+    const currentUnit = item?.unit ?? 'pc';
+
+    setItemName(currentItemName);
+    setItemQuantity(currentQty);
+    setItemUnit(currentUnit);
+
     setEditForm({
       storeName: trip.storeName || '',
       tripType: trip.tripType || 'Supermarket',
@@ -33,10 +54,21 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
       totalScaleWeightKg: trip.totalScaleWeightKg || 0,
       date: trip.date || '',
       notes: trip.notes || '',
-      itemName: trip.itemName || trip.name || ''
+      itemName: currentItemName,
+      itemQuantity: currentQty,
+      itemUnit: currentUnit
     });
     if (onEdit) onEdit(trip);
   };
+
+  useEffect(() => {
+    if (editingTripId) {
+      const trip = trips.find(t => t.id === editingTripId);
+      if (trip) {
+        startEdit(trip);
+      }
+    }
+  }, [editingTripId, trips]);
 
   const cancelEdit = () => {
     setEditingId(null);
@@ -44,7 +76,7 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
   };
 
   const handleSave = (tripId) => {
-    if (onSave) onSave(tripId, editForm);
+    if (onSave) onSave(tripId, { ...editForm, itemName, itemQuantity, itemUnit });
     setEditingId(null);
   };
 
@@ -117,13 +149,47 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
                 </div>
                 <div className="form-group">
                   <label htmlFor={`edit-item-name-${trip.id}`}>Item Name / Extracted Item</label>
-                  <input
-                    id={`edit-item-name-${trip.id}`}
-                    name="itemName"
-                    value={editForm.itemName}
-                    placeholder="Item Name / Product"
-                    onChange={e => setEditForm({ ...editForm, itemName: e.target.value })}
-                  />
+                  <div className="flex items-center gap-2 w-full">
+                    {/* 1. Item Name Input (Takes up most of the space) */}
+                    <input
+                      type="text"
+                      id={`edit-item-name-${trip.id}`}
+                      className="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                      placeholder="e.g. Bangus, Garlic, Cucumber"
+                      value={itemName}
+                      onChange={(e) => {
+                        setItemName(e.target.value);
+                        setEditForm(prev => ({ ...prev, itemName: e.target.value }));
+                      }}
+                    />
+
+                    {/* 2. Quantity Input (Fixed compact width) */}
+                    <input
+                      type="number"
+                      step="any"
+                      id={`edit-item-qty-${trip.id}`}
+                      className="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                      placeholder="Qty"
+                      value={itemQuantity}
+                      onChange={(e) => {
+                        setItemQuantity(e.target.value);
+                        setEditForm(prev => ({ ...prev, itemQuantity: e.target.value }));
+                      }}
+                    />
+
+                    {/* 3. Unit Input / Selector (Fixed compact width) */}
+                    <input
+                      type="text"
+                      id={`edit-item-unit-${trip.id}`}
+                      className="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                      placeholder="Unit (pc, kg)"
+                      value={itemUnit}
+                      onChange={(e) => {
+                        setItemUnit(e.target.value);
+                        setEditForm(prev => ({ ...prev, itemUnit: e.target.value }));
+                      }}
+                    />
+                  </div>
                 </div>
                 <div className="trip-card-footer">
                   <button type="button" className="btn-secondary cancel-edit-trip-btn" onClick={cancelEdit}>Cancel</button>
