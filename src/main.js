@@ -242,7 +242,7 @@ function render() {
 
     ${state.selectedItem ? renderItemDetailModal(state.selectedItem, state.activeDiet) : ''}
     ${state.settingsOpen ? renderSettingsModal(state.settings, state.theme, state.showProjectTab, state.activeDiet) : ''}
-    ${state.authModalOpen ? renderAuthModalHtml({ isOpen: true, mode: state.authModalMode, errorMsg: state.authModalError, isLoading: state.authModalLoading }) : ''}
+    ${state.authModalOpen ? renderAuthModalHtml({ isOpen: true, mode: state.authModalMode, errorMsg: state.authModalError, isLoading: state.authModalLoading, values: state.authModalValues || {} }) : ''}
   `;
 
   attachEventHandlers();
@@ -431,10 +431,24 @@ function attachEventHandlers() {
       }
     });
 
+    // Show / hide password toggles
+    document.querySelectorAll('[data-auth-toggle-password]').forEach((toggleBtn) => {
+      toggleBtn.addEventListener('click', () => {
+        const input = document.getElementById(toggleBtn.dataset.authTogglePassword);
+        if (!input) return;
+        const reveal = input.type === 'password';
+        input.type = reveal ? 'text' : 'password';
+        toggleBtn.setAttribute('aria-pressed', String(reveal));
+        toggleBtn.setAttribute('aria-label', reveal ? 'Hide password' : 'Show password');
+        toggleBtn.title = reveal ? 'Hide password' : 'Show password';
+      });
+    });
+
     const authForm = document.querySelector('#auth-modal-form');
     if (authForm) {
       authForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (state.authModalLoading) return; // prevent duplicate submissions
         state.authModalError = '';
 
         const emailInput = document.querySelector('#auth-html-email');
@@ -446,6 +460,9 @@ function attachEventHandlers() {
         const password = passInput?.value || '';
         const name = (nameInput?.value || '').trim();
         const confirmPassword = confirmPassInput?.value || '';
+
+        // Preserve non-secret field values across re-renders (passwords are never re-rendered)
+        state.authModalValues = { email, name };
 
         if (!email) {
           state.authModalError = 'Please enter your email address.';
@@ -511,6 +528,7 @@ function attachEventHandlers() {
           state.authModalOpen = false;
           state.authModalLoading = false;
           state.authModalError = '';
+          state.authModalValues = {};
           render();
 
           // Trigger refresh of user's trips and scans

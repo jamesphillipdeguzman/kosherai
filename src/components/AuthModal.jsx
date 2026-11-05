@@ -1,6 +1,50 @@
 import React, { useState } from 'react';
 export { renderAuthModalHtml, authenticateUser, isValidEmail } from './AuthModal.js';
 
+/**
+ * React AuthModal.
+ *
+ * NOTE: Tailwind is NOT compiled in this project, so this component uses the
+ * same scoped `.auth-*` classes as the vanilla renderer in AuthModal.js
+ * (defined in the "AUTH MODAL" section of src/style.css). Both paths render
+ * identically. Card: #0b1329 background, #1e293b (slate-800) border.
+ */
+function PasswordInput({ id, name, label, value, onChange, autoComplete, minLength }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="auth-field">
+      <label className="auth-label" htmlFor={id}>{label}</label>
+      <div className="auth-input-wrap">
+        <input
+          id={id}
+          type={visible ? 'text' : 'password'}
+          name={name}
+          required
+          minLength={minLength}
+          value={value}
+          onChange={onChange}
+          autoComplete={autoComplete}
+          placeholder="••••••••"
+          className="auth-input auth-input--with-toggle"
+        />
+        <button
+          type="button"
+          className="auth-eye-btn"
+          aria-label={visible ? 'Hide password' : 'Show password'}
+          aria-pressed={visible}
+          title={visible ? 'Hide password' : 'Show password'}
+          onClick={() => setVisible((v) => !v)}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onAuthSuccess, onSuccess }) {
   const [mode, setMode] = useState(initialMode); // 'signin' | 'signup'
   const [formData, setFormData] = useState({
@@ -14,16 +58,24 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
 
   if (!isOpen) return null;
 
+  const isSignUp = mode === 'signup';
+
   const handleChange = (e) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
     if (errorMsg) setErrorMsg('');
   };
 
+  const switchMode = (next) => {
+    setMode(next);
+    setErrorMsg('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isLoading) return; // prevent duplicate submissions
     setErrorMsg('');
 
-    if (mode === 'signup' && formData.password !== formData.confirmPassword) {
+    if (isSignUp && formData.password !== formData.confirmPassword) {
       setErrorMsg('Passwords do not match');
       return;
     }
@@ -64,60 +116,45 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
   };
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm modal-overlay"
-      onClick={onClose}
+    <div
+      className="auth-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="auth-modal-title"
+      onClick={() => { if (!isLoading) onClose(); }}
     >
-      <div 
-        className="relative w-full max-w-md bg-[#0b1329] border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-7 text-slate-100 flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Top Header Row with Title & Close Button */}
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-medium mb-2">
-              <span>🛡️</span> Multi-Tenant Data Isolation
-            </div>
-            <h2 className="text-xl font-bold tracking-tight text-white">
-              {mode === 'signin' ? 'Sign In to KosherAI' : 'Create an Account'}
-            </h2>
-            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-              {mode === 'signin'
-                ? 'Access your personal shopping trips, scans, and diet tracking.'
-                : 'Get started with personal food cost analysis and receipt tracking.'}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800/60 hover:bg-slate-700/80 text-slate-400 hover:text-white transition-colors cursor-pointer"
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
+      <div className="auth-card" onClick={(e) => e.stopPropagation()}>
+        <button type="button" onClick={onClose} className="auth-close-btn" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
 
-        {/* Mode Toggle Switch (Matches Supermarket / Wet Market pill style) */}
-        <div className="flex p-1 mb-5 bg-[#070d1f] rounded-xl border border-slate-800">
+        {/* Header */}
+        <div className="auth-brand">
+          <img src="/favicon.svg" alt="" className="auth-brand-logo" />
+          <h2 className="auth-title" id="auth-modal-title">KosherAI</h2>
+        </div>
+        <span className="auth-badge">🛡️ Multi-Tenant Data Isolation</span>
+        <p className="auth-subtitle">Your dietary history, securely synced across your devices.</p>
+
+        {/* Mode Toggle (segmented control) */}
+        <div className="auth-segment" role="tablist" aria-label="Authentication mode">
           <button
             type="button"
-            onClick={() => { setMode('signin'); setErrorMsg(''); }}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-              mode === 'signin'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
+            role="tab"
+            aria-selected={!isSignUp}
+            onClick={() => switchMode('signin')}
+            className={`auth-segment-btn ${!isSignUp ? 'is-active' : ''}`}
           >
             Sign In
           </button>
           <button
             type="button"
-            onClick={() => { setMode('signup'); setErrorMsg(''); }}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-              mode === 'signup'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
+            role="tab"
+            aria-selected={isSignUp}
+            onClick={() => switchMode('signup')}
+            className={`auth-segment-btn ${isSignUp ? 'is-active' : ''}`}
           >
             Create Account
           </button>
@@ -125,109 +162,90 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
 
         {/* Error Feedback */}
         {errorMsg && (
-          <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center gap-2">
-            <span>⚠️</span>
+          <div className="auth-error" role="alert">
+            <span aria-hidden="true">⚠️</span>
             <span>{errorMsg}</span>
           </div>
         )}
 
-        {/* Form Inputs */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
-          {mode === 'signup' && (
-            <div className="flex flex-col gap-1 text-left">
-              <label className="text-xs font-medium text-slate-300">
-                Full Name
-              </label>
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="auth-form">
+          {isSignUp && (
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="auth-react-name">Full Name</label>
               <input
+                id="auth-react-name"
                 type="text"
                 name="name"
                 required
+                autoComplete="name"
                 value={formData.name}
                 onChange={handleChange}
                 placeholder="e.g. Maria Santos"
-                className="w-full px-3.5 py-2.5 bg-[#060b17] border border-slate-700/80 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                className="auth-input"
               />
             </div>
           )}
 
-          <div className="flex flex-col gap-1 text-left">
-            <label className="text-xs font-medium text-slate-300">
-              Email Address
-            </label>
+          <div className="auth-field">
+            <label className="auth-label" htmlFor="auth-react-email">Email Address</label>
             <input
+              id="auth-react-email"
               type="email"
               name="email"
               required
+              autoComplete="email"
               value={formData.email}
               onChange={handleChange}
               placeholder="patient@example.com"
-              className="w-full px-3.5 py-2.5 bg-[#060b17] border border-slate-700/80 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+              className="auth-input"
             />
           </div>
 
-          <div className="flex flex-col gap-1 text-left">
-            <label className="text-xs font-medium text-slate-300">
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              required
-              minLength={6}
-              value={formData.password}
+          <PasswordInput
+            id="auth-react-password"
+            name="password"
+            label={isSignUp ? 'Password (min 6 characters)' : 'Password'}
+            value={formData.password}
+            onChange={handleChange}
+            autoComplete={isSignUp ? 'new-password' : 'current-password'}
+            minLength={6}
+          />
+
+          {isSignUp && (
+            <PasswordInput
+              id="auth-react-confirm-password"
+              name="confirmPassword"
+              label="Confirm Password"
+              value={formData.confirmPassword}
               onChange={handleChange}
-              placeholder="••••••••"
-              className="w-full px-3.5 py-2.5 bg-[#060b17] border border-slate-700/80 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+              autoComplete="new-password"
+              minLength={6}
             />
-          </div>
-
-          {mode === 'signup' && (
-            <div className="flex flex-col gap-1 text-left">
-              <label className="text-xs font-medium text-slate-300">
-                Confirm Password
-              </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                required
-                minLength={6}
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                placeholder="••••••••"
-                className="w-full px-3.5 py-2.5 bg-[#060b17] border border-slate-700/80 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
-              />
-            </div>
           )}
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full mt-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-          >
-            {isLoading && (
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            )}
-            <span>{mode === 'signin' ? 'Sign In' : 'Create Account'}</span>
+          <button type="submit" disabled={isLoading} aria-busy={isLoading} className="auth-submit-btn">
+            {isLoading && <span className="auth-spinner" aria-hidden="true" />}
+            <span>
+              {isLoading
+                ? (isSignUp ? 'Creating Account…' : 'Signing In…')
+                : (isSignUp ? 'Create Account' : 'Sign In')}
+            </span>
           </button>
         </form>
 
-        {/* Mode Footer Switch */}
-        <div className="mt-5 text-center">
-          <p className="text-xs text-slate-400">
-            {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}
-            {' '}
-            <button
-              type="button"
-              onClick={() => {
-                setMode(mode === 'signin' ? 'signup' : 'signin');
-                setErrorMsg('');
-              }}
-              className="font-medium text-emerald-400 hover:text-emerald-300 underline underline-offset-2 ml-1 cursor-pointer"
-            >
-              {mode === 'signin' ? 'Sign up' : 'Sign in'}
-            </button>
-          </p>
-        </div>
+        {/* Footer */}
+        <p className="auth-switch">
+          {isSignUp ? 'Already have an account?' : "Don't have an account?"}
+          <button
+            type="button"
+            onClick={() => switchMode(isSignUp ? 'signin' : 'signup')}
+            className="auth-link-btn"
+          >
+            {isSignUp ? 'Sign in' : 'Sign up'}
+          </button>
+        </p>
+        <p className="auth-privacy">🔒 Encrypted session · Your data is isolated to your account only.</p>
       </div>
     </div>
   );

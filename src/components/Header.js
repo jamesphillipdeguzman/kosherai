@@ -58,7 +58,7 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
               </button>
             </div>
           ` : `
-            <div class="flex items-center gap-2">
+            <div class="header-auth-buttons flex items-center gap-2">
               <button
                 type="button"
                 id="header-signin-btn"

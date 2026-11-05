@@ -96,8 +96,14 @@ assert.ok(authModalSource.includes('kosherai_user_session'), 'AuthModal must per
 assert.ok(authModalSource.includes('kosherai_current_user'), 'AuthModal must persist kosherai_current_user to localStorage');
 assert.ok(authModalSource.includes('kosherai:auth-changed'), 'AuthModal must dispatch kosherai:auth-changed event');
 assert.ok(authModalSource.includes('kosherai:sync-data'), 'AuthModal must dispatch kosherai:sync-data event');
-assert.ok(authModalSource.includes('bg-[#0b1329]') || authModalSource.includes('bg-slate-900'), 'AuthModal card must use dark theme (bg-[#0b1329] or bg-slate-900)');
-assert.ok(authModalSource.includes('border-slate-800'), 'AuthModal card must use border-slate-800');
+assert.ok(authModalSource.includes('auth-card'), 'AuthModal.jsx must use the scoped .auth-card class');
+assert.ok(authModalSource.includes('auth-input'), 'AuthModal.jsx must use the scoped .auth-input class');
+// Tailwind is not compiled in this project: verify the scoped auth styles actually exist in style.css
+const styleCss = fs.readFileSync(path.resolve('src/style.css'), 'utf8');
+assert.ok(/\.auth-card\s*\{[^}]*background:\s*#0b1329/.test(styleCss), 'style.css must define .auth-card with #0b1329 background');
+assert.ok(/\.auth-card \.auth-input\s*\{[^}]*background:\s*#060b17/.test(styleCss), 'style.css must define dark .auth-input (#060b17)');
+assert.ok(styleCss.includes('.auth-segment-btn.is-active'), 'style.css must style the active segmented control');
+assert.ok(signInHtml.includes('data-auth-toggle-password'), 'Vanilla modal must render show/hide password toggle');
 console.log('  ✅ AuthModal.jsx component props, persistence, and dark slate styling verified.\n');
 
 // ----------------------------------------------------

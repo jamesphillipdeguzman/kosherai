@@ -194,7 +194,7 @@ export function Header({
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="header-auth-buttons flex items-center gap-2">
                 <button
                   type="button"
                   id="header-signin-btn"

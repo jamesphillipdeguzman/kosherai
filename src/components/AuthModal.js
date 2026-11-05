@@ -70,153 +70,123 @@ export async function authenticateUser(mode, credentials) {
   };
 }
 
+function escapeAttr(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+const EYE_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>`;
+
+function passwordField({ id, label, autocomplete, minlength = false }) {
+  return `
+    <div class="auth-field">
+      <label class="auth-label" for="${id}">${label}</label>
+      <div class="auth-input-wrap">
+        <input
+          id="${id}"
+          type="password"
+          class="auth-input auth-input--with-toggle"
+          autocomplete="${autocomplete}"
+          placeholder="••••••••"
+          ${minlength ? 'minlength="6"' : ''}
+          required
+        />
+        <button type="button" class="auth-eye-btn" data-auth-toggle-password="${id}" aria-label="Show password" aria-pressed="false" title="Show password">
+          ${EYE_ICON}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
 /**
- * Pure HTML generator for DOM-based rendering in vanilla main.js
+ * Pure HTML generator for DOM-based rendering in vanilla main.js.
+ *
+ * NOTE: This project does NOT ship Tailwind CSS. Only a hand-written subset of
+ * utility classes exists in style.css, so this markup uses dedicated, scoped
+ * `.auth-*` classes (see "AUTH MODAL" section in src/style.css) instead of
+ * Tailwind utilities, which would silently fall back to native browser styles.
  */
 export function renderAuthModalHtml({
   isOpen = false,
   mode = 'signin',
   errorMsg = '',
-  isLoading = false
+  isLoading = false,
+  values = {}
 } = {}) {
   if (!isOpen) return '';
+  const isSignUp = mode === 'signup';
 
   return `
-    <div
-      id="auth-modal-overlay"
-      class="fixed inset-0 z-50 modal-overlay bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div class="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 text-slate-100 overflow-hidden" id="auth-modal-card">
-        <button
-          type="button"
-          id="auth-modal-close-btn"
-          aria-label="Close"
-          class="absolute top-4 right-4 text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800/80 transition-colors cursor-pointer"
-        >
-          ✕
+    <div id="auth-modal-overlay" class="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+      <div class="auth-card" id="auth-modal-card">
+        <button type="button" id="auth-modal-close-btn" class="auth-close-btn" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
 
-        <div class="flex items-center gap-2 mb-2">
-          <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-bold text-sm shadow-md">
-            🌿
-          </div>
-          <h2 class="text-xl font-black tracking-tight text-white">KosherAI</h2>
+        <div class="auth-brand">
+          <img src="/favicon.svg" alt="" class="auth-brand-logo" />
+          <h2 class="auth-title" id="auth-modal-title">KosherAI</h2>
         </div>
-        <p class="text-xs text-slate-400 mb-5">
-          ${mode === 'signin'
-            ? 'Sign in to access your personal shopping trips, scans, and clinical diet records.'
-            : 'Create your account to sync your multi-tenant clinical diet history across devices.'}
-        </p>
+        <span class="auth-badge">🛡️ Multi-Tenant Data Isolation</span>
+        <p class="auth-subtitle">Your dietary history, securely synced across your devices.</p>
 
-        <div class="grid grid-cols-2 p-1 bg-slate-950/80 border border-slate-800 rounded-xl mb-5" role="tablist">
-          <button
-            type="button"
-            id="auth-html-tab-signin"
-            class="py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-              mode === 'signin' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-            }"
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            id="auth-html-tab-signup"
-            class="py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-              mode === 'signup' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-            }"
-          >
-            Create Account
-          </button>
+        <div class="auth-segment" role="tablist" aria-label="Authentication mode">
+          <button type="button" id="auth-html-tab-signin" role="tab" aria-selected="${!isSignUp}" class="auth-segment-btn ${!isSignUp ? 'is-active' : ''}">Sign In</button>
+          <button type="button" id="auth-html-tab-signup" role="tab" aria-selected="${isSignUp}" class="auth-segment-btn ${isSignUp ? 'is-active' : ''}">Create Account</button>
         </div>
 
         ${errorMsg ? `
-          <div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-medium flex items-start gap-2 mb-4" role="alert">
-            <span class="flex-shrink-0 text-rose-400 font-bold">⚠️</span>
-            <span class="flex-1">${errorMsg}</span>
+          <div class="auth-error" role="alert">
+            <span aria-hidden="true">⚠️</span>
+            <span>${escapeAttr(errorMsg)}</span>
           </div>
         ` : ''}
 
-        <form id="auth-modal-form" class="space-y-4">
-          ${mode === 'signup' ? `
-            <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1.5" for="auth-html-name">Full Name</label>
-              <input
-                id="auth-html-name"
-                type="text"
-                autocomplete="name"
-                placeholder="Maria Santos"
-                class="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-slate-700/80 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
-                required
-              />
+        <form id="auth-modal-form" class="auth-form" novalidate>
+          ${isSignUp ? `
+            <div class="auth-field">
+              <label class="auth-label" for="auth-html-name">Full Name</label>
+              <input id="auth-html-name" type="text" class="auth-input" autocomplete="name" placeholder="e.g. Maria Santos" value="${escapeAttr(values.name)}" required />
             </div>
           ` : ''}
 
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1.5" for="auth-html-email">Email Address</label>
-            <input
-              id="auth-html-email"
-              type="email"
-              autocomplete="email"
-              placeholder="patient@example.com"
-              class="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-slate-700/80 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
-              required
-            />
+          <div class="auth-field">
+            <label class="auth-label" for="auth-html-email">Email Address</label>
+            <input id="auth-html-email" type="email" class="auth-input" autocomplete="email" placeholder="patient@example.com" value="${escapeAttr(values.email)}" required />
           </div>
 
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1.5" for="auth-html-password">
-              ${mode === 'signup' ? 'Password (min 6 chars)' : 'Password'}
-            </label>
-            <input
-              id="auth-html-password"
-              type="password"
-              autocomplete="${mode === 'signup' ? 'new-password' : 'current-password'}"
-              placeholder="••••••••"
-              class="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-slate-700/80 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
-              required
-              ${mode === 'signup' ? 'minlength="6"' : ''}
-            />
-          </div>
+          ${passwordField({
+            id: 'auth-html-password',
+            label: isSignUp ? 'Password <span class="auth-label-hint">(min 6 characters)</span>' : 'Password',
+            autocomplete: isSignUp ? 'new-password' : 'current-password',
+            minlength: isSignUp
+          })}
 
-          ${mode === 'signup' ? `
-            <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1.5" for="auth-html-confirm-password">Confirm Password</label>
-              <input
-                id="auth-html-confirm-password"
-                type="password"
-                autocomplete="new-password"
-                placeholder="••••••••"
-                class="w-full min-h-[44px] px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-slate-700/80 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors"
-                required
-              />
-            </div>
-          ` : ''}
+          ${isSignUp ? passwordField({
+            id: 'auth-html-confirm-password',
+            label: 'Confirm Password',
+            autocomplete: 'new-password',
+            minlength: true
+          }) : ''}
 
-          <button
-            type="submit"
-            id="auth-html-submit-btn"
-            ${isLoading ? 'disabled' : ''}
-            class="w-full min-h-[44px] py-3 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-900/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
-          >
-            ${isLoading ? 'Processing...' : (mode === 'signin' ? 'Sign In' : 'Create Account')}
+          <button type="submit" id="auth-html-submit-btn" class="auth-submit-btn" ${isLoading ? 'disabled aria-busy="true"' : ''}>
+            ${isLoading ? '<span class="auth-spinner" aria-hidden="true"></span>' : ''}
+            <span>${isLoading
+              ? (isSignUp ? 'Creating Account…' : 'Signing In…')
+              : (isSignUp ? 'Create Account' : 'Sign In')}</span>
           </button>
         </form>
 
-        <div class="text-center text-xs text-slate-400 mt-5">
-          ${mode === 'signin' ? `
-            Don't have an account?
-            <button type="button" id="auth-html-switch-signup" class="text-emerald-400 hover:underline font-semibold cursor-pointer ml-1">
-              Sign up
-            </button>
-          ` : `
-            Already have an account?
-            <button type="button" id="auth-html-switch-signin" class="text-emerald-400 hover:underline font-semibold cursor-pointer ml-1">
-              Sign in
-            </button>
-          `}
-        </div>
+        <p class="auth-switch">
+          ${isSignUp
+            ? `Already have an account? <button type="button" id="auth-html-switch-signin" class="auth-link-btn">Sign in</button>`
+            : `Don't have an account? <button type="button" id="auth-html-switch-signup" class="auth-link-btn">Sign up</button>`}
+        </p>
+        <p class="auth-privacy">🔒 Encrypted session · Your data is isolated to your account only.</p>
       </div>
     </div>
   `;
