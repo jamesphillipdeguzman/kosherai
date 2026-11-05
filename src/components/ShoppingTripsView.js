@@ -289,3 +289,4 @@ export function renderShoppingTripsView(state = {}) {
     </div>
   `;
 }
+
