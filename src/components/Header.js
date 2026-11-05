@@ -58,12 +58,22 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
               </button>
             </div>
           ` : `
-            <a href="/sign-in" class="px-2.5 py-1 text-xs font-semibold rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" id="header-signin-btn">
-              Sign In
-            </a>
-            <a href="/sign-up" class="px-3 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors hidden sm:inline-flex" id="header-signup-btn">
-              Get Started
-            </a>
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                id="header-signin-btn"
+                class="text-xs font-medium text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                id="header-signup-btn"
+                class="text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm cursor-pointer"
+              >
+                Get Started
+              </button>
+            </div>
           `}
         </div>
 

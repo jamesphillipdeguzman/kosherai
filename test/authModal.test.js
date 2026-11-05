@@ -108,20 +108,28 @@ const headerJsxSource = fs.readFileSync(path.resolve('src/components/Header.jsx'
 
 assert.ok(headerJsxSource.includes("import AuthModal from './AuthModal.jsx'"), 'Header.jsx must import AuthModal');
 assert.ok(headerJsxSource.includes('const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)'), 'Header.jsx must declare isAuthModalOpen state');
+assert.ok(headerJsxSource.includes("const [authMode, setAuthMode] = useState('signin')"), 'Header.jsx must declare authMode state');
+assert.ok(headerJsxSource.includes("openAuthModal('signin')"), 'Header.jsx must trigger openAuthModal("signin") on Sign In click');
+assert.ok(headerJsxSource.includes("openAuthModal('signup')"), 'Header.jsx must trigger openAuthModal("signup") on Get Started click');
 assert.ok(headerJsxSource.includes('id="header-signin-btn"'), 'Header.jsx must render #header-signin-btn when logged out');
+assert.ok(headerJsxSource.includes('id="header-signup-btn"'), 'Header.jsx must render #header-signup-btn when logged out');
 assert.ok(headerJsxSource.includes('id="header-signout-btn"'), 'Header.jsx must render #header-signout-btn when logged in');
 assert.ok(headerJsxSource.includes('<AuthModal'), 'Header.jsx must mount <AuthModal component');
 assert.ok(headerJsxSource.includes('isOpen={isAuthModalOpen}'), 'Header.jsx must bind isOpen={isAuthModalOpen}');
-console.log('  ✅ Header.jsx modal state, auth controls, and child mounting verified.\n');
+assert.ok(headerJsxSource.includes('initialMode={authMode}'), 'Header.jsx must bind initialMode={authMode}');
+console.log('  ✅ Header.jsx modal state, auth controls, mode toggles, and child mounting verified.\n');
 
 // ----------------------------------------------------
 // Test 5: Vanilla Header.js Dynamic Auth State
 // ----------------------------------------------------
 console.log('Test 5: Header.js dynamic auth state rendering');
 
-// 5a. Logged out state renders Sign In button
+// 5a. Logged out state renders distinct Sign In and Get Started buttons
 const loggedOutHeader = renderHeader(true, 'diet', true, 'lid', 'dark', null);
 assert.ok(loggedOutHeader.includes('id="header-signin-btn"'), 'Logged-out Header.js must render #header-signin-btn');
+assert.ok(loggedOutHeader.includes('id="header-signup-btn"'), 'Logged-out Header.js must render #header-signup-btn');
+assert.ok(loggedOutHeader.includes('Sign In'), 'Logged-out Header.js must include "Sign In" text');
+assert.ok(loggedOutHeader.includes('Get Started'), 'Logged-out Header.js must include "Get Started" text');
 assert.ok(!loggedOutHeader.includes('id="header-signout-btn"'), 'Logged-out Header.js must not render #header-signout-btn');
 
 // 5b. Logged in state renders user avatar and Sign Out button
