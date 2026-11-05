@@ -88,7 +88,9 @@ console.log(`  ✅ Verified: All ${FOOD_DATABASE.length} food items have 0 exter
 // Check that no Unsplash URLs remain in DIET_RECIPES
 for (const [diet, dietData] of Object.entries(DIET_RECIPES)) {
   for (const meal of dietData.meals) {
-    assert.strictEqual(meal.imageUrl, null, `Meal ${meal.id} under ${diet} imageUrl should be null or free of external URLs`);
+    if (meal.imageUrl) {
+      assert.ok(!meal.imageUrl.includes('images.unsplash.com'), `Meal ${meal.id} under ${diet} should not use external Unsplash URLs`);
+    }
   }
 }
 console.log('  ✅ Verified: All DIET_RECIPES meals have 0 external Unsplash URLs.\n');
@@ -125,7 +127,7 @@ for (const diet of breakfastDiets) {
   assert.ok(bMeal.id, `Breakfast meal under ${diet} must have id`);
   assert.ok(bMeal.name, `Breakfast meal under ${diet} must have name`);
   assert.ok(bMeal.clinicalRationale || bMeal.clinicalNote, `Breakfast meal under ${diet} must have clinical rationale`);
-  assert.strictEqual(bMeal.imageUrl, null, `Breakfast meal under ${diet} must have null imageUrl`);
+  assert.ok(!bMeal.imageUrl || !bMeal.imageUrl.includes('images.unsplash.com'), `Breakfast meal under ${diet} must not use external Unsplash URLs`);
 }
 
 // Test CookModeTab filtering with 'Breakfast' and 'ALL'

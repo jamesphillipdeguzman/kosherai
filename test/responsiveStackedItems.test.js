@@ -97,3 +97,4 @@ console.log('  ✅ Clean sequential keyboard navigation (Item Name → Qty → U
 console.log('\n=============================================================');
 console.log('🎉 ALL RESPONSIVE STACKED ITEMS & UNIT SELECTOR TESTS PASSED!');
 console.log('=============================================================\n');
+
