@@ -918,10 +918,18 @@ function createReceiptItemRowHtml(item = {}, idx = 0, dietProfile = null, isWetM
         <input type="number" step="0.1" min="0.1" class="table-input item-qty-val" value="${qty}" style="width: 100%; text-align: center;" />
       </td>
 
-      <!-- Tier 2 Col 1b (Mobile) / Col 3 (Desktop): Unit -->
+      <!-- Tier 2 Col 1b (Mobile) / Col 3 (Desktop): Unit Selector Dropdown -->
       <td class="item-cell-unit">
         <label class="mobile-cell-label">Unit</label>
-        <input type="text" class="table-input item-unit-val" value="${escapeHtml(unit)}" placeholder="unit" style="width: 100%; text-align: center;" />
+        <select class="table-input item-unit-val" style="width: 100%; text-align: center; appearance: none; cursor: pointer;">
+          <option value="kg" ${unit === 'kg' ? 'selected' : ''}>kg</option>
+          <option value="g" ${unit === 'g' ? 'selected' : ''}>g</option>
+          <option value="pcs" ${unit === 'pcs' || !unit ? 'selected' : ''}>pcs</option>
+          <option value="pack" ${unit === 'pack' ? 'selected' : ''}>pack</option>
+          <option value="bundle" ${unit === 'bundle' ? 'selected' : ''}>bundle</option>
+          <option value="can" ${unit === 'can' ? 'selected' : ''}>can</option>
+          <option value="bottle" ${unit === 'bottle' ? 'selected' : ''}>bottle</option>
+        </select>
       </td>
 
       <!-- Tier 2 Col 2 (Mobile) / Col 4 (Desktop): Price -->

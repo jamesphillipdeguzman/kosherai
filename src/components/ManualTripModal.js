@@ -58,13 +58,28 @@ export function escapeHtml(str) {
 }
 
 export function createManualItemRowHtml(name = '', qtyUnit = '1 pcs', price = '') {
+  const parsed = parseQuantityAndUnit(qtyUnit);
+  const qty = parsed.quantity || 1;
+  const unit = parsed.unit || 'pcs';
+
   return `
     <tr class="manual-item-row border-b border-slate-200 dark:border-slate-800 transition-colors">
       <td style="padding: 6px 8px;">
         <input type="text" class="table-input manual-item-name w-full" placeholder="e.g. Sayote" value="${escapeHtml(name)}" />
       </td>
-      <td style="padding: 6px 8px; width: 130px;">
-        <input type="text" class="table-input manual-item-qty-unit w-full" placeholder="e.g. 2 pcs or 1 kg" value="${escapeHtml(qtyUnit)}" />
+      <td style="padding: 6px 8px; width: 140px;" class="manual-item-qty-unit">
+        <div style="display: flex; gap: 4px; align-items: center;">
+          <input type="number" step="any" min="0" class="table-input manual-item-qty" placeholder="Qty" value="${qty}" style="width: 55px; text-align: center;" />
+          <select class="table-input manual-item-unit" style="flex: 1; text-align: center; appearance: none; cursor: pointer; padding: 4px 6px;">
+            <option value="kg" ${unit === 'kg' ? 'selected' : ''}>kg</option>
+            <option value="g" ${unit === 'g' ? 'selected' : ''}>g</option>
+            <option value="pcs" ${unit === 'pcs' || !unit ? 'selected' : ''}>pcs</option>
+            <option value="pack" ${unit === 'pack' ? 'selected' : ''}>pack</option>
+            <option value="bundle" ${unit === 'bundle' ? 'selected' : ''}>bundle</option>
+            <option value="can" ${unit === 'can' ? 'selected' : ''}>can</option>
+            <option value="bottle" ${unit === 'bottle' ? 'selected' : ''}>bottle</option>
+          </select>
+        </div>
       </td>
       <td style="padding: 6px 8px; width: 110px;">
         <input type="number" step="0.01" min="0" class="table-input manual-item-price w-full" placeholder="0.00" value="${price !== '' ? price : ''}" style="text-align: right;" />

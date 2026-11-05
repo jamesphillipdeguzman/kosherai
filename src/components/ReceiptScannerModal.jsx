@@ -343,9 +343,11 @@ export default function ReceiptScannerModal({
       prev.map(item => {
         if (item.id !== id) return item;
         const updated = { ...item, [field]: value };
-        if (field === 'quantity' || field === 'unitPrice') {
-          const qty = field === 'quantity' ? Number(value) || 0 : item.quantity;
-          const price = field === 'unitPrice' ? Number(value) || 0 : item.unitPrice;
+        if (field === 'price') updated.unitPrice = value;
+        if (field === 'unitPrice') updated.price = value;
+        if (field === 'quantity' || field === 'unitPrice' || field === 'price') {
+          const qty = field === 'quantity' ? Number(value) || 0 : (Number(item.quantity) || 0);
+          const price = (field === 'unitPrice' || field === 'price') ? Number(value) || 0 : (Number(item.price !== undefined ? item.price : item.unitPrice) || 0);
           updated.totalPrice = Math.round(qty * price * 100) / 100;
         }
         return updated;
@@ -353,8 +355,24 @@ export default function ReceiptScannerModal({
     );
   };
 
+  const updateItem = (idOrIndex, field, value) => {
+    if (typeof idOrIndex === 'number' && items[idOrIndex] && items[idOrIndex].id !== undefined) {
+      handleUpdateItem(items[idOrIndex].id, field, value);
+    } else {
+      handleUpdateItem(idOrIndex, field, value);
+    }
+  };
+
   const handleRemoveItem = (id) => {
     setItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const removeItem = (idOrIndex) => {
+    if (typeof idOrIndex === 'number' && items[idOrIndex] && items[idOrIndex].id !== undefined) {
+      handleRemoveItem(items[idOrIndex].id);
+    } else {
+      handleRemoveItem(idOrIndex);
+    }
   };
 
   // Math Discrepancy Check
@@ -868,111 +886,107 @@ export default function ReceiptScannerModal({
                       </button>
                     </div>
 
-                    <div className="overflow-x-auto -mx-1 sm:mx-0 max-h-56 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-800">
-                      <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[500px]">
-                        <thead>
-                          <tr
-                            className={`border-b ${theme === 'dark'
-                              ? 'bg-slate-900 text-slate-400 border-slate-800'
-                              : 'bg-slate-100 text-slate-600 border-slate-200'
-                              }`}
+                    {/* Desktop Column Header Bar - Hidden on Mobile Screens */}
+                    <div className="hidden sm:grid sm:grid-cols-12 gap-2 px-3 py-2 text-xs font-semibold text-slate-400 bg-slate-900/60 rounded-lg border border-slate-800 mb-2">
+                      <div className="sm:col-span-4">Item Name</div>
+                      <div className="sm:col-span-3 text-center">Qty &amp; Unit</div>
+                      <div className="sm:col-span-2 text-right">Price (₱)</div>
+                      <div className="sm:col-span-2 text-right">Line Total</div>
+                      <div className="sm:col-span-1 text-center" aria-label="Actions"></div>
+                    </div>
+
+                    {/* Items List: Stacked 2-Tier Cards on Mobile, 12-Col Grid on Desktop */}
+                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                      {items.length === 0 ? (
+                        <div className="py-6 text-center text-xs text-slate-500 rounded-xl border border-dashed border-slate-800">
+                          No items extracted yet. Click &quot;Add Item Row&quot; to add manually.
+                        </div>
+                      ) : (
+                        items.map((item, index) => (
+                          <div
+                            key={item.id || index}
+                            className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-2 sm:space-y-0 sm:bg-slate-900/30 sm:p-2 sm:border-slate-800/80 sm:grid sm:grid-cols-12 sm:gap-2 sm:items-center transition-colors hover:border-slate-700"
                           >
-                            <th className="py-2.5 px-3 font-semibold">Item Name</th>
-                            <th className="py-2.5 px-2 font-semibold w-20">Qty</th>
-                            <th className="py-2.5 px-2 font-semibold w-20">Unit</th>
-                            <th className="py-2.5 px-2 font-semibold w-24">Price (₱)</th>
-                            <th className="py-2.5 px-2 font-semibold w-24">Line Total</th>
-                            <th className="py-2.5 px-2 font-semibold w-10 text-center" aria-label="Actions"></th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                          {items.length === 0 ? (
-                            <tr>
-                              <td colSpan={6} className="py-4 text-center text-xs text-slate-500">
-                                No items extracted yet. Click &quot;Add Item Row&quot; to add manually.
-                              </td>
-                            </tr>
-                          ) : (
-                            items.map(item => (
-                              <tr key={item.id} className="hover:bg-slate-500/5">
-                                <td className="py-2 px-2">
-                                  <input
-                                    type="text"
-                                    required
-                                    placeholder="Item name"
-                                    value={item.name}
-                                    onChange={e => handleUpdateItem(item.id, 'name', e.target.value)}
-                                    className={`w-full min-h-[36px] px-2.5 py-1.5 text-xs rounded border outline-none ${theme === 'dark'
-                                      ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
-                                      : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
-                                      }`}
-                                  />
-                                </td>
-                                <td className="py-2 px-1">
-                                  <input
-                                    type="number"
-                                    step="0.1"
-                                    min="0.1"
-                                    value={item.quantity}
-                                    onChange={e => handleUpdateItem(item.id, 'quantity', e.target.value)}
-                                    className={`w-full min-h-[36px] px-2 py-1.5 text-xs text-center rounded border outline-none font-mono ${theme === 'dark'
-                                      ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
-                                      : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
-                                      }`}
-                                  />
-                                </td>
-                                <td className="py-2 px-1">
-                                  <input
-                                    type="text"
-                                    value={item.unit}
-                                    onChange={e => handleUpdateItem(item.id, 'unit', e.target.value)}
-                                    className={`w-full min-h-[36px] px-2 py-1.5 text-xs text-center rounded border outline-none ${theme === 'dark'
-                                      ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
-                                      : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
-                                      }`}
-                                  />
-                                </td>
-                                <td className="py-2 px-1">
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={item.unitPrice}
-                                    onChange={e => handleUpdateItem(item.id, 'unitPrice', e.target.value)}
-                                    className={`w-full min-h-[36px] px-2 py-1.5 text-xs text-right rounded border outline-none font-mono ${theme === 'dark'
-                                      ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
-                                      : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
-                                      }`}
-                                  />
-                                </td>
-                                <td className="py-2 px-1">
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={item.totalPrice}
-                                    onChange={e => handleUpdateItem(item.id, 'totalPrice', e.target.value)}
-                                    className={`w-full min-h-[36px] px-2 py-1.5 text-xs text-right rounded border outline-none font-mono font-semibold ${theme === 'dark'
-                                      ? 'bg-slate-900 text-white border-slate-700 focus:border-cyan-500'
-                                      : 'bg-white text-slate-900 border-slate-300 focus:border-teal-500'
-                                      }`}
-                                  />
-                                </td>
-                                <td className="py-2 px-1 text-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveItem(item.id)}
-                                    className="p-1 text-slate-400 hover:text-red-500 transition-colors"
-                                    title="Remove item"
-                                  >
-                                    ✕
-                                  </button>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
+                            {/* Tier 1: Full-width Item Name with delete button */}
+                            <div className="flex items-center gap-2 sm:col-span-4">
+                              <input
+                                type="text"
+                                placeholder="Item Name (e.g., Sayote, Pork Liempo)"
+                                value={item.name}
+                                onChange={(e) => handleUpdateItem(item.id, 'name', e.target.value)}
+                                className="w-full bg-slate-950/80 border border-slate-700/80 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-teal-500 placeholder-slate-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(item.id)}
+                                className="sm:hidden p-2 text-slate-400 hover:text-rose-400 rounded-lg bg-slate-800/50 flex-shrink-0 transition-colors cursor-pointer"
+                                title="Remove Item"
+                                aria-label="Remove Item"
+                              >
+                                ✕
+                              </button>
+                            </div>
+
+                            {/* Tier 2: 3-column cluster for numeric values */}
+                            <div className="grid grid-cols-12 gap-2 sm:contents">
+                              {/* Qty & Unit selector grouped together (5 cols on mobile, 3 cols on desktop) */}
+                              <div className="col-span-5 flex items-center gap-1 sm:col-span-3">
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  placeholder="Qty"
+                                  value={item.quantity}
+                                  onChange={(e) => handleUpdateItem(item.id, 'quantity', e.target.value)}
+                                  className="w-full min-w-0 bg-slate-950/80 border border-slate-700/80 rounded-lg px-2 py-2 text-sm text-center text-slate-100 font-mono focus:outline-none focus:border-teal-500"
+                                />
+                                <select
+                                  value={item.unit || 'kg'}
+                                  onChange={(e) => handleUpdateItem(item.id, 'unit', e.target.value)}
+                                  className="bg-slate-950/80 border border-slate-700/80 rounded-lg px-2 py-2 text-xs text-slate-100 appearance-none focus:outline-none focus:border-teal-500 cursor-pointer"
+                                >
+                                  <option value="kg">kg</option>
+                                  <option value="g">g</option>
+                                  <option value="pcs">pcs</option>
+                                  <option value="pack">pack</option>
+                                  <option value="bundle">bundle</option>
+                                  <option value="can">can</option>
+                                  <option value="bottle">bottle</option>
+                                </select>
+                              </div>
+
+                              {/* Price Input (4 cols on mobile, 2 cols on desktop) */}
+                              <div className="col-span-4 sm:col-span-2">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="₱ Price"
+                                  value={item.price !== undefined ? item.price : (item.unitPrice !== undefined ? item.unitPrice : '')}
+                                  onChange={(e) => handleUpdateItem(item.id, 'price', e.target.value)}
+                                  className="w-full bg-slate-950/80 border border-slate-700/80 rounded-lg px-2 py-2 text-sm text-right text-slate-100 font-mono focus:outline-none focus:border-teal-500 placeholder-slate-500"
+                                />
+                              </div>
+
+                              {/* Line Total Badge (3 cols on mobile, 2 cols on desktop) */}
+                              <div className="col-span-3 sm:col-span-2 flex items-center justify-end px-2 py-2 bg-slate-950/40 rounded-lg border border-slate-800/80 font-mono text-xs text-emerald-400 font-semibold truncate">
+                                ₱{(Number(item.quantity || 0) * Number(item.price !== undefined ? item.price : (item.unitPrice || 0))).toFixed(2)}
+                              </div>
+
+                              {/* Desktop-only delete button */}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(item.id)}
+                                className="hidden sm:flex sm:col-span-1 items-center justify-center p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                                title="Remove Item"
+                                aria-label="Remove Item"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
 

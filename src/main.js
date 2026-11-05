@@ -1425,6 +1425,7 @@ Cracked black pepper`;
     if (!tbody) return;
     tbody.querySelectorAll('tr').forEach(row => {
       const qtyInput = row.querySelector('.item-qty-val');
+      const unitSelect = row.querySelector('.item-unit-val');
       const priceInput = row.querySelector('.item-price-val');
       const totalInput = row.querySelector('.item-total-val');
 
@@ -1438,10 +1439,16 @@ Cracked black pepper`;
 
       if (qtyInput && !qtyInput._hasCalcListener) {
         qtyInput.addEventListener('input', handleCalc);
+        qtyInput.addEventListener('change', handleCalc);
         qtyInput._hasCalcListener = true;
+      }
+      if (unitSelect && !unitSelect._hasCalcListener) {
+        unitSelect.addEventListener('change', handleCalc);
+        unitSelect._hasCalcListener = true;
       }
       if (priceInput && !priceInput._hasCalcListener) {
         priceInput.addEventListener('input', handleCalc);
+        priceInput.addEventListener('change', handleCalc);
         priceInput._hasCalcListener = true;
       }
     });
@@ -1721,17 +1728,33 @@ Cracked black pepper`;
       const items = [];
       document.querySelectorAll('#manual-items-tbody tr').forEach((row, idx) => {
         const name = row.querySelector('.manual-item-name')?.value?.trim();
-        const qtyUnitStr = row.querySelector('.manual-item-qty-unit')?.value?.trim() || '1 pcs';
+        const qtyVal = parseFloat(row.querySelector('.manual-item-qty')?.value);
+        const unitVal = row.querySelector('.manual-item-unit')?.value;
+        const qtyUnitInput = row.querySelector('.manual-item-qty-unit input:not(.manual-item-qty)') || row.querySelector('input.manual-item-qty-unit');
+        const qtyUnitStr = qtyUnitInput?.value?.trim() || `${!isNaN(qtyVal) ? qtyVal : 1} ${unitVal || 'pcs'}`;
         const linePrice = parseFloat(row.querySelector('.manual-item-price')?.value || 0);
 
         if (name) {
-          const { quantity, unit, weightGrams } = parseQuantityAndUnit(qtyUnitStr);
+          let quantity = !isNaN(qtyVal) ? qtyVal : 1;
+          let unit = unitVal || 'pcs';
+          let weightGrams = 0;
+
+          if (qtyUnitInput?.value) {
+            const parsed = parseQuantityAndUnit(qtyUnitInput.value);
+            quantity = parsed.quantity;
+            unit = parsed.unit;
+            weightGrams = parsed.weightGrams;
+          } else {
+            if (unit === 'kg') weightGrams = Math.round(quantity * 1000);
+            else if (unit === 'g') weightGrams = Math.round(quantity);
+          }
+
           const unitPrice = quantity > 0 ? parseFloat((linePrice / quantity).toFixed(2)) : linePrice;
 
           items.push({
             id: `item_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
             name,
-            rawReceiptText: `${name} (${qtyUnitStr})`.trim(),
+            rawReceiptText: `${name} (${quantity} ${unit})`.trim(),
             quantity,
             unit,
             unitPrice,

@@ -5149,7 +5149,8 @@ html.dark .venue-toggle-btn:hover {
     border-right-width: 0 !important;
     text-align: center !important;
   }
-  .receipt-item-row .item-cell-unit input {
+  .receipt-item-row .item-cell-unit input,
+  .receipt-item-row .item-cell-unit select {
     border-top-left-radius: 0 !important;
     border-bottom-left-radius: 0 !important;
     text-align: center !important;
