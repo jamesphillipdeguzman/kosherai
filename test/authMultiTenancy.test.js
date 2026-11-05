@@ -60,6 +60,13 @@ async function runTests() {
   const adminId = adminRows[0].id;
   console.log(`  ✅ usr_primary_admin verified (ID: ${adminId})`);
 
+  // Create an active session token for Admin
+  const sessionTokenAdmin = `token_admin_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  await sql`
+    INSERT INTO "session" (id, "userId", token, "expiresAt", "createdAt", "updatedAt")
+    VALUES (${`sess_admin_${Date.now()}`}, ${adminId}, ${sessionTokenAdmin}, NOW() + INTERVAL '1 day', NOW(), NOW());
+  `;
+
   // ----------------------------------------------------
   // Test 2: Provisioning Secondary Tenant User B
   // ----------------------------------------------------
@@ -129,7 +136,7 @@ async function runTests() {
 
   // Query trips for Admin
   const { req: adminTripsReq, res: adminTripsRes, getData: getAdminTrips } = createMockReqRes(
-    'GET', null, { 'x-user-id': adminId }, '/api/trips'
+    'GET', null, { 'authorization': `Bearer ${sessionTokenAdmin}` }, '/api/trips'
   );
   await tripsApiHandler(adminTripsReq, adminTripsRes);
   const adminTrips = getAdminTrips();
@@ -234,7 +241,7 @@ async function runTests() {
 
   // Re-fetch Admin trips
   const { req: adminTripsCheckReq, res: adminTripsCheckRes, getData: getAdminTripsCheck } = createMockReqRes(
-    'GET', null, { 'x-user-id': adminId }, '/api/trips'
+    'GET', null, { 'authorization': `Bearer ${sessionTokenAdmin}` }, '/api/trips'
   );
   await tripsApiHandler(adminTripsCheckReq, adminTripsCheckRes);
   const adminTripsCheck = getAdminTripsCheck();
@@ -272,13 +279,26 @@ async function runTests() {
 
   console.log('  ✅ Mobile session verification passed without database collisions.');
 
-  // Cleanup User B test records from Neon
+  // ----------------------------------------------------
+  // Test 8: Security Verification - Forged x-user-id Rejected
+  // ----------------------------------------------------
+  console.log('\nTest 8: Security Check - Forged x-user-id Rejected Without Valid Session');
+  const { req: forgedReq, res: forgedRes, getStatus: getForgedStatus, getData: getForgedData } = createMockReqRes(
+    'GET', null, { 'x-user-id': adminId }, '/api/trips'
+  );
+  await tripsApiHandler(forgedReq, forgedRes);
+  assert.strictEqual(getForgedStatus(), 401, 'Unauthenticated request with forged x-user-id must return 401');
+  const forgedResult = getForgedData();
+  assert.strictEqual(forgedResult?.error, 'UNAUTHORIZED', 'Response must be UNAUTHORIZED');
+  console.log('  ✅ Security verified: Unauthenticated request with forged x-user-id received 401 UNAUTHORIZED.');
+
+  // Cleanup test records from Neon
   await sql`DELETE FROM grocery_purchases WHERE user_id = ${userBId};`;
   await sql`DELETE FROM shopping_trips WHERE user_id = ${userBId};`;
   await sql`DELETE FROM scans WHERE user_id = ${userBId};`;
   await sql`DELETE FROM food_waste_logs WHERE user_id = ${userBId};`;
   await sql`DELETE FROM recipe_comments WHERE user_id = ${userBId};`;
-  await sql`DELETE FROM "session" WHERE "userId" = ${userBId};`;
+  await sql`DELETE FROM "session" WHERE "userId" = ${userBId} OR token = ${sessionTokenAdmin};`;
   await sql`DELETE FROM "user" WHERE id = ${userBId};`;
   await sql`DELETE FROM users WHERE id = ${userBId};`;
 

@@ -219,7 +219,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Extract authenticated tenant user
+    // Extract authenticated tenant user (strictly verified via Better Auth session)
     let user = null;
     try {
       const { getAuthenticatedUser } = await import('../lib/auth.ts');
@@ -227,9 +227,7 @@ export default async function handler(req, res) {
     } catch (_) {}
 
     const query = parseQueryParams(req);
-    const bodyForAuth = method === 'POST' ? await parseRequestBody(req) : {};
-    const explicitUserId = req.headers?.['x-user-id'] || query.userId || query.user_id || bodyForAuth.userId || bodyForAuth.user_id;
-    const userId = user?.id || explicitUserId || (process.env.STRICT_AUTH === 'true' ? null : 'usr_primary_admin');
+    const userId = user?.id;
 
     if (!userId) {
       return sendJson(res, 401, {

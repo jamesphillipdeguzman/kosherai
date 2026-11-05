@@ -14,6 +14,11 @@ const appBaseUrl =
   process.env.NEXT_PUBLIC_APP_URL ||
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:5173');
 
+const betterAuthSecret = process.env.BETTER_AUTH_SECRET;
+if (!betterAuthSecret) {
+  throw new Error('[Better Auth Config Error] BETTER_AUTH_SECRET environment variable is missing.');
+}
+
 /**
  * Server Authentication Instance
  * Configures Email/Password, optional Google OAuth, and handles Better Auth sessions.
@@ -30,7 +35,7 @@ export const auth = betterAuth({
     'http://localhost:3000',
     ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : [])
   ],
-  secret: process.env.BETTER_AUTH_SECRET || 'c7f92e41a89b3d047e1f6a5b8c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d',
+  secret: betterAuthSecret,
   emailAndPassword: {
     enabled: true,
     autoSignIn: true
@@ -139,15 +144,15 @@ export async function getAuthenticatedUser(reqOrHeaders: any) {
         }
       }
 
-      // Explicit tenant header check (for serverless/worker invocation or admin impersonation)
-      const tenantHeader = fetchHeaders.get('x-user-id');
-      if (tenantHeader && tenantHeader.trim()) {
-        const tenantId = tenantHeader.trim();
-        // Verify tenant exists in Neon user table
-        if (databaseUrl) {
+      // Internal service-to-service calls: only honored if explicitly authorized with valid INTERNAL_SERVICE_KEY
+      const internalKey = process.env.INTERNAL_SERVICE_KEY;
+      const internalSecret = fetchHeaders.get('x-internal-secret') || fetchHeaders.get('x-service-key');
+      if (internalKey && internalSecret && internalSecret === internalKey) {
+        const tenantHeader = fetchHeaders.get('x-user-id');
+        if (tenantHeader && tenantHeader.trim() && databaseUrl) {
           try {
             const sql = neon(databaseUrl);
-            const userRows = await sql`SELECT id, email, name FROM "user" WHERE id = ${tenantId} LIMIT 1`;
+            const userRows = await sql`SELECT id, email, name FROM "user" WHERE id = ${tenantHeader.trim()} LIMIT 1`;
             if (userRows.length > 0) {
               return {
                 id: userRows[0].id,
@@ -156,11 +161,10 @@ export async function getAuthenticatedUser(reqOrHeaders: any) {
                 session: null
               };
             }
-          } catch (e) {
+          } catch (_) {
             // fallback
           }
         }
-        return { id: tenantId, email: null, name: 'Tenant User', session: null };
       }
     }
 

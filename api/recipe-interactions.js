@@ -326,7 +326,7 @@ export default async function handler(req, res) {
           authUser = await getAuthenticatedUser(req);
         } catch (_) {}
 
-        const userId = authUser?.id || req.headers?.['x-user-id'] || body.userId || (process.env.STRICT_AUTH === 'true' ? null : 'usr_primary_admin');
+        const userId = authUser?.id || null;
         const userName = authUser?.name || (body.userName || 'Caregiver / Cook').trim() || 'Caregiver / Cook';
 
         const rows = await sql`
