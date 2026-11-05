@@ -96,7 +96,7 @@ assert.ok(authModalSource.includes('kosherai_user_session'), 'AuthModal must per
 assert.ok(authModalSource.includes('kosherai_current_user'), 'AuthModal must persist kosherai_current_user to localStorage');
 assert.ok(authModalSource.includes('kosherai:auth-changed'), 'AuthModal must dispatch kosherai:auth-changed event');
 assert.ok(authModalSource.includes('kosherai:sync-data'), 'AuthModal must dispatch kosherai:sync-data event');
-assert.ok(authModalSource.includes('bg-slate-900'), 'AuthModal card must use bg-slate-900 dark slate theme');
+assert.ok(authModalSource.includes('bg-[#0b1329]') || authModalSource.includes('bg-slate-900'), 'AuthModal card must use dark theme (bg-[#0b1329] or bg-slate-900)');
 assert.ok(authModalSource.includes('border-slate-800'), 'AuthModal card must use border-slate-800');
 console.log('  ✅ AuthModal.jsx component props, persistence, and dark slate styling verified.\n');
 

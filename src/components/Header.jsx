@@ -202,7 +202,7 @@ export function Header({
                     setAuthInitialMode('signin');
                     setIsAuthModalOpen(true);
                   }}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                  className="px-3.5 py-1.5 text-xs font-medium text-slate-200 hover:text-white bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-lg transition-all cursor-pointer"
                 >
                   Sign In
                 </button>
@@ -213,7 +213,7 @@ export function Header({
                     setAuthInitialMode('signup');
                     setIsAuthModalOpen(true);
                   }}
-                  className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors shadow-sm cursor-pointer"
+                  className="px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-all shadow-sm cursor-pointer"
                 >
                   Get Started
                 </button>

@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import { isValidEmail, authenticateUser, renderAuthModalHtml } from './AuthModal.js';
-
-export { isValidEmail, authenticateUser, renderAuthModalHtml };
+export { renderAuthModalHtml, authenticateUser, isValidEmail } from './AuthModal.js';
 
 export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onAuthSuccess, onSuccess }) {
   const [mode, setMode] = useState(initialMode); // 'signin' | 'signup'
@@ -32,26 +30,16 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
 
     setIsLoading(true);
     try {
-      // Primary endpoint as specified, with graceful email sub-path fallback
-      let endpoint = mode === 'signin' ? '/api/auth/sign-in' : '/api/auth/sign-up';
-      let res = await fetch(endpoint, {
+      const endpoint = mode === 'signin' ? '/api/auth/sign-in' : '/api/auth/sign-up';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
 
-      if (!res.ok && res.status === 404) {
-        endpoint = mode === 'signin' ? '/api/auth/sign-in/email' : '/api/auth/sign-up/email';
-        res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
-        });
-      }
-
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || (mode === 'signin' ? 'Failed to sign in' : 'Failed to register'));
+        throw new Error(errorData.message || (mode === 'signin' ? 'Invalid credentials' : 'Registration failed'));
       }
 
       const user = await res.json();
@@ -69,7 +57,7 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
       if (onSuccess) onSuccess(user);
       onClose();
     } catch (err) {
-      setErrorMsg(err.message || 'An unexpected error occurred. Please try again.');
+      setErrorMsg(err.message || 'Unable to authenticate. Please check your details.');
     } finally {
       setIsLoading(false);
     }
@@ -77,51 +65,46 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm transition-opacity modal-overlay"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm modal-overlay"
       onClick={onClose}
     >
       <div 
-        className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden p-6 text-slate-100 animate-in fade-in zoom-in-95 duration-200"
+        className="relative w-full max-w-md bg-[#0b1329] border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-7 text-slate-100 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close Button */}
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
-          aria-label="Close"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-
-        {/* Header Title */}
-        <div className="mb-6">
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium mb-3">
-            <span>🛡️</span> Multi-Tenant Isolation
+        {/* Top Header Row with Title & Close Button */}
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-medium mb-2">
+              <span>🛡️</span> Multi-Tenant Data Isolation
+            </div>
+            <h2 className="text-xl font-bold tracking-tight text-white">
+              {mode === 'signin' ? 'Sign In to KosherAI' : 'Create an Account'}
+            </h2>
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+              {mode === 'signin'
+                ? 'Access your personal shopping trips, scans, and diet tracking.'
+                : 'Get started with personal food cost analysis and receipt tracking.'}
+            </p>
           </div>
-          <h2 className="text-xl font-bold tracking-tight text-white">
-            {mode === 'signin' ? 'Welcome Back' : 'Create an Account'}
-          </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            {mode === 'signin' 
-              ? 'Sign in to access your synchronized trips, scans, and LID study records.' 
-              : 'Register to start tracking personal food costs, receipts, and nutrition data.'}
-          </p>
-        </div>
-
-        {/* Tab Toggle */}
-        <div className="grid grid-cols-2 p-1 mb-5 bg-slate-950/60 rounded-xl border border-slate-800" role="tablist">
           <button
             type="button"
-            id="auth-tab-signin"
-            role="tab"
-            aria-selected={mode === 'signin'}
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-800/60 hover:bg-slate-700/80 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Mode Toggle Switch (Matches Supermarket / Wet Market pill style) */}
+        <div className="flex p-1 mb-5 bg-[#070d1f] rounded-xl border border-slate-800">
+          <button
+            type="button"
             onClick={() => { setMode('signin'); setErrorMsg(''); }}
-            className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-              mode === 'signin' 
-                ? 'bg-emerald-600 text-white shadow-sm' 
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              mode === 'signin'
+                ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -129,13 +112,10 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
           </button>
           <button
             type="button"
-            id="auth-tab-signup"
-            role="tab"
-            aria-selected={mode === 'signup'}
             onClick={() => { setMode('signup'); setErrorMsg(''); }}
-            className={`py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-              mode === 'signup' 
-                ? 'bg-emerald-600 text-white shadow-sm' 
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+              mode === 'signup'
+                ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -143,19 +123,19 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
           </button>
         </div>
 
-        {/* Error Alert */}
+        {/* Error Feedback */}
         {errorMsg && (
-          <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-300 text-xs flex items-center gap-2" role="alert">
+          <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center gap-2">
             <span>⚠️</span>
             <span>{errorMsg}</span>
           </div>
         )}
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Form Inputs */}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
           {mode === 'signup' && (
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+            <div className="flex flex-col gap-1 text-left">
+              <label className="text-xs font-medium text-slate-300">
                 Full Name
               </label>
               <input
@@ -165,13 +145,13 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
                 value={formData.name}
                 onChange={handleChange}
                 placeholder="e.g. Maria Santos"
-                className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                className="w-full px-3.5 py-2.5 bg-[#060b17] border border-slate-700/80 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
               />
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1.5">
+          <div className="flex flex-col gap-1 text-left">
+            <label className="text-xs font-medium text-slate-300">
               Email Address
             </label>
             <input
@@ -181,12 +161,12 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
               value={formData.email}
               onChange={handleChange}
               placeholder="patient@example.com"
-              className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+              className="w-full px-3.5 py-2.5 bg-[#060b17] border border-slate-700/80 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1.5">
+          <div className="flex flex-col gap-1 text-left">
+            <label className="text-xs font-medium text-slate-300">
               Password
             </label>
             <input
@@ -197,13 +177,13 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
               value={formData.password}
               onChange={handleChange}
               placeholder="••••••••"
-              className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+              className="w-full px-3.5 py-2.5 bg-[#060b17] border border-slate-700/80 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
             />
           </div>
 
           {mode === 'signup' && (
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+            <div className="flex flex-col gap-1 text-left">
+              <label className="text-xs font-medium text-slate-300">
                 Confirm Password
               </label>
               <input
@@ -214,7 +194,7 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 placeholder="••••••••"
-                className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                className="w-full px-3.5 py-2.5 bg-[#060b17] border border-slate-700/80 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
               />
             </div>
           )}
@@ -222,7 +202,7 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full mt-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full mt-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             {isLoading && (
               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -231,7 +211,7 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
           </button>
         </form>
 
-        {/* Footer Switch */}
+        {/* Mode Footer Switch */}
         <div className="mt-5 text-center">
           <p className="text-xs text-slate-400">
             {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}
