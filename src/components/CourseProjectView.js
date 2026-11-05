@@ -13,6 +13,7 @@ import {
   getMealPlans,
   getSixWeekComparison,
   saveShoppingTrip,
+  updateShoppingTrip,
   deleteShoppingTrip,
   saveStandaloneExpense,
   deleteExpense,
@@ -63,7 +64,8 @@ import { getDietProfile } from '../data/dietProfiles.js';
 import { DIET_RECIPES } from '../data/dietRecipes.js';
 import lidRecipes from '../data/lidRecipes.json' with { type: 'json' };
 import { renderManualTripModal } from './ManualTripModal.js';
-export { renderManualTripModal };
+import { renderShoppingTripsView, renderEditTripModal, renderTripCard } from './ShoppingTripsView.js';
+export { renderManualTripModal, renderShoppingTripsView, renderEditTripModal, renderTripCard, updateShoppingTrip };
 
 export function renderCourseProjectView(state) {
   const activeSubTab = state.courseSubTab || 'dashboard'; // 'dashboard' | 'trips' | 'groceries' | 'waste' | 'mealplan' | 'export'
@@ -150,6 +152,7 @@ export function renderCourseProjectView(state) {
       <!-- Modals rendered conditionally -->
       ${state.receiptModalOpen ? renderReceiptScanModal(state) : ''}
       ${state.manualTripModalOpen ? renderManualTripModal(state) : ''}
+      ${state.editTripModalOpen ? renderEditTripModal(state) : ''}
       ${state.wasteModalOpen ? renderFoodWasteModal(state) : ''}
       ${state.mealPlanModalOpen ? renderMealPlanModal(state) : ''}
       ${state.configModalOpen ? renderProjectConfigModal(config) : ''}
@@ -395,130 +398,10 @@ function renderDashboardTab(comparison, config, state) {
 // =========================================================================
 // 2. SHOPPING TRIPS & RECEIPT SCANNER TAB
 // =========================================================================
+// 2. SHOPPING TRIPS & RECEIPTS TAB
+// =========================================================================
 function renderShoppingTripsTab(state) {
-  const trips = getShoppingTrips();
-  const config = getCourseConfig();
-
-  return `
-    <div class="trips-view-container">
-      <!-- Actions Bar -->
-      <div class="trips-action-bar">
-        <div>
-          <h2 class="section-title">Shopping Trips & Supermarket Receipts</h2>
-          <p class="section-desc">
-            Record shopping runs, scan receipts with AI document OCR, and input the <strong>whole-grocery physical scale weight</strong>.
-          </p>
-        </div>
-        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-          <button class="btn-primary" id="open-receipt-scanner-btn">
-            📷 Scan Food
-          </button>
-          <button class="btn-secondary" id="manual-sync-trips-btn" title="Synchronize local IndexedDB trips to Neon PostgreSQL">
-            ☁️ Sync Neon
-          </button>
-          <button class="btn-secondary" id="restore-neon-btn" title="Pull and restore latest data from Neon PostgreSQL cloud">
-            ☁️ Restore from Neon
-          </button>
-        </div>
-      </div>
-
-      <!-- Quick Guidance Callout -->
-      <div class="guidance-callout">
-        <span class="callout-icon">⚖️</span>
-        <div>
-          <strong>Whole-Grocery Scale Measurement:</strong>
-          Upon arriving home from grocery shopping, weigh the entire food haul together using a kitchen scale or luggage scale (in kg). 
-          This provides the physical mass baseline for food consumption and waste ratio analysis.
-        </div>
-      </div>
-
-      <!-- Trips List -->
-      ${trips.length === 0 ? `
-        <div class="empty-state-card">
-          <div class="empty-icon">🧾</div>
-          <h3>No Shopping Trips Recorded Yet</h3>
-          <p>Scan your first grocery receipt from your camera/phone or add a manual trip record for Week 1 baseline.</p>
-          <div style="display: flex; gap: 10px; justify-content: center; margin-top: 14px;">
-            <button class="btn-primary" id="empty-scan-btn">📷 Scan Food</button>
-          </div>
-        </div>
-      ` : `
-        <div class="trips-grid">
-          ${trips.map(trip => {
-    const items = getGroceryItems(trip.id);
-    return `
-              <div class="trip-card" data-trip-id="${trip.id}">
-                <div class="trip-card-header">
-                  <div style="display: flex; align-items: center; gap: 10px;">
-                    <span class="trip-store-icon">${trip.tripType.includes('Wet') ? '🐟' : '🛒'}</span>
-                    <div>
-                      <div class="trip-store-name">${escapeHtml(trip.storeName)}</div>
-                      <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 2px;">
-                        <span class="trip-date-pill">Week ${trip.projectWeek} • ${trip.date}</span>
-                        ${trip.synced === false ? `
-                          <span class="trip-sync-badge offline" title="Saved locally in IndexedDB; will auto-sync to Neon when online">
-                            ☁️⏳ Offline
-                          </span>
-                        ` : `
-                          <span class="trip-sync-badge synced" title="Synced with Neon PostgreSQL cloud database">
-                            ☁️✓ Neon Synced
-                          </span>
-                        `}
-                      </div>
-                    </div>
-                  </div>
-                  <div class="trip-price-tag">₱${formatNumber(trip.totalAmountPaid)}</div>
-                </div>
-
-                <div class="trip-metrics-row">
-                  <div class="trip-metric">
-                    <span class="metric-label">Whole Scale Weight</span>
-                    <span class="metric-val text-cyan">${trip.totalScaleWeightKg > 0 ? `${trip.totalScaleWeightKg.toFixed(2)} kg` : 'Not Weighed'}</span>
-                  </div>
-                  <div class="trip-metric">
-                    <span class="metric-label">Items Count</span>
-                    <span class="metric-val">${items.length || trip.itemsCount || 0} items</span>
-                  </div>
-                  <div class="trip-metric">
-                    <span class="metric-label">Trip Type</span>
-                    <span class="metric-val">${escapeHtml(trip.tripType)}</span>
-                  </div>
-                </div>
-
-                ${trip.receiptImageUrl ? `
-                  <div class="trip-receipt-preview">
-                    <img src="${trip.receiptImageUrl}" alt="Receipt image" loading="lazy" />
-                    <span class="receipt-attached-badge">Receipt Attached</span>
-                  </div>
-                ` : ''}
-
-                <!-- Items Preview -->
-                ${items.length > 0 ? `
-                  <div class="trip-items-preview">
-                    <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">Extracted Items:</div>
-                    <div class="trip-items-chips">
-                      ${items.slice(0, 5).map(i => `
-                        <span class="item-mini-chip status-${(i.lidStatus || 'SAFE').toLowerCase()}">
-                          ${escapeHtml(i.name)} (${i.quantity} ${i.unit})
-                        </span>
-                      `).join('')}
-                      ${items.length > 5 ? `<span class="item-mini-chip" style="background: var(--bg-card-hover);">+${items.length - 5} more</span>` : ''}
-                    </div>
-                  </div>
-                ` : ''}
-
-                <div class="trip-card-footer">
-                  <button class="btn-text delete-trip-btn" data-delete-trip="${trip.id}">
-                    🗑️ Delete Trip
-                  </button>
-                </div>
-              </div>
-            `;
-  }).join('')}
-        </div>
-      `}
-    </div>
-  `;
+  return renderShoppingTripsView(state);
 }
 
 // =========================================================================

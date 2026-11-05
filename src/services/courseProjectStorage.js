@@ -711,6 +711,152 @@ export async function deleteShoppingTrip(tripId) {
 }
 
 /**
+ * Updates an existing shopping trip's metadata (storeName, tripType, totalAmountPaid, totalScaleWeightKg, date, notes).
+ * Updates local item in kosherai_course_trips, triggers UI store refresh, and syncs via PATCH to /api/trips with credentials: "include".
+ */
+export async function updateShoppingTrip(tripId, updatedFields = {}) {
+  try {
+    const trips = getShoppingTrips();
+    const index = trips.findIndex(t => t.id === tripId);
+    if (index === -1) {
+      console.warn(`[Storage] Trip ${tripId} not found for update`);
+      return null;
+    }
+
+    const existing = trips[index];
+    const config = getCourseConfig();
+
+    const date = updatedFields.date || existing.date;
+    const projectWeek = updatedFields.projectWeek !== undefined
+      ? Number(updatedFields.projectWeek)
+      : (updatedFields.date ? getProjectWeekForDate(date, config.startDate) : existing.projectWeek);
+
+    const storeName = updatedFields.storeName !== undefined
+      ? updatedFields.storeName
+      : (updatedFields.store_name !== undefined ? updatedFields.store_name : existing.storeName);
+
+    const tripType = updatedFields.tripType !== undefined
+      ? updatedFields.tripType
+      : (updatedFields.trip_type !== undefined ? updatedFields.trip_type : (existing.tripType || existing.trip_type || 'Supermarket'));
+
+    const totalAmountPaid = updatedFields.totalAmountPaid !== undefined
+      ? Number(updatedFields.totalAmountPaid)
+      : (updatedFields.total_amount_paid !== undefined ? Number(updatedFields.total_amount_paid) : Number(existing.totalAmountPaid || 0));
+
+    const totalScaleWeightKg = updatedFields.totalScaleWeightKg !== undefined
+      ? Number(updatedFields.totalScaleWeightKg)
+      : (updatedFields.total_scale_weight_kg !== undefined ? Number(updatedFields.total_scale_weight_kg) : Number(existing.totalScaleWeightKg || 0));
+
+    const notes = updatedFields.notes !== undefined
+      ? updatedFields.notes
+      : (existing.notes || '');
+
+    const updatedTrip = {
+      ...existing,
+      ...updatedFields,
+      id: tripId,
+      storeName,
+      tripType,
+      trip_type: tripType,
+      date,
+      projectWeek,
+      totalAmountPaid,
+      totalScaleWeightKg,
+      notes,
+      updatedAt: new Date().toISOString(),
+      synced: false
+    };
+
+    // 1. Update local item in kosherai_course_trips and save to localStorage
+    trips[index] = updatedTrip;
+    localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(trips));
+
+    // 2. Synchronize linked expense record (exp_trip_${tripId})
+    try {
+      const expenses = getExpenses();
+      const tripExpenseId = `exp_trip_${tripId}`;
+      const expIdx = expenses.findIndex(e => e.id === tripExpenseId || e.tripId === tripId);
+      if (expIdx !== -1) {
+        expenses[expIdx] = {
+          ...expenses[expIdx],
+          date,
+          projectWeek,
+          vendor: storeName,
+          category: tripType,
+          amount: totalAmountPaid,
+          notes: `Shopping trip (${updatedTrip.itemsCount || 0} items, whole weight: ${totalScaleWeightKg} kg)`
+        };
+        localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(expenses));
+      }
+    } catch (expErr) {
+      console.warn('[Storage] Error updating linked trip expense:', expErr);
+    }
+
+    // 3. Persist to IndexedDB
+    try {
+      const items = getGroceryItems(tripId);
+      await saveTripToIndexedDB(updatedTrip, items, false);
+    } catch (idbErr) {
+      console.warn('[Storage] IndexedDB trip update error:', idbErr);
+    }
+
+    // 4. Trigger a UI store refresh
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('kosherai-trips-updated', { detail: { tripId, updatedTrip } }));
+      window.dispatchEvent(new CustomEvent('kosherai-trips-synced', { detail: { tripId } }));
+      window.dispatchEvent(new CustomEvent('kosherai-store-refresh', { detail: { type: 'trips', tripId } }));
+    }
+
+    // 5. If online, send a PATCH request to /api/trips with credentials: "include" and Authorization: Bearer <token>
+    let isSynced = false;
+    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+    if (isOnline && typeof fetch === 'function') {
+      try {
+        const payload = {
+          id: tripId,
+          tripId,
+          storeName,
+          tripType,
+          totalAmountPaid,
+          totalScaleWeightKg,
+          date,
+          notes,
+          projectWeek
+        };
+
+        const res = await fetch('/api/trips', {
+          method: 'PATCH',
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          credentials: 'include',
+          body: JSON.stringify(payload)
+        });
+
+        if (res && res.ok) {
+          isSynced = true;
+          updatedTrip.synced = true;
+          trips[index] = updatedTrip;
+          localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(trips));
+          try {
+            const items = getGroceryItems(tripId);
+            await saveTripToIndexedDB(updatedTrip, items, true);
+          } catch (_) {}
+          console.info('[Storage] Successfully persisted trip update to Neon PostgreSQL:', tripId);
+        } else {
+          console.warn('[Storage] Remote PATCH /api/trips returned status:', res?.status);
+        }
+      } catch (err) {
+        console.warn('[Storage] Remote PATCH /api/trips failed, saved locally for auto-sync:', err.message);
+      }
+    }
+
+    return updatedTrip;
+  } catch (e) {
+    console.error('Failed to update shopping trip:', e);
+    throw e;
+  }
+}
+
+/**
  * Saves a standalone manual food expense (e.g. wet market veggies, pantry condiment without trip)
  */
 export function saveStandaloneExpense(expenseData) {

@@ -41,7 +41,9 @@ import {
 import {
   getCourseConfig,
   saveCourseConfig,
+  getShoppingTrips,
   saveShoppingTrip,
+  updateShoppingTrip,
   deleteShoppingTrip,
   syncPendingTrips,
   restoreFromNeon,
@@ -157,6 +159,9 @@ const state = {
   mealPlanWeek: 2,
   receiptModalOpen: false,
   manualTripModalOpen: false,
+  editTripModalOpen: false,
+  editingTripId: null,
+  editingTrip: null,
   wasteModalOpen: false,
   mealPlanModalOpen: false,
   configModalOpen: false,
@@ -2055,6 +2060,117 @@ Cracked black pepper`;
     });
   });
 
+  // Edit Trip (Opens modal or toggles inline editing)
+  document.querySelectorAll('.edit-trip-btn[data-edit-trip]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = e.currentTarget.getAttribute('data-edit-trip');
+      const trips = getShoppingTrips();
+      const trip = trips.find(t => t.id === id);
+      if (trip) {
+        state.editingTripId = id;
+        state.editingTrip = trip;
+        state.editTripModalOpen = true;
+        render();
+      }
+    });
+  });
+
+  // Edit Trip Modal Actions
+  const closeEditTripBtn = document.querySelector('#close-edit-trip-btn');
+  const cancelEditTripBtn = document.querySelector('#cancel-edit-trip-btn');
+  if (closeEditTripBtn) {
+    closeEditTripBtn.addEventListener('click', () => {
+      state.editTripModalOpen = false;
+      state.editingTripId = null;
+      state.editingTrip = null;
+      render();
+    });
+  }
+  if (cancelEditTripBtn) {
+    cancelEditTripBtn.addEventListener('click', () => {
+      state.editTripModalOpen = false;
+      state.editingTripId = null;
+      state.editingTrip = null;
+      render();
+    });
+  }
+
+  // Edit Trip Form Submission (Modal)
+  const editTripForm = document.querySelector('#edit-trip-form');
+  if (editTripForm) {
+    editTripForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const tripId = editTripForm.getAttribute('data-trip-id') || state.editingTripId || state.editingTrip?.id;
+      if (!tripId) return;
+
+      const storeName = document.querySelector('#edit-store-name')?.value?.trim() || 'Supermarket';
+      const tripType = document.querySelector('#edit-trip-type')?.value || 'Supermarket';
+      const totalAmountPaid = parseFloat(document.querySelector('#edit-total-amount')?.value || 0);
+      const totalScaleWeightKg = parseFloat(document.querySelector('#edit-scale-weight')?.value || 0);
+      const date = document.querySelector('#edit-trip-date')?.value || new Date().toISOString().split('T')[0];
+      const notes = document.querySelector('#edit-notes')?.value?.trim() || '';
+
+      await updateShoppingTrip(tripId, {
+        storeName,
+        tripType,
+        totalAmountPaid,
+        totalScaleWeightKg,
+        date,
+        notes
+      });
+
+      state.editTripModalOpen = false;
+      state.editingTripId = null;
+      state.editingTrip = null;
+      showToast('Shopping trip updated successfully!', 'success');
+      render();
+    });
+  }
+
+  // Inline Edit Trip Handlers
+  document.querySelectorAll('.cancel-edit-trip-btn[data-cancel-trip]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.editingTripId = null;
+      state.editingTrip = null;
+      state.editTripModalOpen = false;
+      render();
+    });
+  });
+
+  document.querySelectorAll('.save-edit-trip-btn[data-save-trip]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const tripId = e.currentTarget.getAttribute('data-save-trip');
+      const card = e.currentTarget.closest('.trip-card');
+      if (!tripId || !card) return;
+
+      const storeName = card.querySelector('.edit-store-name')?.value?.trim() || 'Supermarket';
+      const tripType = card.querySelector('.edit-trip-type')?.value || 'Supermarket';
+      const totalAmountPaid = parseFloat(card.querySelector('.edit-total-amount')?.value || 0);
+      const totalScaleWeightKg = parseFloat(card.querySelector('.edit-scale-weight')?.value || 0);
+      const date = card.querySelector('.edit-trip-date')?.value || new Date().toISOString().split('T')[0];
+      const notes = card.querySelector('.edit-notes')?.value?.trim() || '';
+
+      await updateShoppingTrip(tripId, {
+        storeName,
+        tripType,
+        totalAmountPaid,
+        totalScaleWeightKg,
+        date,
+        notes
+      });
+
+      state.editingTripId = null;
+      state.editingTrip = null;
+      state.editTripModalOpen = false;
+      showToast('Shopping trip updated successfully!', 'success');
+      render();
+    });
+  });
+
   // Food Waste Modal Open & Close
   const openWasteModalBtn = document.querySelector('#open-waste-modal-btn');
   const emptyWasteBtn = document.querySelector('#empty-waste-btn');
@@ -2522,6 +2638,11 @@ window.addEventListener('keydown', (e) => {
       render();
     } else if (state.receiptModalOpen) {
       state.receiptModalOpen = false;
+      render();
+    } else if (state.editTripModalOpen || state.editingTripId) {
+      state.editTripModalOpen = false;
+      state.editingTripId = null;
+      state.editingTrip = null;
       render();
     } else if (state.manualTripModalOpen) {
       state.manualTripModalOpen = false;

@@ -25,9 +25,14 @@ export async function ensureTripsTables(sql) {
       items_count INTEGER DEFAULT 0,
       notes TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
       synced BOOLEAN DEFAULT TRUE
     );
   `;
+
+  try {
+    await sql`ALTER TABLE shopping_trips ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`;
+  } catch (_) {}
 
   await sql`
     CREATE TABLE IF NOT EXISTS grocery_purchases (
@@ -77,7 +82,7 @@ function sendJson(res, statusCode, data) {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.end(JSON.stringify(data));
 }
@@ -145,13 +150,14 @@ export function isValidPostgresUrl(url) {
  * Supported Methods:
  * - GET: Returns shopping trips with linked grocery items
  * - POST: Accepts { trip, items } or verified receipt trip, inserts into shopping_trips and batch inserts grocery_purchases
+ * - PUT / PATCH: Updates existing shopping_trips record (store_name, total_amount_paid, total_scale_weight_kg, date, notes)
  * - DELETE: Deletes trip by id (cascading to grocery_purchases)
  */
 export default async function handler(req, res) {
   // CORS Preflight
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.statusCode = 204;
     return res.end();
@@ -179,6 +185,15 @@ export default async function handler(req, res) {
         message: 'DATABASE_URL is not configured. Trip saved locally in client IndexedDB.',
         trip: body.trip || body,
         items: body.items || []
+      });
+    }
+    if (method === 'PUT' || method === 'PATCH') {
+      const body = await parseRequestBody(req);
+      return sendJson(res, 200, {
+        synced: false,
+        offline: true,
+        message: 'DATABASE_URL is not configured. Trip updated locally in client IndexedDB.',
+        trip: body.trip || body
       });
     }
     if (method === 'DELETE') {
@@ -213,6 +228,15 @@ export default async function handler(req, res) {
         message: 'Database connection failed. Persisting to client IndexedDB with synced: false.',
         trip: body.trip || body,
         items: body.items || []
+      });
+    }
+    if (method === 'PUT' || method === 'PATCH') {
+      const body = await parseRequestBody(req);
+      return sendJson(res, 200, {
+        synced: false,
+        offline: true,
+        message: 'Database connection failed. Persisting to client IndexedDB with synced: false.',
+        trip: body.trip || body
       });
     }
     return sendJson(res, 200, { synced: false, trips: [] });
@@ -491,6 +515,88 @@ export default async function handler(req, res) {
         trip: savedTrip,
         items: savedItems,
         message: `Shopping trip ${tripId} and ${savedItems.length} grocery items saved to Neon PostgreSQL.`
+      });
+    }
+
+    // ----------------------------------------------------
+    // PUT / PATCH /api/trips: Updates an existing shopping trip (Scoped to user_id)
+    // ----------------------------------------------------
+    if (method === 'PUT' || method === 'PATCH') {
+      const query = parseQueryParams(req);
+      const body = await parseRequestBody(req);
+      const tripData = body.trip || body;
+      const targetId = query.id || query.tripId || tripData.id || tripData.tripId;
+
+      if (!targetId) {
+        return sendJson(res, 400, { error: 'MISSING_ID', message: 'Trip ID is required for update.' });
+      }
+
+      // Fetch existing record to ensure ownership and fallback values
+      const existingRows = await sql`
+        SELECT * FROM shopping_trips WHERE id = ${targetId} AND user_id = ${userId} LIMIT 1;
+      `;
+
+      if (!existingRows || existingRows.length === 0) {
+        return sendJson(res, 404, { error: 'NOT_FOUND', message: 'Shopping trip not found or unauthorized.' });
+      }
+
+      const current = existingRows[0];
+      const storeName = tripData.storeName !== undefined ? tripData.storeName : (tripData.store_name !== undefined ? tripData.store_name : current.store_name);
+      const totalAmountPaid = tripData.totalAmountPaid !== undefined ? Number(tripData.totalAmountPaid) : (tripData.total_amount_paid !== undefined ? Number(tripData.total_amount_paid) : Number(current.total_amount_paid || 0));
+      const totalScaleWeightKg = tripData.totalScaleWeightKg !== undefined ? Number(tripData.totalScaleWeightKg) : (tripData.total_scale_weight_kg !== undefined ? Number(tripData.total_scale_weight_kg) : Number(current.total_scale_weight_kg || 0));
+      const date = tripData.date !== undefined ? tripData.date : current.date;
+      const notes = tripData.notes !== undefined ? tripData.notes : (current.notes || '');
+      const tripType = tripData.tripType !== undefined ? tripData.tripType : (tripData.trip_type !== undefined ? tripData.trip_type : current.trip_type);
+      const projectWeek = tripData.projectWeek !== undefined ? Number(tripData.projectWeek) : (tripData.project_week !== undefined ? Number(tripData.project_week) : Number(current.project_week || 1));
+
+      // Execute UPDATE shopping_trips SET store_name = $1, total_amount_paid = $2, total_scale_weight_kg = $3, date = $4, notes = $5, updated_at = NOW() WHERE id = $6 AND user_id = $7
+      const updatedRows = await sql`
+        UPDATE shopping_trips 
+        SET store_name = ${storeName},
+            total_amount_paid = ${totalAmountPaid},
+            total_scale_weight_kg = ${totalScaleWeightKg},
+            date = ${date},
+            notes = ${notes},
+            trip_type = ${tripType},
+            project_week = ${projectWeek},
+            updated_at = NOW()
+        WHERE id = ${targetId} AND user_id = ${userId}
+        RETURNING *;
+      `;
+
+      const row = updatedRows[0] || {
+        ...current,
+        store_name: storeName,
+        total_amount_paid: totalAmountPaid,
+        total_scale_weight_kg: totalScaleWeightKg,
+        date,
+        notes,
+        trip_type: tripType,
+        project_week: projectWeek
+      };
+
+      const updatedTrip = {
+        id: row.id,
+        date: row.date,
+        projectWeek: Number(row.project_week || 1),
+        storeName: row.store_name || 'Supermarket',
+        tripType: row.trip_type || 'Supermarket',
+        totalAmountPaid: Number(row.total_amount_paid || 0),
+        totalScaleWeightKg: Number(row.total_scale_weight_kg || 0),
+        receiptImageUrl: row.receipt_image_url || null,
+        receiptRawText: row.receipt_raw_text || '',
+        itemsCount: Number(row.items_count || 0),
+        notes: row.notes || '',
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        synced: true
+      };
+
+      return sendJson(res, 200, {
+        success: true,
+        synced: true,
+        trip: updatedTrip,
+        message: `Shopping trip ${targetId} updated successfully in Neon PostgreSQL.`
       });
     }
 
