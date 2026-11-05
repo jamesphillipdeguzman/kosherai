@@ -1,6 +1,6 @@
 import { searchDatabase } from './ruleEngine.js';
 import { LID_DATABASE, STATUS } from '../data/lidDatabase.js';
-import { getAuthHeaders } from './authHeaders.js';
+import { getAuthHeaders, getClientAuthToken } from './authHeaders.js';
 import {
   saveTripToIndexedDB,
   getTripsFromIndexedDB,
@@ -777,12 +777,14 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
 
     const rawItemName = updatedFields.itemName ?? updatedFields.name ?? '';
     const cleanName = typeof rawItemName === 'string' ? rawItemName.trim() : (rawItemName ? String(rawItemName).trim() : '');
-    const rawItemQty = (updatedFields.itemQuantity !== undefined && updatedFields.itemQuantity !== null && updatedFields.itemQuantity !== '')
-      ? Number(updatedFields.itemQuantity)
-      : ((updatedFields.itemQty !== undefined && updatedFields.itemQty !== null && updatedFields.itemQty !== '')
-        ? Number(updatedFields.itemQty)
-        : ((updatedFields.quantity !== undefined && updatedFields.quantity !== null && updatedFields.quantity !== '') ? Number(updatedFields.quantity) : null));
-    const cleanUnit = (updatedFields.itemUnit || updatedFields.unit || 'pc').trim();
+    const rawItemQty = (updatedFields.quantity !== undefined && updatedFields.quantity !== null && updatedFields.quantity !== '')
+      ? Number(updatedFields.quantity)
+      : ((updatedFields.itemQuantity !== undefined && updatedFields.itemQuantity !== null && updatedFields.itemQuantity !== '')
+        ? Number(updatedFields.itemQuantity)
+        : ((updatedFields.itemQty !== undefined && updatedFields.itemQty !== null && updatedFields.itemQty !== '')
+          ? Number(updatedFields.itemQty)
+          : null));
+    const cleanUnit = (updatedFields.unit || updatedFields.itemUnit || 'pc').trim();
 
     if (Array.isArray(updatedFields.items) && updatedFields.items.length > 0) {
       const itemUpdatesMap = new Map(updatedFields.items.map(i => [i.id, i]));
@@ -798,37 +800,41 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
             }
             if (update.quantity !== undefined && !isNaN(update.quantity)) item.quantity = Number(update.quantity);
             if (update.unit) item.unit = update.unit.trim();
+            item.synced = false;
             groceryItemsUpdated = true;
           }
         }
       });
-    } else if (cleanName) {
+    } else if (cleanName || rawItemQty !== null || cleanUnit) {
       let foundMatching = false;
       allGroceryItems.forEach(item => {
         if (item.tripId === tripId || item.trip_id === tripId) {
           foundMatching = true;
-          item.name = cleanName;
-          item.raw_receipt_text = cleanName;
-          item.rawReceiptText = cleanName;
+          if (cleanName) {
+            item.name = cleanName;
+            item.raw_receipt_text = cleanName;
+            item.rawReceiptText = cleanName;
+          }
           if (rawItemQty !== null && !isNaN(rawItemQty)) item.quantity = rawItemQty;
           if (cleanUnit) item.unit = cleanUnit;
+          item.synced = false;
           groceryItemsUpdated = true;
         }
       });
 
-      if (!foundMatching) {
-        // If trip had no line items yet, create one matching the updated item name
+      if (!foundMatching && (cleanName || rawItemQty !== null)) {
+        // If trip had no line items yet, create one matching the updated item details
         const newItemId = `item_${tripId}_0_${Math.random().toString(36).slice(2, 6)}`;
         allGroceryItems.push({
           id: newItemId,
           tripId,
           purchaseDate: date,
           projectWeek,
-          name: cleanName,
-          raw_receipt_text: cleanName,
-          rawReceiptText: cleanName,
+          name: cleanName || 'Item',
+          raw_receipt_text: cleanName || 'Item',
+          rawReceiptText: cleanName || 'Item',
           quantity: (rawItemQty !== null && !isNaN(rawItemQty)) ? rawItemQty : 1,
-          unit: cleanUnit,
+          unit: cleanUnit || 'pc',
           unitPrice: totalAmountPaid,
           totalPrice: totalAmountPaid,
           weightGrams: 0,
@@ -878,22 +884,30 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
       console.warn('[Storage] IndexedDB trip update error:', idbErr);
     }
 
-    // 5. Trigger a UI store refresh
+    // 5. Step A: Instant Local-First Write Event Dispatch
     if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('kosherai_storage_updated'));
       window.dispatchEvent(new CustomEvent('kosherai-trips-updated', { detail: { tripId, updatedTrip } }));
       window.dispatchEvent(new CustomEvent('kosherai-groceries-updated', { detail: { tripId, items: tripItems } }));
-      window.dispatchEvent(new CustomEvent('kosherai-trips-synced', { detail: { tripId } }));
       window.dispatchEvent(new CustomEvent('kosherai-store-refresh', { detail: { type: 'trips', tripId } }));
     }
 
-    // 6. If online, send a PATCH request to /api/trips with credentials: "include" and Authorization: Bearer <token>
-    let isSynced = false;
-    const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
-    if (isOnline && typeof fetch === 'function') {
+    // 6. Step B: Background Neon PostgreSQL Synchronization
+    const bgSync = (async () => {
+      const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
+      if (!isOnline || typeof fetch !== 'function') return;
+
       try {
+        const rawToken = typeof localStorage !== 'undefined' ? localStorage.getItem('better-auth.session_token') : null;
+        const token = rawToken || getClientAuthToken();
+        const headers = {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        };
+
         const payload = {
-          id: tripId,
           tripId,
+          id: tripId,
           storeName,
           tripType,
           totalAmountPaid,
@@ -906,24 +920,49 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
           unit: cleanUnit || (tripItems[0]?.unit || 'pc'),
           itemQuantity: rawItemQty !== null ? rawItemQty : (tripItems[0]?.quantity ?? 1),
           itemUnit: cleanUnit || (tripItems[0]?.unit || 'pc'),
-          items: tripItems
+          items: tripItems,
+          ...updatedFields
         };
 
         const res = await fetch('/api/trips', {
           method: 'PATCH',
-          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          headers,
           credentials: 'include',
           body: JSON.stringify(payload)
         });
 
         if (res && res.ok) {
-          isSynced = true;
-          updatedTrip.synced = true;
-          trips[index] = updatedTrip;
-          localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(trips));
+          // Re-read kosherai_course_trips and kosherai_course_grocery_items, set synced: true
+          const freshTrips = getShoppingTrips();
+          const tIdx = freshTrips.findIndex(t => t.id === tripId);
+          if (tIdx !== -1) {
+            freshTrips[tIdx].synced = true;
+            localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(freshTrips));
+            updatedTrip.synced = true;
+          }
+
+          const freshItems = getGroceryItems();
+          let fItemsChanged = false;
+          freshItems.forEach(item => {
+            if (item.tripId === tripId || item.trip_id === tripId) {
+              item.synced = true;
+              fItemsChanged = true;
+            }
+          });
+          if (fItemsChanged) {
+            localStorage.setItem(STORAGE_KEYS.GROCERY_ITEMS, JSON.stringify(freshItems));
+          }
+
           try {
-            await saveTripToIndexedDB(updatedTrip, tripItems, true);
+            await saveTripToIndexedDB(freshTrips[tIdx] || updatedTrip, tripItems, true);
           } catch (_) {}
+
+          // Dispatch window.dispatchEvent(new Event('kosherai_storage_updated')) so the card badge transitions from '⏳ OFFLINE' to '✓ NEON SYNCED'
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('kosherai_storage_updated'));
+            window.dispatchEvent(new CustomEvent('kosherai-trips-synced', { detail: { tripId } }));
+            window.dispatchEvent(new CustomEvent('kosherai-store-refresh', { detail: { type: 'trips', tripId } }));
+          }
           console.info('[Storage] Successfully persisted trip update to Neon PostgreSQL:', tripId);
         } else {
           console.warn('[Storage] Remote PATCH /api/trips returned status:', res?.status);
@@ -931,7 +970,10 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
       } catch (err) {
         console.warn('[Storage] Remote PATCH /api/trips failed, saved locally for auto-sync:', err.message);
       }
-    }
+    })();
+
+    await bgSync;
+    return updatedTrip;
 
     return updatedTrip;
   } catch (e) {

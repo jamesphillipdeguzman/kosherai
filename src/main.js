@@ -2131,7 +2131,8 @@ Cracked black pepper`;
         });
       }
 
-      await updateShoppingTrip(tripId, {
+      // Non-blocking local-first write: update state and close modal instantly
+      updateShoppingTrip(tripId, {
         storeName,
         tripType,
         totalAmountPaid,
@@ -2139,7 +2140,10 @@ Cracked black pepper`;
         date,
         notes,
         itemName,
+        quantity: itemQty,
+        itemQuantity: itemQty,
         itemQty,
+        unit: itemUnit,
         itemUnit,
         items
       });
@@ -2147,7 +2151,7 @@ Cracked black pepper`;
       state.editTripModalOpen = false;
       state.editingTripId = null;
       state.editingTrip = null;
-      showToast('Shopping trip updated successfully!', 'success');
+      showToast('Shopping trip updated! Syncing with Neon...', 'info');
       render();
     });
   }
@@ -2164,7 +2168,7 @@ Cracked black pepper`;
   });
 
   document.querySelectorAll('.save-edit-trip-btn[data-save-trip]').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
+    btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       const tripId = e.currentTarget.getAttribute('data-save-trip');
@@ -2181,7 +2185,7 @@ Cracked black pepper`;
       const itemQty = parseFloat(card.querySelector('.edit-item-qty')?.value || 1);
       const itemUnit = card.querySelector('.edit-item-unit')?.value?.trim() || 'pcs';
 
-      await updateShoppingTrip(tripId, {
+      updateShoppingTrip(tripId, {
         storeName,
         tripType,
         totalAmountPaid,
@@ -2189,14 +2193,17 @@ Cracked black pepper`;
         date,
         notes,
         itemName,
+        quantity: itemQty,
+        itemQuantity: itemQty,
         itemQty,
+        unit: itemUnit,
         itemUnit
       });
 
       state.editingTripId = null;
       state.editingTrip = null;
       state.editTripModalOpen = false;
-      showToast('Shopping trip updated successfully!', 'success');
+      showToast('Shopping trip updated! Syncing with Neon...', 'info');
       render();
     });
   });
@@ -2600,6 +2607,9 @@ window.addEventListener('offline', () => {
   render();
 });
 
+window.addEventListener('kosherai_storage_updated', () => {
+  render();
+});
 window.addEventListener('kosherai-trips-synced', () => {
   render();
 });

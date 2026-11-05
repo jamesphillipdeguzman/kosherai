@@ -286,10 +286,61 @@ assert.strictEqual(expensesInStorage[0].amount, 2800);
 
 // Verify UI custom events were dispatched
 const refreshedEvents = customEventsDispatched.map(e => e.type);
+assert.ok(refreshedEvents.includes('kosherai_storage_updated'), 'Must dispatch kosherai_storage_updated');
 assert.ok(refreshedEvents.includes('kosherai-trips-updated'), 'Must dispatch kosherai-trips-updated');
 assert.ok(refreshedEvents.includes('kosherai-groceries-updated'), 'Must dispatch kosherai-groceries-updated');
 assert.ok(refreshedEvents.includes('kosherai-store-refresh'), 'Must dispatch kosherai-store-refresh');
-console.log('  ✅ updateShoppingTrip updates trips, grocery items, linked expense, and dispatches refresh events.');
+console.log('  ✅ updateShoppingTrip updates trips, grocery items, linked expense, and dispatches kosherai_storage_updated.');
+
+// 2.2 Test changing Garlic quantity from 6 to 7 in localStorage with non-blocking sync
+const garlicTripId = 'trip_garlic_test_102';
+const garlicTrip = {
+  id: garlicTripId,
+  storeName: 'Local Wet Market',
+  tripType: 'Wet Market / Palengke',
+  totalAmountPaid: 85,
+  totalScaleWeightKg: 0.25,
+  date: '2026-11-05',
+  notes: 'Cooking aromatics',
+  synced: true
+};
+const garlicItem = {
+  id: 'item_garlic_102_1',
+  tripId: garlicTripId,
+  name: 'Native Garlic',
+  quantity: 6,
+  unit: 'heads'
+};
+
+mockStorage.set('kosherai_course_trips', JSON.stringify([sampleTrip, garlicTrip]));
+mockStorage.set('kosherai_course_grocery_items', JSON.stringify([sampleItem, garlicItem]));
+
+global.fetch = async (url, opts) => {
+  if (url === '/api/trips') {
+    const body = JSON.parse(opts.body);
+    assert.strictEqual(body.tripId, garlicTripId);
+    assert.strictEqual(Number(body.quantity), 7);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, synced: true })
+    };
+  }
+  return nativeFetch(url, opts);
+};
+
+await updateShoppingTrip(garlicTripId, {
+  itemName: 'Native Garlic',
+  quantity: 7,
+  unit: 'heads'
+});
+
+const updatedGarlicItems = JSON.parse(mockStorage.get('kosherai_course_grocery_items'));
+const foundGarlic = updatedGarlicItems.find(i => i.tripId === garlicTripId);
+assert.strictEqual(foundGarlic.quantity, 7, 'Garlic quantity must be updated to 7 in localStorage');
+assert.strictEqual(foundGarlic.synced, true, 'Garlic item state must resolve to synced: true upon API success');
+global.fetch = nativeFetch; // Restore native fetch
+console.log('  ✅ Garlic quantity updated locally to 7 and transitioned to synced: true.');
 
 // ---------------------------------------------------------------------------
 // Test 3: Backend API PUT / PATCH /api/trips
@@ -422,6 +473,38 @@ try {
   assert.strictEqual(dataPut().trip.storeName, 'Puregold Price Club (PUT)');
   assert.strictEqual(dataPut().items[0].name, 'Puregold Grade A Chicken Breast');
   console.log('  ✅ PUT /api/trips also succeeds with 200 OK and updates grocery_purchases.');
+
+  // 3.7 Specifically test updating Garlic quantity from 6 to 7 in Neon PostgreSQL
+  await sql`
+    UPDATE grocery_purchases
+    SET name = 'Fresh Native Garlic', quantity = 6, unit = 'heads'
+    WHERE trip_id = ${testTripId} AND user_id = ${activeUserId};
+  `;
+
+  const { req: rGarlic, res: sGarlic, getStatus: statusGarlic, getData: dataGarlic } = createMockReqRes('PATCH', {
+    authorization: `Bearer ${activeSession.token}`
+  }, {
+    tripId: testTripId,
+    itemName: 'Fresh Native Garlic',
+    quantity: 7,
+    unit: 'heads'
+  });
+
+  await tripsApiHandler(rGarlic, sGarlic);
+  assert.strictEqual(statusGarlic(), 200, 'PATCH for Garlic quantity update must return 200');
+  assert.strictEqual(dataGarlic().success, true);
+  assert.strictEqual(dataGarlic().synced, true);
+
+  const garlicDbRows = await sql`
+    SELECT name, quantity, unit
+    FROM grocery_purchases
+    WHERE trip_id = ${testTripId} AND user_id = ${activeUserId};
+  `;
+  assert.strictEqual(garlicDbRows.length, 1);
+  assert.strictEqual(garlicDbRows[0].name, 'Fresh Native Garlic');
+  assert.strictEqual(Number(garlicDbRows[0].quantity), 7, 'Neon grocery_purchases quantity must equal 7');
+  assert.strictEqual(garlicDbRows[0].unit, 'heads');
+  console.log('  ✅ Neon PostgreSQL directly verified: Garlic quantity successfully updated from 6 to 7.');
 
 } finally {
   // Clean up test trip & purchases

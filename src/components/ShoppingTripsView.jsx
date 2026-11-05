@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getGroceryItems } from '../services/courseProjectStorage.js';
+import { getGroceryItems, updateShoppingTrip } from '../services/courseProjectStorage.js';
 import {
   escapeHtml,
   formatNumber,
@@ -39,9 +39,11 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
       else allItems = [];
     }
     const item = allItems[0] || {};
-    const currentItemName = item?.name || item?.raw_receipt_text || item?.rawReceiptText || item?.itemName || trip?.extractedItemName || '';
-    const currentQty = item?.quantity ?? item?.qty ?? 1;
-    const currentUnit = item?.unit ?? 'pc';
+    const currentItemName = item?.name || item?.raw_receipt_text || item?.itemName || '';
+    const currentQty = (item?.quantity !== undefined && item?.quantity !== null && item?.quantity !== '')
+      ? Number(item.quantity)
+      : 1;
+    const currentUnit = item?.unit || 'pc';
 
     setItemName(currentItemName);
     setItemQuantity(currentQty);
@@ -55,7 +57,9 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
       date: trip.date || '',
       notes: trip.notes || '',
       itemName: currentItemName,
+      quantity: currentQty,
       itemQuantity: currentQty,
+      unit: currentUnit,
       itemUnit: currentUnit
     });
     if (onEdit) onEdit(trip);
@@ -76,7 +80,18 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
   };
 
   const handleSave = (tripId) => {
-    if (onSave) onSave(tripId, { ...editForm, itemName, itemQuantity, itemUnit });
+    const formValues = {
+      ...editForm,
+      itemName: itemName ? itemName.trim() : '',
+      quantity: (itemQuantity !== undefined && itemQuantity !== null && itemQuantity !== '' && !isNaN(Number(itemQuantity))) ? Number(itemQuantity) : 1,
+      itemQuantity: (itemQuantity !== undefined && itemQuantity !== null && itemQuantity !== '' && !isNaN(Number(itemQuantity))) ? Number(itemQuantity) : 1,
+      unit: itemUnit ? itemUnit.trim() : 'pc',
+      itemUnit: itemUnit ? itemUnit.trim() : 'pc'
+    };
+
+    // Instant local-first save without blocking the UI
+    updateShoppingTrip(tripId, formValues);
+    if (onSave) onSave(tripId, formValues);
     setEditingId(null);
   };
 
@@ -201,7 +216,20 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
 
           return (
             <div key={trip.id} className="trip-card" data-trip-id={trip.id}>
-              <div className="trip-store-name">{trip.storeName}</div>
+              <div className="trip-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="trip-store-name">{trip.storeName}</div>
+                <div className="trip-sync-badge-container">
+                  {trip.synced === false ? (
+                    <span className="trip-sync-badge offline" title="Saved locally in IndexedDB; will auto-sync to Neon when online">
+                      ☁️⏳ Offline
+                    </span>
+                  ) : (
+                    <span className="trip-sync-badge synced" title="Synced with Neon PostgreSQL cloud database">
+                      ☁️✓ Neon Synced
+                    </span>
+                  )}
+                </div>
+              </div>
               <div className="trip-card-footer">
                 <button type="button" className="btn-text edit-trip-btn" data-edit-trip={trip.id} onClick={() => startEdit(trip)}>
                   ✏️ Edit

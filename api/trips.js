@@ -530,7 +530,7 @@ export default async function handler(req, res) {
       const query = parseQueryParams(req);
       const body = await parseRequestBody(req);
       const tripData = body.trip || body;
-      const targetId = query.id || query.tripId || tripData.id || tripData.tripId;
+      const targetId = query.id || query.tripId || tripData.id || tripData.tripId || body.tripId;
 
       if (!targetId) {
         return sendJson(res, 400, { error: 'MISSING_ID', message: 'Trip ID is required for update.' });
@@ -546,106 +546,97 @@ export default async function handler(req, res) {
       }
 
       const current = existingRows[0];
-      const storeName = tripData.storeName !== undefined ? tripData.storeName : (tripData.store_name !== undefined ? tripData.store_name : current.store_name);
-      const totalAmountPaid = tripData.totalAmountPaid !== undefined ? Number(tripData.totalAmountPaid) : (tripData.total_amount_paid !== undefined ? Number(tripData.total_amount_paid) : Number(current.total_amount_paid || 0));
-      const totalScaleWeightKg = tripData.totalScaleWeightKg !== undefined ? Number(tripData.totalScaleWeightKg) : (tripData.total_scale_weight_kg !== undefined ? Number(tripData.total_scale_weight_kg) : Number(current.total_scale_weight_kg || 0));
-      const date = tripData.date !== undefined ? tripData.date : current.date;
-      const notes = tripData.notes !== undefined ? tripData.notes : (current.notes || '');
-      const tripType = tripData.tripType !== undefined ? tripData.tripType : (tripData.trip_type !== undefined ? tripData.trip_type : current.trip_type);
-      const projectWeek = tripData.projectWeek !== undefined ? Number(tripData.projectWeek) : (tripData.project_week !== undefined ? Number(tripData.project_week) : Number(current.project_week || 1));
+      const storeName = tripData.storeName !== undefined
+        ? tripData.storeName
+        : (tripData.store_name !== undefined ? tripData.store_name : null);
 
-      // Execute UPDATE shopping_trips SET store_name = $1, total_amount_paid = $2, total_scale_weight_kg = $3, date = $4, notes = $5, updated_at = NOW() WHERE id = $6 AND user_id = $7
+      const date = tripData.date !== undefined ? tripData.date : null;
+
+      const tripType = tripData.tripType !== undefined
+        ? tripData.tripType
+        : (tripData.trip_type !== undefined ? tripData.trip_type : null);
+
+      const totalScaleWeightKg = (tripData.totalScaleWeightKg !== undefined && tripData.totalScaleWeightKg !== null && tripData.totalScaleWeightKg !== '')
+        ? Number(tripData.totalScaleWeightKg)
+        : ((tripData.total_scale_weight_kg !== undefined && tripData.total_scale_weight_kg !== null && tripData.total_scale_weight_kg !== '')
+          ? Number(tripData.total_scale_weight_kg)
+          : null);
+
+      const totalAmountPaid = (tripData.totalAmountPaid !== undefined && tripData.totalAmountPaid !== null && tripData.totalAmountPaid !== '')
+        ? Number(tripData.totalAmountPaid)
+        : ((tripData.total_amount_paid !== undefined && tripData.total_amount_paid !== null && tripData.total_amount_paid !== '')
+          ? Number(tripData.total_amount_paid)
+          : null);
+
+      const notes = tripData.notes !== undefined ? tripData.notes : null;
+
+      // 1. Update shopping_trips using parameterized COALESCE query
       const updatedRows = await sql`
         UPDATE shopping_trips 
-        SET store_name = ${storeName},
-            total_amount_paid = ${totalAmountPaid},
-            total_scale_weight_kg = ${totalScaleWeightKg},
-            date = ${date},
-            notes = ${notes},
-            trip_type = ${tripType},
-            project_week = ${projectWeek},
-            updated_at = NOW()
+        SET 
+          store_name = COALESCE(${storeName}, store_name),
+          date = COALESCE(${date}, date),
+          trip_type = COALESCE(${tripType}, trip_type),
+          total_scale_weight_kg = COALESCE(${totalScaleWeightKg}, total_scale_weight_kg),
+          total_amount_paid = COALESCE(${totalAmountPaid}, total_amount_paid),
+          notes = COALESCE(${notes}, notes),
+          updated_at = NOW()
         WHERE id = ${targetId} AND user_id = ${userId}
         RETURNING *;
       `;
 
-      const row = updatedRows[0] || {
-        ...current,
-        store_name: storeName,
-        total_amount_paid: totalAmountPaid,
-        total_scale_weight_kg: totalScaleWeightKg,
-        date,
-        notes,
-        trip_type: tripType,
-        project_week: projectWeek
-      };
+      const row = (updatedRows && updatedRows[0]) || current;
 
-      // Update grocery_purchases if itemName or items provided
-      const itemName = tripData.itemName || tripData.item_name || body.itemName || body.item_name || null;
-      const itemQuantity = tripData.quantity !== undefined
-        ? Number(tripData.quantity)
+      // 2. Extract item details
+      const rawItemName = tripData.itemName || tripData.item_name || body.itemName || body.item_name || null;
+      const cleanItemName = rawItemName ? String(rawItemName).trim() : null;
+
+      const rawQuantity = tripData.quantity !== undefined
+        ? tripData.quantity
         : (body.quantity !== undefined
-          ? Number(body.quantity)
+          ? body.quantity
           : (tripData.itemQuantity !== undefined
-            ? Number(tripData.itemQuantity)
-            : (tripData.itemQty !== undefined ? Number(tripData.itemQty) : null)));
-      const itemUnit = tripData.unit || body.unit || tripData.itemUnit || null;
-      const rawItems = (Array.isArray(body.items) && body.items.length > 0) ? body.items : (Array.isArray(tripData.items) ? tripData.items : null);
+            ? tripData.itemQuantity
+            : (tripData.itemQty !== undefined ? tripData.itemQty : null)));
+      const cleanQuantity = (rawQuantity !== null && rawQuantity !== undefined && rawQuantity !== '' && !isNaN(Number(rawQuantity)))
+        ? Number(rawQuantity)
+        : null;
 
+      const rawUnit = tripData.unit || body.unit || tripData.itemUnit || null;
+      const cleanUnit = rawUnit ? String(rawUnit).trim() : null;
+
+      // If itemName, quantity, or unit are supplied, update grocery_purchases linked to that tripId
+      if (cleanItemName !== null || cleanQuantity !== null || cleanUnit !== null) {
+        await sql`
+          UPDATE grocery_purchases 
+          SET 
+            name = COALESCE(${cleanItemName}, name), 
+            raw_receipt_text = COALESCE(${cleanItemName}, raw_receipt_text), 
+            quantity = COALESCE(${cleanQuantity}, quantity),
+            unit = COALESCE(${cleanUnit}, unit),
+            updated_at = NOW() 
+          WHERE trip_id = ${targetId} AND user_id = ${userId};
+        `;
+      }
+
+      // Also support batch items update if items array provided
+      const rawItems = (Array.isArray(body.items) && body.items.length > 0) ? body.items : (Array.isArray(tripData.items) ? tripData.items : null);
       if (rawItems && rawItems.length > 0) {
         for (const item of rawItems) {
-          if (item.id && item.name) {
-            const iQty = item.quantity !== undefined ? Number(item.quantity) : 1;
-            const iUnit = item.unit || 'pcs';
+          if (item.id) {
+            const iName = item.name ? String(item.name).trim() : null;
+            const iQty = (item.quantity !== undefined && item.quantity !== null && !isNaN(Number(item.quantity))) ? Number(item.quantity) : null;
+            const iUnit = item.unit ? String(item.unit).trim() : null;
             await sql`
               UPDATE grocery_purchases
-              SET name = ${item.name},
-                  raw_receipt_text = ${item.name},
-                  quantity = ${iQty},
-                  unit = ${iUnit},
+              SET name = COALESCE(${iName}, name),
+                  raw_receipt_text = COALESCE(${iName}, raw_receipt_text),
+                  quantity = COALESCE(${iQty}, quantity),
+                  unit = COALESCE(${iUnit}, unit),
                   updated_at = NOW()
               WHERE id = ${item.id} AND trip_id = ${targetId} AND user_id = ${userId};
             `;
           }
-        }
-      }
-
-      if (itemName) {
-        const cleanName = itemName.trim();
-        if (itemQuantity !== null && itemUnit) {
-          await sql`
-            UPDATE grocery_purchases 
-            SET name = ${cleanName}, 
-                raw_receipt_text = ${cleanName}, 
-                quantity = ${itemQuantity},
-                unit = ${itemUnit},
-                updated_at = NOW() 
-            WHERE trip_id = ${targetId} AND user_id = ${userId};
-          `;
-        } else if (itemQuantity !== null) {
-          await sql`
-            UPDATE grocery_purchases 
-            SET name = ${cleanName}, 
-                raw_receipt_text = ${cleanName}, 
-                quantity = ${itemQuantity},
-                updated_at = NOW() 
-            WHERE trip_id = ${targetId} AND user_id = ${userId};
-          `;
-        } else if (itemUnit) {
-          await sql`
-            UPDATE grocery_purchases 
-            SET name = ${cleanName}, 
-                raw_receipt_text = ${cleanName}, 
-                unit = ${itemUnit},
-                updated_at = NOW() 
-            WHERE trip_id = ${targetId} AND user_id = ${userId};
-          `;
-        } else {
-          await sql`
-            UPDATE grocery_purchases 
-            SET name = ${cleanName}, raw_receipt_text = ${cleanName}, updated_at = NOW() 
-            WHERE trip_id = ${targetId} AND user_id = ${userId};
-          `;
         }
       }
 
