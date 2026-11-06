@@ -33,6 +33,8 @@ import {
   hasCourseData,
   PROJECT_CONFIG
 } from '../services/courseProjectStorage.js';
+import { getHouseholdMembers } from '../services/storage.js';
+import { detectOverBuying, renderOverBuyingAlertsHtml } from '../services/overBuyingDetector.js';
 
 export function handleDownloadClick(e, exportFn) {
   if (e && typeof e.stopPropagation === 'function') {
@@ -916,6 +918,28 @@ function renderReceiptScanModal(state) {
     </div>
   ` : '';
 
+  // Smart Over-Buying Detection (Phase 2)
+  let overBuyingAlertsHtml = '';
+  if (scanData && !isScanning && Array.isArray(scanData.items) && scanData.items.length > 0) {
+    try {
+      const historicalPurchases = getGroceryItems();
+      const historicalWaste = getFoodWasteRecords();
+      const householdMembers = state.household_members || getHouseholdMembers();
+
+      const overBuyingResult = detectOverBuying(scanData.items, {
+        purchases: historicalPurchases,
+        wasteRecords: historicalWaste,
+        householdMembers
+      });
+
+      if (overBuyingResult.hasWarnings) {
+        overBuyingAlertsHtml = renderOverBuyingAlertsHtml(overBuyingResult.warnings);
+      }
+    } catch (e) {
+      console.warn('Over-buying analysis skipped:', e);
+    }
+  }
+
   // Render items rows using createReceiptItemRowHtml
   const items = scanData?.items || [];
   let itemsHtml = '';
@@ -1048,6 +1072,7 @@ function renderReceiptScanModal(state) {
             ${mathAlertHtml}
             ${duplicateAlertHtml}
             ${dietBadgeHtml}
+            ${overBuyingAlertsHtml}
 
             <form id="receipt-verification-form" class="flex flex-col gap-4">
 

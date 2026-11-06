@@ -1,6 +1,7 @@
 import { searchDatabase } from './ruleEngine.js';
 import { LID_DATABASE, STATUS } from '../data/lidDatabase.js';
 import { getAuthHeaders, getClientAuthToken } from './authHeaders.js';
+import { resolveFoodCategory } from './overBuyingDetector.js';
 import {
   saveTripToIndexedDB,
   getTripsFromIndexedDB,
@@ -233,7 +234,7 @@ export async function saveShoppingTrip(tripData, items = []) {
         unitPrice: Number(item.unitPrice || item.price || 0),
         totalPrice: Number(item.totalPrice || item.lineTotal || (Number(item.quantity || item.qty || 1) * Number(item.unitPrice || item.price || 0))),
         weightGrams: Number(item.weightGrams || item.weightG || 0),
-        category: item.category || 'General Food',
+        category: item.category && item.category !== 'General Food' ? item.category : resolveFoodCategory(item.name || item.itemName),
         lidStatus: item.lidStatus || lidEval.status,
         lidReason: item.lidReason || lidEval.reason || '',
         synced: false
@@ -401,7 +402,7 @@ export async function syncPendingTrips() {
         unitPrice: Number(item.unitPrice || item.price || 0),
         totalPrice: Number(item.totalPrice || item.lineTotal || (Number(item.quantity || 1) * Number(item.unitPrice || 0))),
         weightGrams: Number(item.weightGrams || item.weightG || 0),
-        category: item.category || 'General Food',
+        category: item.category && item.category !== 'General Food' ? item.category : resolveFoodCategory(item.name || item.itemName),
         lidStatus: item.lidStatus || 'SAFE',
         lidReason: item.lidReason || ''
       }));
@@ -1061,6 +1062,7 @@ export function saveFoodWasteRecord(wasteData) {
       isEstimated: Boolean(wasteData.isEstimated), // False if weighed on scale, true if estimated
       estimatedCost: Number(wasteData.estimatedCost || 0), // In ₱
       reason: wasteData.reason || 'Spoiled / Molded', // 'Spoiled', 'Expired', 'Cooked Excess', 'Trimmings', 'LID Mismatch'
+      category: wasteData.category || resolveFoodCategory(wasteData.itemName || wasteData.name),
       notes: wasteData.notes || '',
       createdAt: wasteData.createdAt || new Date().toISOString(),
       synced: Boolean(wasteData.synced)

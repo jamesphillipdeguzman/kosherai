@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useId, useRef } from 'react';
+import React, { useState, useEffect, useId, useRef, useMemo } from 'react';
 import { sanitizeCurrency } from '../services/aiVerification.js';
 import { runPaddleOCR, parseStructuredReceiptText } from '../services/paddleOcrService.js';
+import { detectOverBuying, isWarningKeyDismissed, dismissWarningKey } from '../services/overBuyingDetector.js';
+import { getGroceryItems, getFoodWasteRecords } from '../services/courseProjectStorage.js';
+import { getHouseholdMembers } from '../services/storage.js';
 
 /**
  * ReceiptScannerModal
@@ -128,6 +131,28 @@ export default function ReceiptScannerModal({
   const scaleWeightId = useId();
   const totalAmountId = useId();
   const tripTypeId = useId();
+
+  // Phase 2: Smart Over-Buying Detection state
+  const [dismissedWarnings, setDismissedWarnings] = useState(() => new Set());
+  const overBuyingAnalysis = useMemo(() => {
+    if (!items || items.length === 0 || isScanning) return { warnings: [] };
+    try {
+      const histPurchases = getGroceryItems();
+      const histWaste = getFoodWasteRecords();
+      const members = getHouseholdMembers();
+      return detectOverBuying(items, {
+        purchases: histPurchases,
+        wasteRecords: histWaste,
+        householdMembers: members
+      });
+    } catch (_) {
+      return { warnings: [] };
+    }
+  }, [items, isScanning]);
+
+  const activeOverBuyingWarnings = (overBuyingAnalysis.warnings || []).filter(
+    w => !dismissedWarnings.has(w.id) && !isWarningKeyDismissed(w.id)
+  );
 
   // Populate from initialData when provided
   useEffect(() => {
@@ -864,6 +889,70 @@ export default function ReceiptScannerModal({
                       </span>
                     </div>
                   </div>
+
+                  {/* Over-Buying Advisory Alerts (Phase 2) */}
+                  {activeOverBuyingWarnings.length > 0 && (
+                    <div className="space-y-2 mb-2">
+                      {activeOverBuyingWarnings.map(warning => (
+                        <div
+                          key={warning.id}
+                          className={`p-3 rounded-xl border transition-all ${
+                            warning.level === 'high'
+                              ? 'border-rose-300 dark:border-rose-900/60 bg-rose-50/80 dark:bg-rose-950/20'
+                              : warning.level === 'moderate'
+                              ? 'border-amber-300 dark:border-amber-900/60 bg-amber-50/80 dark:bg-amber-950/20'
+                              : 'border-cyan-300 dark:border-cyan-900/60 bg-cyan-50/80 dark:bg-cyan-950/20'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-2.5">
+                              <span className="text-xl select-none mt-0.5">
+                                {warning.level === 'high' ? '🚨' : warning.level === 'moderate' ? '⚠️' : 'ℹ️'}
+                              </span>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-xs uppercase tracking-wider text-slate-900 dark:text-white">
+                                    {warning.level === 'high' ? 'Potential Over-Purchasing Detected' : warning.level === 'moderate' ? 'Historical Waste Alert' : 'Advisory Note'}: {warning.category}
+                                  </span>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                    warning.level === 'high'
+                                      ? 'bg-rose-500/20 text-rose-800 dark:text-rose-300 border-rose-500/40'
+                                      : 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40'
+                                  }`}>
+                                    {warning.level.toUpperCase()} ADVISORY
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 leading-relaxed">
+                                  {warning.reason}
+                                </p>
+                                <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-1.5 flex-wrap">
+                                  <span>Proposed: <strong>{warning.proposedQuantityKg} kg</strong></span>
+                                  <span>•</span>
+                                  <span>Hist. Avg: <strong>{warning.adjustedReferenceKg} kg/cycle</strong></span>
+                                  <span>•</span>
+                                  <span>Waste Ratio: <strong className={warning.level === 'high' ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}>{warning.historicalWasteRatioPercent}%</strong></span>
+                                </div>
+                                <div className="mt-2 text-xs font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
+                                  💡 <strong>Action:</strong> {warning.suggestedAction}
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                dismissWarningKey(warning.id);
+                                setDismissedWarnings(prev => new Set([...prev, warning.id]));
+                              }}
+                              className="text-xs px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800 shrink-0 cursor-pointer transition-colors"
+                              title="Dismiss advisory"
+                            >
+                              ✕ Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* 4. Extracted Items Table */}
                   <div

@@ -150,6 +150,9 @@ export function renderManualTripModal(state = {}) {
             <input type="number" step="0.01" min="0" id="manual-total-amount" class="form-input" placeholder="e.g. 1500.00" required />
           </div>
 
+          <!-- Over-Buying Advisory Alerts Container (Phase 2) -->
+          <div id="manual-overbuying-alerts"></div>
+
           <!-- Itemized Purchases (Optional) Section -->
           <div class="form-group rounded-2xl p-3.5 bg-slate-50/90 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 transition-colors">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">

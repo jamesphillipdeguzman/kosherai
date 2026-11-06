@@ -26,6 +26,7 @@ import {
 
 import { searchDatabase, analyzeIngredients, analyzeRecipe } from './services/ruleEngine.js';
 import { scaleRecipe } from './services/recipeScaler.js';
+import { detectOverBuying, renderOverBuyingAlertsHtml, dismissWarningKey } from './services/overBuyingDetector.js';
 import { compressImage, compressImageForOCR, runClientOCR, verifyWithGeminiAI, scanSupermarketReceipt, scanReceiptWithPaddleOCR, auditReceiptItemOffline } from './services/aiVerification.js';
 import {
   getSettings,
@@ -1946,6 +1947,39 @@ Cracked black pepper`;
         sumBtn.textContent = `⚡ Apply Sum (₱${sum.toFixed(2)}) to Total`;
       }
     }
+
+    // Phase 2: Live Over-Buying Detection on manual items
+    const manualAlertsBox = document.querySelector('#manual-overbuying-alerts');
+    if (manualAlertsBox) {
+      const candidateItems = [];
+      rows.forEach(row => {
+        const name = row.querySelector('.manual-item-name')?.value?.trim();
+        const qtyVal = parseFloat(row.querySelector('.manual-item-qty')?.value);
+        const unitVal = row.querySelector('.manual-item-unit')?.value;
+        if (name) {
+          candidateItems.push({
+            name,
+            quantity: !isNaN(qtyVal) ? qtyVal : 1,
+            unit: unitVal || 'pcs'
+          });
+        }
+      });
+
+      if (candidateItems.length > 0) {
+        try {
+          const overBuying = detectOverBuying(candidateItems, {
+            purchases: getGroceryItems(),
+            wasteRecords: getFoodWasteRecords(),
+            householdMembers: state.household_members || getHouseholdMembers()
+          });
+          manualAlertsBox.innerHTML = overBuying.hasWarnings ? renderOverBuyingAlertsHtml(overBuying.warnings) : '';
+        } catch (_) {
+          manualAlertsBox.innerHTML = '';
+        }
+      } else {
+        manualAlertsBox.innerHTML = '';
+      }
+    }
   }
 
   function attachManualRowRemoveListeners() {
@@ -1975,13 +2009,17 @@ Cracked black pepper`;
 
           const nameInput = newRow.querySelector('.manual-item-name');
           const priceInput = newRow.querySelector('.manual-item-price');
+          const qtyInput = newRow.querySelector('.manual-item-qty');
+          const unitSelect = newRow.querySelector('.manual-item-unit');
+
           if (nameInput) {
             nameInput.addEventListener('input', updateManualItemsSummary);
             nameInput.focus();
           }
-          if (priceInput) {
-            priceInput.addEventListener('input', updateManualItemsSummary);
-          }
+          if (priceInput) priceInput.addEventListener('input', updateManualItemsSummary);
+          if (qtyInput) qtyInput.addEventListener('input', updateManualItemsSummary);
+          if (unitSelect) unitSelect.addEventListener('change', updateManualItemsSummary);
+
           updateManualItemsSummary();
         }
       }
@@ -2005,8 +2043,11 @@ Cracked black pepper`;
   }
 
   // Attach live summary updates on initial row(s)
-  document.querySelectorAll('#manual-items-tbody .manual-item-name, #manual-items-tbody .manual-item-price').forEach(input => {
+  document.querySelectorAll('#manual-items-tbody .manual-item-name, #manual-items-tbody .manual-item-price, #manual-items-tbody .manual-item-qty').forEach(input => {
     input.addEventListener('input', updateManualItemsSummary);
+  });
+  document.querySelectorAll('#manual-items-tbody .manual-item-unit').forEach(select => {
+    select.addEventListener('change', updateManualItemsSummary);
   });
   attachManualRowRemoveListeners();
   updateManualItemsSummary();
@@ -2696,6 +2737,19 @@ window.addEventListener('kosherai:household-changed', (e) => {
 
 // Document-level fallback listener ensuring header auth buttons and modal backdrop remain 100% responsive
 document.addEventListener('click', (e) => {
+  const dismissWarningBtn = e.target.closest('.dismiss-warning-btn');
+  if (dismissWarningBtn) {
+    e.preventDefault();
+    const wid = dismissWarningBtn.getAttribute('data-dismiss-warning');
+    if (wid) dismissWarningKey(wid);
+    const banner = dismissWarningBtn.closest('.overbuying-warning-banner');
+    if (banner) {
+      banner.style.opacity = '0';
+      setTimeout(() => banner.remove(), 150);
+    }
+    return;
+  }
+
   const signinBtn = e.target.closest('#header-signin-btn');
   if (signinBtn) {
     e.preventDefault();
