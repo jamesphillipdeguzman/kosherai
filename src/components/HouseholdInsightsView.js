@@ -571,3 +571,4 @@ export function renderHouseholdInsightsDashboard(state = {}) {
     </div>
   `;
 }
+

@@ -367,3 +367,4 @@ console.log('\nTest J: Regression Checks (Portion Scaling & Category Classificat
 console.log('\n======================================================================');
 console.log('🎉 ALL PHASE 3 HOUSEHOLD GROCERY INSIGHTS ACCEPTANCE TESTS PASSED!');
 console.log('======================================================================\n');
+
