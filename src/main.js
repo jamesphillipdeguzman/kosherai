@@ -169,6 +169,7 @@ const state = {
   selectedWeekView: 1,
   mealPlanWeek: 2,
   insightsPeriod: 'last_30_days',
+  isIntelligenceExpanded: false,
   receiptModalOpen: false,
   manualTripModalOpen: false,
   editTripModalOpen: false,
@@ -1474,6 +1475,16 @@ Cracked black pepper`;
       render();
     });
   });
+
+  // Toggle Food Cost & Spoilage Intelligence Section Collapse/Expand
+  const toggleIntelligenceBtn = document.querySelector('#toggle-food-cost-intelligence-btn');
+  if (toggleIntelligenceBtn) {
+    toggleIntelligenceBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      state.isIntelligenceExpanded = !state.isIntelligenceExpanded;
+      render();
+    });
+  }
 
   // Household Grocery Insights Reporting Period Filter (Phase 3)
   document.querySelectorAll('[data-insights-period]').forEach(btn => {
@@ -2845,6 +2856,14 @@ document.addEventListener('click', (e) => {
       banner.style.opacity = '0';
       setTimeout(() => banner.remove(), 150);
     }
+    return;
+  }
+
+  const toggleIntBtn = e.target.closest('#toggle-food-cost-intelligence-btn');
+  if (toggleIntBtn) {
+    e.preventDefault();
+    state.isIntelligenceExpanded = !state.isIntelligenceExpanded;
+    render();
     return;
   }
 
