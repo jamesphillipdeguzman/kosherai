@@ -559,3 +559,4 @@ export function renderInventoryModal(state = {}) {
     </div>
   `;
 }
+
