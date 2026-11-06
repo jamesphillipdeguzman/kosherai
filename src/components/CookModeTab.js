@@ -5,10 +5,11 @@ import { DIET_RECIPES } from '../data/dietRecipes.js';
 import { getCategoryIcon } from '../data/lidDatabase.js';
 import { getRecipeImageUrl } from '../utils/cloudinary.js';
 import { getCachedRecipeInteraction, isRecipeLiked } from '../services/recipeInteractionsStorage.js';
+import { scaleRecipe } from '../services/recipeScaler.js';
 import lidRecipes from '../data/lidRecipes.json' with { type: 'json' };
 import generatedImages from '../data/generatedImages.json' with { type: 'json' };
 
-export { DIET_RECIPES, lidRecipes };
+export { DIET_RECIPES, lidRecipes, scaleRecipe };
 
 const CATEGORIES = ['All', 'Breakfast', 'Mains', 'Soups & Stews', 'Snacks & Sides'];
 
@@ -18,8 +19,11 @@ export function renderCookModeTab(state) {
     recipeAnalysis = null, 
     recipeText = '',
     recipeCategoryFilter = 'ALL',
-    activeDiet = 'lid'
+    activeDiet = 'lid',
+    household_members = 4
   } = state;
+
+  const householdMembers = Math.max(1, Math.min(20, Math.round(Number(household_members || state.settings?.household_members || 4))));
 
   const currentDietData = DIET_RECIPES[activeDiet] || DIET_RECIPES.lid;
   const activeChecklist = CHECKLIST_BY_DIET[activeDiet] || CHECKLIST_BY_DIET.lid || PRE_COOKING_CHECKLIST;
@@ -164,6 +168,50 @@ export function renderCookModeTab(state) {
           </span>
         </div>
 
+        <!-- Household Portion Scaling Selector -->
+        <div class="household-portion-bar flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 shadow-sm mb-6">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-center text-xl select-none">
+              👨‍👩‍👧‍👦
+            </div>
+            <div>
+              <div class="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <span>Household Size</span>
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                  Dynamic Scaling
+                </span>
+              </div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">
+                Adjust recipe ingredients dynamically for your household (1–20 members).
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button 
+              type="button" 
+              class="household-dec-btn w-8 h-8 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold flex items-center justify-center transition-colors shadow-xs cursor-pointer text-base disabled:opacity-50 disabled:cursor-not-allowed"
+              data-current-val="${householdMembers}"
+              aria-label="Decrease household members"
+              ${householdMembers <= 1 ? 'disabled' : ''}
+            >
+              −
+            </button>
+            <span class="household-members-count font-bold text-sm text-slate-900 dark:text-white px-3 min-w-[90px] text-center select-none">
+              ${householdMembers} Members
+            </span>
+            <button 
+              type="button" 
+              class="household-inc-btn w-8 h-8 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold flex items-center justify-center transition-colors shadow-xs cursor-pointer text-base disabled:opacity-50 disabled:cursor-not-allowed"
+              data-current-val="${householdMembers}"
+              aria-label="Increase household members"
+              ${householdMembers >= 20 ? 'disabled' : ''}
+            >
+              +
+            </button>
+          </div>
+        </div>
+
         <!-- Category Filter Bar -->
         <div class="recipe-filter-bar" role="tablist" aria-label="Recipe categories">
           ${CATEGORIES.map(cat => {
@@ -199,6 +247,11 @@ export function renderCookModeTab(state) {
 }
 
 function renderRecipeCard(recipe, state = {}) {
+  const householdMembers = Math.max(1, Math.min(20, Math.round(Number(state.household_members || state.settings?.household_members || 4))));
+  const scaled = scaleRecipe(recipe, householdMembers);
+  const baseServings = scaled.base_servings;
+  const scalingMultiplier = scaled.scaling_multiplier;
+
   const title = recipe.name || recipe.title || 'Curated Meal';
   const category = recipe.type || recipe.category || 'Mains';
   const tag = recipe.tag || recipe.clinicalBadge || 'Protocol Compliant';
@@ -249,27 +302,68 @@ function renderRecipeCard(recipe, state = {}) {
           </div>
         </div>
         <h3 class="recipe-card-title">${escapeHtml(title)}</h3>
-        <div class="recipe-clinical-badge inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-emerald-600/50 dark:border-emerald-400/50 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-          </svg>
-          <span>${escapeHtml(tag)}</span>
+        <div class="flex items-center gap-2 flex-wrap mb-1">
+          <div class="recipe-clinical-badge inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-emerald-600/50 dark:border-emerald-400/50 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            <span>${escapeHtml(tag)}</span>
+          </div>
+          <div class="recipe-servings-badge inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300">
+            <span>👥</span>
+            <span>${householdMembers === baseServings ? `Serves ${baseServings}` : `${baseServings} Base → ${householdMembers} Members`}</span>
+          </div>
         </div>
       </div>
 
       <div class="recipe-card-body">
-        <!-- Ingredients List -->
+        <!-- Ingredients List & Dynamic Scaling Table -->
         <div class="recipe-card-section">
-          <div class="recipe-section-heading">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 11l3 3L22 4"></path>
-              <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
-            </svg>
-            <span>Ingredients (${recipe.ingredients.length})</span>
+          <div class="recipe-section-heading flex justify-between items-center mb-2">
+            <div class="flex items-center gap-1.5">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 11l3 3L22 4"></path>
+                <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"></path>
+              </svg>
+              <span>Ingredients (${scaled.scaledIngredients.length})</span>
+            </div>
+            <span class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-800/40">
+              ${householdMembers === baseServings 
+                ? `Base: ${baseServings} servings` 
+                : `${baseServings} Base → ${householdMembers} Members (${scalingMultiplier.toFixed(2).replace(/\.00$/, '')}×)`
+              }
+            </span>
           </div>
-          <ul class="recipe-ingredients-list">
-            ${recipe.ingredients.map(ing => `<li>${escapeHtml(ing)}</li>`).join('')}
-          </ul>
+
+          ${householdMembers === baseServings ? `
+            <ul class="recipe-ingredients-list">
+              ${scaled.scaledIngredients.map(ing => `<li>${escapeHtml(ing.scaledText)}</li>`).join('')}
+            </ul>
+          ` : `
+            <div class="scaled-ingredients-summary text-[11px] text-slate-500 dark:text-slate-400 mb-2">
+              Original recipe: <strong>${baseServings} servings</strong> • Preparing for: <strong class="text-emerald-600 dark:text-emerald-400">${householdMembers} members</strong>
+            </div>
+            <div class="overflow-x-auto rounded-lg border border-slate-200/80 dark:border-slate-800 my-2">
+              <table class="w-full text-xs text-left border-collapse">
+                <thead class="bg-slate-100/90 dark:bg-slate-800/90 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800">
+                  <tr>
+                    <th class="py-1.5 px-2.5">Ingredient</th>
+                    <th class="py-1.5 px-2.5 text-right w-20">Original</th>
+                    <th class="py-1.5 px-2.5 text-right w-24 text-emerald-600 dark:text-emerald-400 font-bold">Adjusted</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 bg-white/50 dark:bg-slate-900/50">
+                  ${scaled.scaledIngredients.map(item => `
+                    <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                      <td class="py-1.5 px-2.5 font-medium text-slate-800 dark:text-slate-200">${escapeHtml(item.displayName || item.name)}</td>
+                      <td class="py-1.5 px-2.5 text-right text-slate-400 dark:text-slate-500 font-mono">${escapeHtml(item.originalQuantityText || '—')}</td>
+                      <td class="py-1.5 px-2.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">${escapeHtml(item.scaledQuantityText || item.scaledText)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `}
         </div>
 
         <!-- Step-by-Step Directions -->

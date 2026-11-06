@@ -36,7 +36,40 @@ export function renderSettingsModal(settings = {}, currentTheme = 'dark', showPr
             </div>
           </div>
 
-          <!-- 2. Interface Theme Switcher -->
+          <!-- 2. Household Size (Portion Scaling) -->
+          <div class="form-group" style="padding-top: 8px; border-top: 1px solid var(--border-color);">
+            <label class="form-label">
+              <span>Household Size</span>
+              <span class="settings-sub-badge" id="settings-household-badge">${settings.household_members || 4} Members</span>
+            </label>
+            <div class="flex items-center gap-3 bg-slate-100 dark:bg-slate-800/80 p-2 rounded-xl border border-slate-200 dark:border-slate-700 w-fit">
+              <button 
+                type="button" 
+                id="settings-household-dec-btn"
+                class="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold flex items-center justify-center transition-colors shadow-xs cursor-pointer text-base"
+                aria-label="Decrease household members"
+              >
+                −
+              </button>
+              <span id="settings-household-val" class="font-bold text-sm text-slate-900 dark:text-white px-2 min-w-[90px] text-center">
+                ${settings.household_members || 4} Members
+              </span>
+              <button 
+                type="button" 
+                id="settings-household-inc-btn"
+                class="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold flex items-center justify-center transition-colors shadow-xs cursor-pointer text-base"
+                aria-label="Increase household members"
+              >
+                +
+              </button>
+              <input type="hidden" id="household-members-input" name="household_members" value="${settings.household_members || 4}" />
+            </div>
+            <div class="form-help">
+              Automatically scales recipe ingredient quantities across Cook Mode (1–20 members).
+            </div>
+          </div>
+
+          <!-- 3. Interface Theme Switcher -->
           <div class="form-group" style="padding-top: 8px; border-top: 1px solid var(--border-color);">
             <label class="form-label">
               <span>Interface Theme</span>

@@ -13,8 +13,43 @@ const DEFAULT_SETTINGS = {
   cloudinaryCloudName: import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME || '',
   cloudinaryPreset: import.meta.env?.VITE_CLOUDINARY_UPLOAD_PRESET || '',
   prepDate: '',
-  targetMaxIodine: 50
+  targetMaxIodine: 50,
+  household_members: 4
 };
+
+export function getHouseholdMembers() {
+  if (typeof window === 'undefined') return 4;
+  try {
+    const direct = localStorage.getItem('kosherai_household_members');
+    if (direct !== null && direct !== '') {
+      const val = parseInt(direct, 10);
+      if (!isNaN(val) && val >= 1 && val <= 20) return val;
+    }
+    const saved = localStorage.getItem('kosherai_settings');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      const val = parseInt(parsed.household_members || parsed.householdMembers, 10);
+      if (!isNaN(val) && val >= 1 && val <= 20) return val;
+    }
+  } catch (_) {}
+  return 4;
+}
+
+export function setHouseholdMembers(count) {
+  const num = Number(count);
+  const valid = Number.isFinite(num) ? num : 4;
+  const clamped = Math.max(1, Math.min(20, Math.round(valid)));
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('kosherai_household_members', String(clamped));
+      const current = getSettings();
+      current.household_members = clamped;
+      localStorage.setItem(KEYS.SETTINGS, JSON.stringify(current));
+      window.dispatchEvent(new CustomEvent('kosherai:household-changed', { detail: { household_members: clamped } }));
+    } catch (_) {}
+  }
+  return clamped;
+}
 
 export function getSettings() {
   let parsed = {};
@@ -30,7 +65,8 @@ export function getSettings() {
     cloudinaryCloudName: parsed.cloudinaryCloudName?.trim() || import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME || '',
     cloudinaryPreset: parsed.cloudinaryPreset?.trim() || import.meta.env?.VITE_CLOUDINARY_UPLOAD_PRESET || '',
     prepDate: parsed.prepDate || '',
-    targetMaxIodine: parsed.targetMaxIodine ?? 50
+    targetMaxIodine: parsed.targetMaxIodine ?? 50,
+    household_members: getHouseholdMembers()
   };
 }
 
@@ -38,6 +74,13 @@ export function saveSettings(newSettings) {
   try {
     const current = getSettings();
     const updated = { ...current, ...newSettings };
+    if (newSettings.household_members !== undefined || newSettings.householdMembers !== undefined) {
+      const hVal = Math.max(1, Math.min(20, Math.round(Number(newSettings.household_members ?? newSettings.householdMembers ?? 4))));
+      updated.household_members = hVal;
+      try {
+        localStorage.setItem('kosherai_household_members', String(hVal));
+      } catch (_) {}
+    }
     localStorage.setItem(KEYS.SETTINGS, JSON.stringify(updated));
     return updated;
   } catch (e) {

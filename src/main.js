@@ -25,10 +25,13 @@ import {
 } from './services/recipeInteractionsStorage.js';
 
 import { searchDatabase, analyzeIngredients, analyzeRecipe } from './services/ruleEngine.js';
+import { scaleRecipe } from './services/recipeScaler.js';
 import { compressImage, compressImageForOCR, runClientOCR, verifyWithGeminiAI, scanSupermarketReceipt, scanReceiptWithPaddleOCR, auditReceiptItemOffline } from './services/aiVerification.js';
 import {
   getSettings,
   saveSettings,
+  getHouseholdMembers,
+  setHouseholdMembers,
   getScanHistory,
   saveScanResult,
   addScanToHistory,
@@ -148,6 +151,7 @@ const state = {
   recipeCategoryFilter: 'ALL',
   activeCommentDrawerRecipe: null,
   commentUserName: (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_user_name') : '') || '',
+  household_members: getHouseholdMembers(),
 
   // Settings
   settings: getSettings(),
@@ -656,6 +660,35 @@ function attachEventHandlers() {
     });
   }
 
+  // Settings Household Members Stepper Controls
+  const settingsHouseholdDecBtn = document.querySelector('#settings-household-dec-btn');
+  const settingsHouseholdIncBtn = document.querySelector('#settings-household-inc-btn');
+  const settingsHouseholdVal = document.querySelector('#settings-household-val');
+  const settingsHouseholdBadge = document.querySelector('#settings-household-badge');
+  const settingsHouseholdInput = document.querySelector('#household-members-input');
+
+  if (settingsHouseholdDecBtn && settingsHouseholdIncBtn && settingsHouseholdInput) {
+    settingsHouseholdDecBtn.addEventListener('click', () => {
+      let current = parseInt(settingsHouseholdInput.value || '4', 10);
+      if (current > 1) {
+        current -= 1;
+        settingsHouseholdInput.value = current;
+        if (settingsHouseholdVal) settingsHouseholdVal.textContent = `${current} Members`;
+        if (settingsHouseholdBadge) settingsHouseholdBadge.textContent = `${current} Members`;
+      }
+    });
+
+    settingsHouseholdIncBtn.addEventListener('click', () => {
+      let current = parseInt(settingsHouseholdInput.value || '4', 10);
+      if (current < 20) {
+        current += 1;
+        settingsHouseholdInput.value = current;
+        if (settingsHouseholdVal) settingsHouseholdVal.textContent = `${current} Members`;
+        if (settingsHouseholdBadge) settingsHouseholdBadge.textContent = `${current} Members`;
+      }
+    });
+  }
+
   // Settings Form Submit
   const settingsForm = document.querySelector('#settings-form');
   if (settingsForm) {
@@ -665,12 +698,17 @@ function attachEventHandlers() {
       const cloudName = document.querySelector('#cloudinary-name-input')?.value || '';
       const cloudPreset = document.querySelector('#cloudinary-preset-input')?.value || '';
       const prepDate = document.querySelector('#prep-date-input')?.value || '';
+      const householdMembersVal = parseInt(document.querySelector('#household-members-input')?.value || '4', 10);
+
+      setHouseholdMembers(householdMembersVal);
+      state.household_members = householdMembersVal;
 
       state.settings = saveSettings({
         geminiApiKey: geminiKey.trim(),
         cloudinaryCloudName: cloudName.trim(),
         cloudinaryPreset: cloudPreset.trim(),
-        prepDate
+        prepDate,
+        household_members: householdMembersVal
       });
 
       state.settingsOpen = false;
@@ -1227,6 +1265,31 @@ Cracked black pepper`;
     });
   }
 
+  // Household Portion Scaling Controls
+  document.querySelectorAll('.household-dec-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const current = state.household_members || getHouseholdMembers();
+      if (current > 1) {
+        const next = setHouseholdMembers(current - 1);
+        state.household_members = next;
+        render();
+      }
+    });
+  });
+
+  document.querySelectorAll('.household-inc-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const current = state.household_members || getHouseholdMembers();
+      if (current < 20) {
+        const next = setHouseholdMembers(current + 1);
+        state.household_members = next;
+        render();
+      }
+    });
+  });
+
   // Recipe Category Filter
   document.querySelectorAll('.recipe-filter-btn[data-category]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1236,7 +1299,7 @@ Cracked black pepper`;
     });
   });
 
-  // Load into Recipe Auditor
+  // Load into Recipe Auditor (Audits the dynamically scaled ingredient quantities)
   document.querySelectorAll('.load-recipe-btn[data-recipe-id]').forEach(btn => {
     btn.addEventListener('click', () => {
       const rid = btn.getAttribute('data-recipe-id');
@@ -1256,7 +1319,8 @@ Cracked black pepper`;
 
       if (recipe && recipe.ingredients) {
         recordRecipeView(rid);
-        state.recipeText = recipe.ingredients.join('\n');
+        const scaled = scaleRecipe(recipe, state.household_members || 4);
+        state.recipeText = scaled.scaledIngredientLines.join('\n');
         state.recipeAnalysis = analyzeRecipe(recipe.name || recipe.title, state.recipeText, activeDiet);
         render();
         const textarea = document.querySelector('#recipe-textarea');
@@ -2622,6 +2686,12 @@ window.addEventListener('kosherai:auth-changed', () => {
 window.addEventListener('kosherai:sync-data', () => {
   pushThenRestoreFromNeon({ manual: true }).catch(() => {});
   refreshScanHistory().catch(() => {});
+});
+window.addEventListener('kosherai:household-changed', (e) => {
+  if (e.detail?.household_members) {
+    state.household_members = e.detail.household_members;
+    render();
+  }
 });
 
 // Document-level fallback listener ensuring header auth buttons and modal backdrop remain 100% responsive
