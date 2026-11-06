@@ -18,6 +18,7 @@ import {
   calculateHouseholdInsights
 } from '../services/householdInsightsService.js';
 import { FOOD_CATEGORIES } from '../services/overBuyingDetector.js';
+import { renderPredictiveInsightsSection } from './PredictiveInsightsView.js';
 
 // Visual Category Icons & Accent Badges
 const CATEGORY_STYLES = {
@@ -585,6 +586,9 @@ export function renderHouseholdInsightsDashboard(state = {}) {
           </div>
         `}
       </div>
+
+      <!-- SECTION G: PREDICTIVE HOUSEHOLD INSIGHTS & SAVINGS INTELLIGENCE (Phase 5) -->
+      ${renderPredictiveInsightsSection(state)}
 
     </div>
   `;
