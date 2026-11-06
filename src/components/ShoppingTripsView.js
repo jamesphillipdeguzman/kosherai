@@ -379,28 +379,31 @@ export function renderTripCard(trip, isEditing = false) {
         </div>
       ` : ''}
 
-      <div class="trip-card-footer flex items-center justify-end gap-2 mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80">
+      <div class="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-slate-100/80 dark:border-slate-800/80">
+        <!-- Modern Edit Button -->
         <button
           type="button"
-          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium leading-none rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/70 dark:text-emerald-300 dark:bg-emerald-950/40 dark:border-emerald-800/50 transition-all cursor-pointer edit-trip-btn"
+          class="edit-trip-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200/80 shadow-xs transition-all active:scale-95 cursor-pointer dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60"
           data-edit-trip="${trip.id}"
-          title="Edit Trip"
+          style="all: unset; display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.35rem 0.75rem; font-size: 0.75rem; font-weight: 600; border-radius: 9999px; background-color: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; cursor: pointer;"
         >
-          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+          <svg style="width: 14px; height: 14px; flex-shrink: 0;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
           </svg>
           <span>Edit</span>
         </button>
+
+        <!-- Modern Delete Button -->
         <button
           type="button"
-          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium leading-none rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200/70 dark:text-rose-300 dark:bg-rose-950/40 dark:border-rose-800/50 transition-all cursor-pointer delete-trip-btn"
+          class="delete-trip-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full text-rose-700 bg-rose-50 hover:bg-rose-100/80 border border-rose-200/80 shadow-xs transition-all active:scale-95 cursor-pointer dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60"
           data-delete-trip="${trip.id}"
-          title="Delete Trip"
+          style="all: unset; display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.35rem 0.75rem; font-size: 0.75rem; font-weight: 600; border-radius: 9999px; background-color: #fff1f2; color: #be123c; border: 1px solid #fecdd3; cursor: pointer;"
         >
-          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          <svg style="width: 14px; height: 14px; flex-shrink: 0;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
-          <span>Delete Trip</span>
+          <span>Delete</span>
         </button>
       </div>
     </div>
