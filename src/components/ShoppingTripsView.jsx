@@ -225,7 +225,7 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
                     </span>
                   ) : (
                     <span className="trip-sync-badge synced" title="Synced with Neon PostgreSQL cloud database">
-                      ☁️✓ Neon Synced
+                      ☁️✓ Synced
                     </span>
                   )}
                 </div>

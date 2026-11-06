@@ -1457,7 +1457,7 @@ Cracked black pepper`;
   });
 
   // Meal Plan Week Selector
-  document.querySelectorAll('.btn-chip[data-mealplan-week]').forEach(btn => {
+  document.querySelectorAll('[data-mealplan-week]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const w = parseInt(e.currentTarget.getAttribute('data-mealplan-week'), 10);
       state.mealPlanWeek = w;

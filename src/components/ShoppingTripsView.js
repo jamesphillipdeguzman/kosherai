@@ -109,10 +109,10 @@ export function renderEditTripModal(state = {}) {
             ${items.length > 1 ? `
               <div class="edit-items-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; padding-right: 4px; margin-top: 4px;">
                 ${items.map((item, idx) => {
-                  const rowName = item?.name || item?.raw_receipt_text || item?.rawReceiptText || item?.itemName || '';
-                  const rowQty = (item?.quantity !== undefined && item?.quantity !== null && item?.quantity !== '') ? item.quantity : (item?.qty ?? 1);
-                  const rowUnit = item?.unit || 'pc';
-                  return `
+    const rowName = item?.name || item?.raw_receipt_text || item?.rawReceiptText || item?.itemName || '';
+    const rowQty = (item?.quantity !== undefined && item?.quantity !== null && item?.quantity !== '') ? item.quantity : (item?.qty ?? 1);
+    const rowUnit = item?.unit || 'pc';
+    return `
                     <div class="edit-item-row flex items-center gap-2 w-full" data-item-id="${item.id}" style="display: flex; align-items: center; gap: 8px; width: 100%;">
                       <!-- 1. Item Name Input (Takes up most of the space) -->
                       <input
@@ -150,7 +150,7 @@ export function renderEditTripModal(state = {}) {
                       />
                     </div>
                   `;
-                }).join('')}
+  }).join('')}
               </div>
             ` : `
               <div class="flex items-center gap-2 w-full" style="display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px;">
@@ -333,7 +333,7 @@ export function renderTripCard(trip, isEditing = false) {
                 </span>
               ` : `
                 <span class="trip-sync-badge synced" title="Synced with Neon PostgreSQL cloud database">
-                  ☁️✓ Neon Synced
+                  ☁️✓ Synced
                 </span>
               `}
             </div>

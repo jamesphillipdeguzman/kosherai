@@ -72,7 +72,7 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
         <!-- Dynamic Auth State: Avatar/Sign Out if logged in, Sign In/Get Started if logged out -->
         <div class="header-auth-controls inline-flex items-center gap-1.5" id="header-auth-container">
           ${currentUser ? `
-            <div class="user-profile-pill flex items-center gap-1.5 bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 px-2.5 py-1 rounded-full text-xs shadow-sm" title="Signed in as ${escapeAttr(currentUser.name || currentUser.email || 'Tenant User')}${currentUser.email ? ` (${escapeAttr(currentUser.email)})` : ''}">
+            <div class="user-profile-pill flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xs border border-slate-200/80 dark:border-slate-700/80 px-2.5 py-1 rounded-full text-xs shadow-2xs" title="Signed in as ${escapeAttr(currentUser.name || currentUser.email || 'Tenant User')}${currentUser.email ? ` (${escapeAttr(currentUser.email)})` : ''}">
               <span class="inline-flex items-center gap-1.5">
                 <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-xs flex-shrink-0" title="Online session"></span>
                 <span class="user-first-name font-semibold text-slate-700 dark:text-slate-200">

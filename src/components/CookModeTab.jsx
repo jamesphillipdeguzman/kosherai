@@ -48,32 +48,48 @@ export function CookModeTab({ activeDiet = 'pinoy_keto', onLoadRecipe }) {
         </div>
 
         {/* Dynamic Household Portion Selector */}
-        <div className="flex items-center gap-3 bg-slate-900/90 border border-slate-800 p-2 rounded-2xl shadow-sm">
-          <div className="flex items-center gap-2 pl-2">
-            <span className="text-lg select-none">👨‍👩‍👧‍👦</span>
-            <span className="text-xs font-bold text-slate-300">Household:</span>
+        <div className="flex flex-col gap-1.5 my-3">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
+            <span className="text-base leading-none">👨‍👩‍👧‍👦</span>
+            <span>Household Size Dynamic Scaling</span>
           </div>
-          <div className="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Adjust recipe ingredients dynamically for your household (1–20 members).
+          </p>
+
+          {/* Modern Pill Stepper */}
+          <div className="inline-flex items-center gap-2 bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 rounded-full px-1.5 py-1 w-fit shadow-2xs">
+            {/* Decrement Button */}
             <button
               type="button"
               onClick={handleDec}
               disabled={householdMembers <= 1}
-              className="w-7 h-7 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white font-bold flex items-center justify-center transition-colors cursor-pointer text-sm"
+              className="w-6 h-6 flex items-center justify-center rounded-full bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed shadow-2xs transition-all active:scale-95 cursor-pointer"
+              title="Decrease members"
               aria-label="Decrease household members"
             >
-              −
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M20 12H4" />
+              </svg>
             </button>
-            <span className="font-bold text-xs text-white px-2 min-w-[75px] text-center select-none">
+
+            {/* Member Count Display */}
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-100 min-w-16 text-center select-none">
               {householdMembers} {householdMembers === 1 ? 'Member' : 'Members'}
             </span>
+
+            {/* Increment Button */}
             <button
               type="button"
               onClick={handleInc}
               disabled={householdMembers >= 20}
-              className="w-7 h-7 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white font-bold flex items-center justify-center transition-colors cursor-pointer text-sm"
+              className="w-6 h-6 flex items-center justify-center rounded-full bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed shadow-2xs transition-all active:scale-95 cursor-pointer"
+              title="Increase members"
               aria-label="Increase household members"
             >
-              +
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+              </svg>
             </button>
           </div>
         </div>

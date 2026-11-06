@@ -374,7 +374,7 @@ export async function syncPendingTrips() {
     for (const trip of pendingTrips) {
       const idbItems = await getGroceryItemsFromIndexedDB(trip.id);
       const localMatchedItems = allLocalGroceryItems.filter(i => i.tripId === trip.id);
-      
+
       let candidateItems = (idbItems && idbItems.length > 0) ? idbItems : localMatchedItems;
       if (!candidateItems || candidateItems.length === 0) {
         if (Array.isArray(trip.items) && trip.items.length > 0) {
@@ -430,7 +430,7 @@ export async function syncPendingTrips() {
           await markTripAsSyncedInIndexedDB(trip.id);
 
           // Update localStorage
-          const localTrips = getShoppingTrips().map(t => 
+          const localTrips = getShoppingTrips().map(t =>
             t.id === trip.id ? { ...t, synced: true, itemsCount: rawItems.length } : t
           );
           localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(localTrips));
@@ -669,8 +669,8 @@ export async function restoreFromNeon() {
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
     console.info('[Network] Back online: initiating automatic background sync with Neon...');
-    syncPendingTrips().catch(() => {});
-    syncPendingFoodWaste().catch(() => {});
+    syncPendingTrips().catch(() => { });
+    syncPendingFoodWaste().catch(() => { });
   });
 }
 
@@ -701,7 +701,7 @@ export async function deleteShoppingTrip(tripId) {
         method: 'DELETE',
         headers: getAuthHeaders(),
         credentials: 'include'
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     return true;
@@ -956,9 +956,9 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
 
           try {
             await saveTripToIndexedDB(freshTrips[tIdx] || updatedTrip, tripItems, true);
-          } catch (_) {}
+          } catch (_) { }
 
-          // Dispatch window.dispatchEvent(new Event('kosherai_storage_updated')) so the card badge transitions from '⏳ OFFLINE' to '✓ NEON SYNCED'
+          // Dispatch window.dispatchEvent(new Event('kosherai_storage_updated')) so the card badge transitions from '⏳ OFFLINE' to '✓  SYNCED'
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new Event('kosherai_storage_updated'));
             window.dispatchEvent(new CustomEvent('kosherai-trips-synced', { detail: { tripId } }));
@@ -1242,7 +1242,7 @@ export function getSixWeekComparison() {
 
     const totalExpense = weekExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
     const totalScaleWeightKg = weekTrips.reduce((sum, t) => sum + Number(t.totalScaleWeightKg || 0), 0);
-    
+
     const totalWasteGrams = weekWaste.reduce((sum, r) => sum + Number(r.measuredWeightG || 0), 0);
     const totalWasteKg = totalWasteGrams / 1000;
     const totalWasteCost = weekWaste.reduce((sum, r) => sum + Number(r.estimatedCost || 0), 0);
@@ -1380,8 +1380,8 @@ function escapeCsvField(val) {
 export function exportAllCourseCsvs(activeState = {}) {
   const comparison = activeState.comparison || getSixWeekComparison();
   const trips = (activeState.trips && activeState.trips.length > 0) ? activeState.trips : getShoppingTrips();
-  const items = (activeState.groceryItems && activeState.groceryItems.length > 0) 
-    ? activeState.groceryItems 
+  const items = (activeState.groceryItems && activeState.groceryItems.length > 0)
+    ? activeState.groceryItems
     : ((activeState.groceryPurchases && activeState.groceryPurchases.length > 0) ? activeState.groceryPurchases : getGroceryItems());
   const expenses = (activeState.expenses && activeState.expenses.length > 0) ? activeState.expenses : getExpenses();
   const waste = (activeState.foodWaste && activeState.foodWaste.length > 0) ? activeState.foodWaste : getFoodWasteRecords();
@@ -1512,9 +1512,9 @@ export function showToast(message, type = 'warning') {
     (isWarning || isError
       ? 'bg-amber-900/95 text-amber-100 border border-amber-500/60 shadow-amber-950/50'
       : 'bg-emerald-950/95 text-emerald-100 border border-emerald-500/60 shadow-emerald-950/50');
-  
+
   toast.style.cssText = 'position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%); z-index: 9999; padding: 12px 20px; border-radius: 14px; font-weight: 600; font-size: 0.88rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 8px; max-width: 90vw; width: max-content; pointer-events: none; text-align: center; backdrop-filter: blur(8px);';
-  
+
   const icon = isWarning ? '⚠️' : isError ? '❌' : '✓';
   const hasIconPrefix = message.startsWith('✓') || message.startsWith('⚠️') || message.startsWith('❌') || message.startsWith('✅');
   toast.innerHTML = (hasIconPrefix ? '' : `<span style="font-size: 1.15rem; font-weight: 800; color: ${isSuccess ? '#34d399' : 'inherit'};">${icon}</span>`) + `<span>${message}</span>`;
@@ -1587,8 +1587,8 @@ export const EMPTY_EXPORT_MESSAGE = "No records available to export. Please reco
 
 export function hasCourseData(activeState = {}) {
   const trips = (activeState.trips && activeState.trips.length > 0) ? activeState.trips : getShoppingTrips();
-  const items = (activeState.groceryItems && activeState.groceryItems.length > 0) 
-    ? activeState.groceryItems 
+  const items = (activeState.groceryItems && activeState.groceryItems.length > 0)
+    ? activeState.groceryItems
     : ((activeState.groceryPurchases && activeState.groceryPurchases.length > 0) ? activeState.groceryPurchases : getGroceryItems());
   const waste = (activeState.foodWaste && activeState.foodWaste.length > 0) ? activeState.foodWaste : getFoodWasteRecords();
   return (trips.length > 0 || items.length > 0 || waste.length > 0);
@@ -1624,8 +1624,8 @@ export function handleExportShoppingTrips(activeState = {}) {
 }
 
 export function handleExportItemizedGroceries(activeState = {}) {
-  const items = (activeState.groceryItems && activeState.groceryItems.length > 0) 
-    ? activeState.groceryItems 
+  const items = (activeState.groceryItems && activeState.groceryItems.length > 0)
+    ? activeState.groceryItems
     : ((activeState.groceryPurchases && activeState.groceryPurchases.length > 0) ? activeState.groceryPurchases : getGroceryItems());
   if (items.length === 0) {
     showToast(EMPTY_EXPORT_MESSAGE, 'warning');

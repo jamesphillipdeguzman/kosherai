@@ -169,45 +169,48 @@ export function renderCookModeTab(state) {
         </div>
 
         <!-- Household Portion Scaling Selector -->
-        <div class="household-portion-bar flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 shadow-sm mb-6">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-center text-xl select-none">
-              👨‍👩‍👧‍👦
-            </div>
-            <div>
-              <div class="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <span>Household Size</span>
-                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
-                  Dynamic Scaling
-                </span>
-              </div>
-              <div class="text-xs text-slate-500 dark:text-slate-400">
-                Adjust recipe ingredients dynamically for your household (1–20 members).
-              </div>
-            </div>
+        <div class="household-portion-bar flex flex-col gap-1.5 my-3 p-4 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800 shadow-sm mb-6">
+          <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
+            <span class="text-base leading-none">👨‍👩‍👧‍👦</span>
+            <span>Household Size Dynamic Scaling</span>
           </div>
-          
-          <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
-            <button 
-              type="button" 
-              class="household-dec-btn w-8 h-8 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold flex items-center justify-center transition-colors shadow-xs cursor-pointer text-base disabled:opacity-50 disabled:cursor-not-allowed"
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            Adjust recipe ingredients dynamically for your household (1–20 members).
+          </p>
+
+          <!-- Modern Pill Stepper -->
+          <div class="inline-flex items-center gap-2 bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 rounded-full px-1.5 py-1 w-fit shadow-2xs">
+            <!-- Decrement Button -->
+            <button
+              type="button"
+              class="household-dec-btn w-6 h-6 flex items-center justify-center rounded-full bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed shadow-2xs transition-all active:scale-95 cursor-pointer"
               data-current-val="${householdMembers}"
+              title="Decrease members"
               aria-label="Decrease household members"
               ${householdMembers <= 1 ? 'disabled' : ''}
             >
-              −
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20 12H4" />
+              </svg>
             </button>
-            <span class="household-members-count font-bold text-sm text-slate-900 dark:text-white px-3 min-w-[90px] text-center select-none">
-              ${householdMembers} Members
+
+            <!-- Member Count Display -->
+            <span class="household-members-count text-xs font-bold text-slate-800 dark:text-slate-100 min-w-16 text-center select-none">
+              ${householdMembers} ${householdMembers === 1 ? 'Member' : 'Members'}
             </span>
-            <button 
-              type="button" 
-              class="household-inc-btn w-8 h-8 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold flex items-center justify-center transition-colors shadow-xs cursor-pointer text-base disabled:opacity-50 disabled:cursor-not-allowed"
+
+            <!-- Increment Button -->
+            <button
+              type="button"
+              class="household-inc-btn w-6 h-6 flex items-center justify-center rounded-full bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed shadow-2xs transition-all active:scale-95 cursor-pointer"
               data-current-val="${householdMembers}"
+              title="Increase members"
               aria-label="Increase household members"
               ${householdMembers >= 20 ? 'disabled' : ''}
             >
-              +
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+              </svg>
             </button>
           </div>
         </div>

@@ -38,34 +38,41 @@ export function renderSettingsModal(settings = {}, currentTheme = 'dark', showPr
 
           <!-- 2. Household Size (Portion Scaling) -->
           <div class="form-group" style="padding-top: 8px; border-top: 1px solid var(--border-color);">
-            <label class="form-label">
-              <span>Household Size</span>
+            <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">
+              <span class="text-base leading-none">👨‍👩‍👧‍👦</span>
+              <span>Household Size Dynamic Scaling</span>
               <span class="settings-sub-badge" id="settings-household-badge">${settings.household_members || 4} Members</span>
-            </label>
-            <div class="flex items-center gap-3 bg-slate-100 dark:bg-slate-800/80 p-2 rounded-xl border border-slate-200 dark:border-slate-700 w-fit">
+            </div>
+            <div class="form-help mb-2">
+              Adjust recipe ingredients dynamically for your household (1–20 members).
+            </div>
+            <div class="inline-flex items-center gap-2 bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 rounded-full px-1.5 py-1 w-fit shadow-2xs">
               <button 
                 type="button" 
                 id="settings-household-dec-btn"
-                class="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold flex items-center justify-center transition-colors shadow-xs cursor-pointer text-base"
+                class="w-6 h-6 flex items-center justify-center rounded-full bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 shadow-2xs transition-all active:scale-95 cursor-pointer"
+                title="Decrease members"
                 aria-label="Decrease household members"
               >
-                −
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20 12H4" />
+                </svg>
               </button>
-              <span id="settings-household-val" class="font-bold text-sm text-slate-900 dark:text-white px-2 min-w-[90px] text-center">
+              <span id="settings-household-val" class="text-xs font-bold text-slate-800 dark:text-slate-100 min-w-16 text-center select-none">
                 ${settings.household_members || 4} Members
               </span>
               <button 
                 type="button" 
                 id="settings-household-inc-btn"
-                class="w-8 h-8 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold flex items-center justify-center transition-colors shadow-xs cursor-pointer text-base"
+                class="w-6 h-6 flex items-center justify-center rounded-full bg-emerald-600 text-white hover:bg-emerald-500 shadow-2xs transition-all active:scale-95 cursor-pointer"
+                title="Increase members"
                 aria-label="Increase household members"
               >
-                +
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+                </svg>
               </button>
               <input type="hidden" id="household-members-input" name="household_members" value="${settings.household_members || 4}" />
-            </div>
-            <div class="form-help">
-              Automatically scales recipe ingredient quantities across Cook Mode (1–20 members).
             </div>
           </div>
 

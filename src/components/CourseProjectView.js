@@ -627,12 +627,24 @@ function renderMealPlanTab(state) {
       </div>
 
       <!-- Week Selector -->
-      <div style="display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px;">
-        ${[2, 3, 4, 5, 6].map(w => `
-          <button class="btn-chip ${selectedWeek === w ? 'active' : ''}" data-mealplan-week="${w}">
-            Week ${w} ${w === 2 ? '(Intervention Launch)' : ''}
-          </button>
-        `).join('')}
+      <div class="inline-flex items-center gap-1.5 p-1 bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 rounded-xl my-3 shadow-2xs overflow-x-auto max-w-full">
+        ${[2, 3, 4, 5, 6].map((weekNum) => {
+          const isActive = selectedWeek === weekNum;
+          const label = weekNum === 2 ? 'Week 2 (Intervention Launch)' : `Week ${weekNum}`;
+          return `
+            <button
+              type="button"
+              data-mealplan-week="${weekNum}"
+              class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                isActive
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-white'
+              }"
+            >
+              ${label}
+            </button>
+          `;
+        }).join('')}
       </div>
 
       <!-- Meal Plan Calendar Grid -->
