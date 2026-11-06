@@ -49,3 +49,4 @@ async function migrateImagesToCloudinary() {
 }
 
 migrateImagesToCloudinary().catch(console.error);
+
