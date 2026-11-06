@@ -680,26 +680,30 @@ function attachEventHandlers() {
   const settingsHouseholdIncBtn = document.querySelector('#settings-household-inc-btn');
   const settingsHouseholdVal = document.querySelector('#settings-household-val');
   const settingsHouseholdBadge = document.querySelector('#settings-household-badge');
+  const settingsHouseholdRatio = document.querySelector('#settings-household-ratio');
   const settingsHouseholdInput = document.querySelector('#household-members-input');
 
   if (settingsHouseholdDecBtn && settingsHouseholdIncBtn && settingsHouseholdInput) {
+    const updateSettingsStepper = (val) => {
+      settingsHouseholdInput.value = val;
+      if (settingsHouseholdVal) settingsHouseholdVal.textContent = `${val} ${val === 1 ? 'Member' : 'Members'}`;
+      if (settingsHouseholdBadge) settingsHouseholdBadge.textContent = `${val} Members`;
+      if (settingsHouseholdRatio) settingsHouseholdRatio.textContent = `${(val / 4).toFixed(2)}x Recipe Ratio`;
+      settingsHouseholdDecBtn.disabled = val <= 1;
+      settingsHouseholdIncBtn.disabled = val >= 20;
+    };
+
     settingsHouseholdDecBtn.addEventListener('click', () => {
       let current = parseInt(settingsHouseholdInput.value || '4', 10);
       if (current > 1) {
-        current -= 1;
-        settingsHouseholdInput.value = current;
-        if (settingsHouseholdVal) settingsHouseholdVal.textContent = `${current} Members`;
-        if (settingsHouseholdBadge) settingsHouseholdBadge.textContent = `${current} Members`;
+        updateSettingsStepper(current - 1);
       }
     });
 
     settingsHouseholdIncBtn.addEventListener('click', () => {
       let current = parseInt(settingsHouseholdInput.value || '4', 10);
       if (current < 20) {
-        current += 1;
-        settingsHouseholdInput.value = current;
-        if (settingsHouseholdVal) settingsHouseholdVal.textContent = `${current} Members`;
-        if (settingsHouseholdBadge) settingsHouseholdBadge.textContent = `${current} Members`;
+        updateSettingsStepper(current + 1);
       }
     });
   }

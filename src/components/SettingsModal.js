@@ -46,33 +46,48 @@ export function renderSettingsModal(settings = {}, currentTheme = 'dark', showPr
             <div class="form-help mb-2">
               Adjust recipe ingredients dynamically for your household (1–20 members).
             </div>
-            <div class="inline-flex items-center gap-2 bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 rounded-full px-1.5 py-1 w-fit shadow-2xs">
-              <button 
-                type="button" 
-                id="settings-household-dec-btn"
-                class="w-6 h-6 flex items-center justify-center rounded-full bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 shadow-2xs transition-all active:scale-95 cursor-pointer"
-                title="Decrease members"
-                aria-label="Decrease household members"
-              >
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20 12H4" />
-                </svg>
-              </button>
-              <span id="settings-household-val" class="text-xs font-bold text-slate-800 dark:text-slate-100 min-w-16 text-center select-none">
-                ${settings.household_members || 4} Members
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 my-3">
+              <!-- Modern Stepper Pill -->
+              <div class="inline-flex items-center gap-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xs border border-slate-200/80 dark:border-slate-700/80 rounded-full px-2 py-1.5 shadow-xs w-fit">
+                <button 
+                  type="button" 
+                  id="settings-household-dec-btn"
+                  class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 cursor-pointer shadow-2xs"
+                  title="Decrease members"
+                  aria-label="Decrease household members"
+                  ${(settings.household_members || 4) <= 1 ? 'disabled' : ''}
+                >
+                  <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4" />
+                  </svg>
+                </button>
+                <div class="flex items-center gap-1.5 px-3 min-w-[7rem] justify-center select-none">
+                  <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <span id="settings-household-val" class="text-sm font-bold text-slate-800 dark:text-slate-100">
+                    ${settings.household_members || 4} ${(settings.household_members || 4) === 1 ? 'Member' : 'Members'}
+                  </span>
+                </div>
+                <button 
+                  type="button" 
+                  id="settings-household-inc-btn"
+                  class="w-8 h-8 flex items-center justify-center rounded-full bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 cursor-pointer shadow-xs"
+                  title="Increase members"
+                  aria-label="Increase household members"
+                  ${(settings.household_members || 4) >= 20 ? 'disabled' : ''}
+                >
+                  <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+                <input type="hidden" id="household-members-input" name="household_members" value="${settings.household_members || 4}" />
+              </div>
+
+              <!-- Quick Multiplier Context Badge -->
+              <span id="settings-household-ratio" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40 w-fit">
+                ${((settings.household_members || 4) / 4).toFixed(2)}x Recipe Ratio
               </span>
-              <button 
-                type="button" 
-                id="settings-household-inc-btn"
-                class="w-6 h-6 flex items-center justify-center rounded-full bg-emerald-600 text-white hover:bg-emerald-500 shadow-2xs transition-all active:scale-95 cursor-pointer"
-                title="Increase members"
-                aria-label="Increase household members"
-              >
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
-                </svg>
-              </button>
-              <input type="hidden" id="household-members-input" name="household_members" value="${settings.household_members || 4}" />
             </div>
           </div>
 
