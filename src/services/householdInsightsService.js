@@ -20,6 +20,11 @@ import {
   getFoodWasteRecords,
   formatDateYMD
 } from './courseProjectStorage.js';
+import {
+  getInventoryItems,
+  getExpirationStatus,
+  EXPIRATION_STATUS
+} from './inventoryService.js';
 
 export const REPORTING_PERIODS = {
   THIS_WEEK: 'this_week',
@@ -722,6 +727,18 @@ export function calculateHouseholdInsights(options = {}) {
     { totalWasteKg: previousWasteWeightKg, totalSpending: previousSpending, wasteRatio: prevWasteRatio }
   );
 
+  // 7.1 Household Inventory Context (Phase 4)
+  const allInventory = getInventoryItems();
+  const activeInventory = allInventory.filter(i => Number(i.quantity || 0) > 0);
+  const expiringSoonCount = activeInventory.filter(i => {
+    const s = getExpirationStatus(i, referenceDate);
+    return s.status === EXPIRATION_STATUS.EXPIRING_SOON || s.status === EXPIRATION_STATUS.USE_SOON;
+  }).length;
+  const measurableInventoryKg = activeInventory.reduce((sum, item) => {
+    const kg = standardizeWeightToKg(item.quantity, item.unit);
+    return sum + (kg || 0);
+  }, 0);
+
   const baseInsights = {
     dateRange,
     householdMembers: members,
@@ -742,7 +759,10 @@ export function calculateHouseholdInsights(options = {}) {
       purchaseWeightPerMember,
       wasteWeightPerMember,
       tripsCount: periodTrips.length,
-      wasteRecordsCount: periodWaste.length
+      wasteRecordsCount: periodWaste.length,
+      inventoryItemsCount: activeInventory.length,
+      expiringSoonCount,
+      measurableInventoryKg: Number(measurableInventoryKg.toFixed(2))
     },
     previousSpending,
     previousWasteWeightKg,

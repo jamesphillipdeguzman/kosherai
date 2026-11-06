@@ -36,6 +36,7 @@ import {
 import { getHouseholdMembers } from '../services/storage.js';
 import { detectOverBuying, renderOverBuyingAlertsHtml } from '../services/overBuyingDetector.js';
 import { renderHouseholdInsightsDashboard } from './HouseholdInsightsView.js';
+import { renderSmartMealPlanner, renderInventoryModal } from './SmartMealPlanningView.js';
 
 export function handleDownloadClick(e, exportFn) {
   if (e && typeof e.stopPropagation === 'function') {
@@ -159,6 +160,7 @@ export function renderCourseProjectView(state) {
       ${state.wasteModalOpen ? renderFoodWasteModal(state) : ''}
       ${state.mealPlanModalOpen ? renderMealPlanModal(state) : ''}
       ${state.configModalOpen ? renderProjectConfigModal(config) : ''}
+      ${state.inventoryModalOpen ? renderInventoryModal(state) : ''}
     </div>
   `;
 }
@@ -622,81 +624,7 @@ function renderFoodWasteTab(state) {
 // 5. WEEKLY MEAL PLANNER TAB (WEEKS 2 - 6 INTERVENTION)
 // =========================================================================
 function renderMealPlanTab(state) {
-  const selectedWeek = state.mealPlanWeek || 2;
-  const plans = getMealPlans(selectedWeek);
-  const onHandGroceries = getGroceryItems();
-
-  const daysOfWeek = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-  const mealTypes = ['Breakfast', 'Lunch', 'Dinner'];
-
-  return `
-    <div class="mealplan-view-container">
-      <div class="trips-action-bar">
-        <div>
-          <h2 class="section-title">Weekly Meal Planner (Intervention Weeks 2–6)</h2>
-          <p class="section-desc">
-            Plan household meals in advance to reduce impulse supermarket purchases and prioritize on-hand ingredients. 
-            All meals must strictly preserve your wife's <strong>Low-Iodine Diet</strong> protocol.
-          </p>
-        </div>
-        <button class="btn-primary" id="open-mealplan-modal-btn">
-          ➕ Plan a Meal
-        </button>
-      </div>
-
-      <!-- Week Selector -->
-      <div class="inline-flex items-center gap-1.5 p-1 bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 rounded-xl my-3 shadow-2xs overflow-x-auto max-w-full">
-        ${[2, 3, 4, 5, 6].map((weekNum) => {
-          const isActive = selectedWeek === weekNum;
-          const label = weekNum === 2 ? 'Week 2 (Intervention Launch)' : `Week ${weekNum}`;
-          return `
-            <button
-              type="button"
-              data-mealplan-week="${weekNum}"
-              class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                isActive
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-white'
-              }"
-            >
-              ${label}
-            </button>
-          `;
-        }).join('')}
-      </div>
-
-      <!-- Meal Plan Calendar Grid -->
-      <div class="mealplan-calendar-grid">
-        ${daysOfWeek.map(day => {
-    const dayPlans = plans.filter(p => p.dayOfWeek === day);
-    return `
-            <div class="calendar-day-column">
-              <div class="calendar-day-header">${day}</div>
-              <div class="calendar-day-content">
-                ${dayPlans.length === 0 ? `
-                  <div class="calendar-empty-slot">No meals planned</div>
-                ` : `
-                  ${dayPlans.map(p => `
-                    <div class="calendar-meal-card">
-                      <div class="meal-type-pill">${p.mealType}</div>
-                      <div class="meal-dish-name">${escapeHtml(p.dishName)}</div>
-                      <div class="meal-lid-badge ${p.lidVerified ? 'safe' : 'caution'}">
-                        ${p.lidVerified ? '🛡️ Strict LID Safe' : '⚠️ Review LID'}
-                      </div>
-                      ${p.notes ? `<div class="meal-notes">${escapeHtml(p.notes)}</div>` : ''}
-                      <button class="btn-text delete-meal-btn" data-delete-meal="${p.id}" style="margin-top: 6px; font-size: 0.7rem; color: #f87171;">
-                        ✕ Remove
-                      </button>
-                    </div>
-                  `).join('')}
-                `}
-              </div>
-            </div>
-          `;
-  }).join('')}
-      </div>
-    </div>
-  `;
+  return renderSmartMealPlanner(state);
 }
 
 // =========================================================================

@@ -68,6 +68,12 @@ import {
   hasCourseData,
   PROJECT_CONFIG
 } from './services/courseProjectStorage.js';
+import {
+  saveInventoryItem,
+  consumeInventoryItem,
+  discardInventoryItem,
+  deleteInventoryItem
+} from './services/inventoryService.js';
 
 import {
   saveFoodWasteToIndexedDB,
@@ -170,6 +176,7 @@ const state = {
   editingTrip: null,
   wasteModalOpen: false,
   mealPlanModalOpen: false,
+  inventoryModalOpen: false,
   configModalOpen: false,
   groceryVenueMode: (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_venue_mode') : null) || 'supermarket',
   receiptPreviewUrl: null,
@@ -2452,6 +2459,83 @@ Cracked black pepper`;
       const id = e.currentTarget.getAttribute('data-delete-meal');
       if (confirm('Remove this planned meal?')) {
         deleteMealPlan(id);
+        render();
+      }
+    });
+  });
+
+  // Quick Add Recommended Recipe to Meal Plan
+  document.querySelectorAll('.quick-add-recipe-to-plan-btn[data-recipe-title]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const dish = e.currentTarget.getAttribute('data-recipe-title');
+      state.mealPlanModalOpen = true;
+      render();
+      const input = document.querySelector('#plan-dish-name');
+      if (input && dish) input.value = dish;
+    });
+  });
+
+  // Inventory Modal Open & Close
+  const openInvBtn = document.querySelector('#open-inventory-modal-btn');
+  const closeInvBtn = document.querySelector('#close-inventory-modal-btn');
+  const cancelInvBtn = document.querySelector('#cancel-inventory-modal-btn');
+
+  if (openInvBtn) openInvBtn.addEventListener('click', () => { state.inventoryModalOpen = true; render(); });
+  if (closeInvBtn) closeInvBtn.addEventListener('click', () => { state.inventoryModalOpen = false; render(); });
+  if (cancelInvBtn) cancelInvBtn.addEventListener('click', () => { state.inventoryModalOpen = false; render(); });
+
+  // Inventory Form Submit
+  const invForm = document.querySelector('#inventory-form');
+  if (invForm) {
+    invForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const itemName = document.querySelector('#inv-name')?.value;
+      const quantity = parseFloat(document.querySelector('#inv-qty')?.value || '1');
+      const unit = document.querySelector('#inv-unit')?.value || 'pcs';
+      const storageLocation = document.querySelector('#inv-location')?.value || 'Refrigerator';
+      const expirationDate = document.querySelector('#inv-expiration')?.value || null;
+      const notes = document.querySelector('#inv-notes')?.value || '';
+
+      saveInventoryItem({
+        itemName,
+        quantity,
+        unit,
+        storageLocation,
+        expirationDate,
+        notes
+      });
+
+      state.inventoryModalOpen = false;
+      render();
+    });
+  }
+
+  // Consume, Discard, Delete Inventory Actions
+  document.querySelectorAll('.consume-inventory-btn[data-inv-id]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.getAttribute('data-inv-id');
+      if (id) {
+        consumeInventoryItem(id, 1);
+        render();
+      }
+    });
+  });
+
+  document.querySelectorAll('.discard-inventory-btn[data-inv-id]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.getAttribute('data-inv-id');
+      if (id) {
+        discardInventoryItem(id, 1, 'Spoiled / Molded');
+        render();
+      }
+    });
+  });
+
+  document.querySelectorAll('.delete-inventory-btn[data-inv-id]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.getAttribute('data-inv-id');
+      if (id && confirm('Remove this item from inventory?')) {
+        deleteInventoryItem(id);
         render();
       }
     });

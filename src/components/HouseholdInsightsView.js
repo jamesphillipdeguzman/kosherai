@@ -118,14 +118,32 @@ export function renderHouseholdInsightsDashboard(state = {}) {
             </p>
           </div>
 
-          <!-- Household Size Context Pill (Reusing Phase 1) -->
-          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 text-xs shadow-2xs">
-            <span class="text-base select-none leading-none">👨‍👩‍👧‍👦</span>
-            <div class="flex flex-col">
-              <span class="text-[10px] text-slate-400 dark:text-slate-400 font-semibold uppercase tracking-wider">Household Size</span>
-              <span class="font-bold text-slate-800 dark:text-slate-200">
-                ${overview.householdMembers} ${overview.householdMembers === 1 ? 'Member' : 'Members'}
-              </span>
+          <div class="flex items-center gap-2 flex-wrap">
+            <!-- Phase 4 Inventory Radar Pill -->
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 text-xs shadow-2xs">
+              <span class="text-base select-none leading-none">📦</span>
+              <div class="flex flex-col">
+                <span class="text-[10px] text-slate-400 dark:text-slate-400 font-semibold uppercase tracking-wider">Inventory Radar</span>
+                <span class="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <span>${overview.inventoryItemsCount || 0} Items</span>
+                  ${overview.expiringSoonCount > 0 ? `
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                      ${overview.expiringSoonCount} Expiring Soon
+                    </span>
+                  ` : ''}
+                </span>
+              </div>
+            </div>
+
+            <!-- Household Size Context Pill (Reusing Phase 1) -->
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 text-xs shadow-2xs">
+              <span class="text-base select-none leading-none">👨‍👩‍👧‍👦</span>
+              <div class="flex flex-col">
+                <span class="text-[10px] text-slate-400 dark:text-slate-400 font-semibold uppercase tracking-wider">Household Size</span>
+                <span class="font-bold text-slate-800 dark:text-slate-200">
+                  ${overview.householdMembers} ${overview.householdMembers === 1 ? 'Member' : 'Members'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
