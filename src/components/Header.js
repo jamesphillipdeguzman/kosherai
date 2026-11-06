@@ -83,7 +83,7 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
               <button
                 type="button"
                 id="header-signout-btn"
-                title="Sign out and clear local device cache"
+                title="Sign out of your session"
                 class="text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 font-medium transition-colors cursor-pointer"
               >
                 Sign Out

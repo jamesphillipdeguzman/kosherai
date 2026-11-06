@@ -50,6 +50,10 @@ import {
   updateShoppingTrip,
   deleteShoppingTrip,
   syncPendingTrips,
+  syncPendingInventory,
+  syncPendingMealPlans,
+  syncAndHydrateUserData,
+  handleTenantAccountChange,
   restoreFromNeon,
   saveFoodWasteRecord,
   deleteFoodWasteRecord,
@@ -398,30 +402,19 @@ function attachEventHandlers() {
     });
   }
 
-  // Header Sign Out & Client Tenant Cache Purge
+  // Header Sign Out (Clears auth credentials only; leaves application data & Neon records intact)
   const headerSignOutBtn = document.querySelector('#header-signout-btn');
   if (headerSignOutBtn) {
     headerSignOutBtn.addEventListener('click', async () => {
       const keysToClear = [
-        'kosherai_course_trips',
-        'kosherai_course_grocery_items',
-        'kosherai_course_food_waste',
-        'kosherai_course_expenses',
-        'kosherai_course_meal_plans',
-        'kosherai_inventory',
-        'kosherai_scan_history',
         'kosherai_current_user',
         'kosherai_user_session',
-        'better-auth.session_token',
-        'kosherai_venue_mode'
+        'better-auth.session_token'
       ];
       keysToClear.forEach(k => {
         try { localStorage.removeItem(k); } catch (_) {}
       });
       sessionStorage.clear();
-      if (window.indexedDB) {
-        try { window.indexedDB.deleteDatabase('KosherAICourseDB'); } catch (_) {}
-      }
       try {
         await fetch('/api/auth/sign-out', {
           method: 'POST',
@@ -579,6 +572,9 @@ function attachEventHandlers() {
           if (userRecord.token) {
             try { localStorage.setItem('better-auth.session_token', userRecord.token); } catch (_) {}
           }
+
+          // Enforce tenant account isolation (purges old user's local cache only if account actually switched)
+          handleTenantAccountChange(sessionPayload.user.id);
 
           state.authModalOpen = false;
           state.authModalLoading = false;
@@ -2164,11 +2160,16 @@ Cracked black pepper`;
       manualSyncTripsBtn.disabled = true;
       manualSyncTripsBtn.innerHTML = '🔄 Syncing...';
       try {
-        await syncPendingTrips();
-        await syncPendingFoodWaste();
+        const res = await syncAndHydrateUserData();
+        if (res && res.ok) {
+          showToast?.(`✓ Neon Synchronized: ${res.tripsRestored} trips, ${res.wasteRestored} waste records.`);
+        } else {
+          showToast?.(res?.message || 'Sync complete with local cache.');
+        }
         render();
       } catch (err) {
         console.warn('Manual sync failed:', err);
+        showToast?.('Sync encountered an issue. Local cache preserved.');
       } finally {
         if (manualSyncTripsBtn) {
           manualSyncTripsBtn.disabled = false;
@@ -2181,8 +2182,20 @@ Cracked black pepper`;
   // Manual "Restore from Neon" Button: push pending local records, then pull the cloud copy
   const restoreNeonBtn = document.querySelector('#restore-neon-btn');
   if (restoreNeonBtn) {
-    restoreNeonBtn.addEventListener('click', () => {
-      pushThenRestoreFromNeon({ manual: true });
+    restoreNeonBtn.addEventListener('click', async () => {
+      restoreNeonBtn.disabled = true;
+      restoreNeonBtn.innerHTML = '🔄 Restoring...';
+      try {
+        await pushThenRestoreFromNeon({ manual: true });
+        showToast?.('✓ Restored latest records from Neon cloud.');
+      } catch (err) {
+        showToast?.('Restore failed. Local cache preserved.');
+      } finally {
+        if (restoreNeonBtn) {
+          restoreNeonBtn.disabled = false;
+          restoreNeonBtn.innerHTML = '☁️ Restore from Neon';
+        }
+      }
     });
   }
 
@@ -3017,8 +3030,17 @@ async function initializeAuthSession() {
             session: data.session,
             user: userWithToken
           }));
+          handleTenantAccountChange(userWithToken.id);
           window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: { user: userWithToken } }));
         }
+      }
+    } else {
+      const stored = localStorage.getItem('kosherai_current_user');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed?.id) handleTenantAccountChange(parsed.id);
+        } catch (_) {}
       }
     }
   } catch (_) {}

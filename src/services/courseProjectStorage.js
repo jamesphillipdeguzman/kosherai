@@ -32,6 +32,44 @@ const STORAGE_KEYS = {
   MEAL_PLANS: 'kosherai_course_meal_plans'
 };
 
+export const TENANT_STORAGE_KEYS = [
+  STORAGE_KEYS.TRIPS,
+  STORAGE_KEYS.GROCERY_ITEMS,
+  STORAGE_KEYS.EXPENSES,
+  STORAGE_KEYS.FOOD_WASTE,
+  STORAGE_KEYS.MEAL_PLANS,
+  'kosherai_inventory',
+  'kosherai_scan_history'
+];
+
+/**
+ * Handles account switching between different tenant users on the same browser.
+ * Preserves local cache if signing back into the same account.
+ * Purges the previous user's cached tenant records ONLY if a genuinely different user logs in.
+ *
+ * @param {string} newUserId
+ * @returns {boolean} true if account switched and cache was purged; false if same user or initial login
+ */
+export function handleTenantAccountChange(newUserId) {
+  if (!newUserId) return false;
+  try {
+    const lastUserId = localStorage.getItem('kosherai_last_auth_user_id');
+    if (lastUserId && lastUserId !== newUserId) {
+      console.info(`[Auth] Switched tenant account from ${lastUserId} to ${newUserId}. Purging previous user local tenant cache.`);
+      TENANT_STORAGE_KEYS.forEach(k => {
+        try { localStorage.removeItem(k); } catch (_) {}
+      });
+      if (typeof window !== 'undefined' && window.indexedDB) {
+        try { window.indexedDB.deleteDatabase('KosherAICourseDB'); } catch (_) {}
+      }
+      localStorage.setItem('kosherai_last_auth_user_id', newUserId);
+      return true;
+    }
+    localStorage.setItem('kosherai_last_auth_user_id', newUserId);
+  } catch (_) {}
+  return false;
+}
+
 export function formatDateYMD(d) {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -725,6 +763,15 @@ export async function syncAndHydrateUserData() {
       }
     } catch (_) {}
   }
+
+  // Ensure tenant account tracking
+  try {
+    const curUserStr = localStorage.getItem('kosherai_current_user');
+    if (curUserStr) {
+      const u = JSON.parse(curUserStr);
+      if (u?.id) handleTenantAccountChange(u.id);
+    }
+  } catch (_) {}
 
   // 2. Upload pending offline records first (so local unsynced edits are never overwritten)
   await Promise.allSettled([

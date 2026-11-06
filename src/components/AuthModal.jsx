@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { handleTenantAccountChange } from '../services/courseProjectStorage.js';
 export { renderAuthModalHtml, authenticateUser, isValidEmail } from './AuthModal.js';
 
 /**
@@ -129,6 +130,9 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
         session: { token },
         user: fullUser
       };
+      if (fullUser.id) {
+        handleTenantAccountChange(fullUser.id);
+      }
       localStorage.setItem('kosherai_user_session', JSON.stringify(sessionPayload));
       localStorage.setItem('kosherai_current_user', JSON.stringify(fullUser));
       if (token) {

@@ -124,25 +124,14 @@ export function Header({
   const handleSignOut = async () => {
     try {
       const keysToClear = [
-        'kosherai_course_trips',
-        'kosherai_course_grocery_items',
-        'kosherai_course_food_waste',
-        'kosherai_course_expenses',
-        'kosherai_course_meal_plans',
-        'kosherai_inventory',
-        'kosherai_scan_history',
         'kosherai_current_user',
         'kosherai_user_session',
-        'better-auth.session_token',
-        'kosherai_venue_mode'
+        'better-auth.session_token'
       ];
       keysToClear.forEach((k) => {
         try { localStorage.removeItem(k); } catch (_) {}
       });
       sessionStorage.clear();
-      if (typeof window !== 'undefined' && window.indexedDB) {
-        try { window.indexedDB.deleteDatabase('KosherAICourseDB'); } catch (_) {}
-      }
       try {
         await fetch('/api/auth/sign-out', {
           method: 'POST',
@@ -153,7 +142,6 @@ export function Header({
       setCurrentUser(null);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: null }));
-        window.dispatchEvent(new CustomEvent('kosherai:sync-data', { detail: null }));
       }
     }
   };

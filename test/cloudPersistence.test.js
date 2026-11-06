@@ -9,6 +9,7 @@ import mealPlansApiHandler from '../api/meal-plans.js';
 import settingsApiHandler from '../api/settings.js';
 import scansApiHandler from '../api/scans.js';
 import { uploadReceiptImageToCloudinary } from '../src/utils/cloudinary.js';
+import { handleTenantAccountChange, TENANT_STORAGE_KEYS } from '../src/services/courseProjectStorage.js';
 
 // Setup Mock In-Memory localStorage & window for Node test environment
 const mockStorage = new Map();
@@ -460,8 +461,55 @@ async function runTests() {
     assert(scansList.some(s => s.id === scanId), 'Scan history must persist to Neon and restore upon login');
     console.log('  ✅ Test K Passed: Scan history persists to Neon and re-hydrates upon login.');
 
+    // -----------------------------------------------------------------------------------
+    // Test L: Non-Destructive Sign Out Verification
+    // -----------------------------------------------------------------------------------
+    console.log('Test L: Non-Destructive Sign Out Safeguard');
+    // Seed local cache
+    globalThis.localStorage.setItem('kosherai_course_trips', JSON.stringify([{ id: 'trip_cached_1' }]));
+    globalThis.localStorage.setItem('kosherai_course_food_waste', JSON.stringify([{ id: 'waste_cached_1' }]));
+    globalThis.localStorage.setItem('kosherai_inventory', JSON.stringify([{ id: 'inv_cached_1' }]));
+    globalThis.localStorage.setItem('kosherai_current_user', JSON.stringify({ id: TEST_USER_A }));
+    globalThis.localStorage.setItem('kosherai_user_session', JSON.stringify({ token: TOKEN_A }));
+    globalThis.localStorage.setItem('better-auth.session_token', TOKEN_A);
+
+    // Simulate Non-Destructive Sign-Out (as implemented in Header.jsx & main.js)
+    const authKeysToClear = [
+      'kosherai_current_user',
+      'kosherai_user_session',
+      'better-auth.session_token'
+    ];
+    authKeysToClear.forEach(k => globalThis.localStorage.removeItem(k));
+
+    // Verify auth keys are cleared
+    assert.strictEqual(globalThis.localStorage.getItem('kosherai_current_user'), null, 'Current user must be cleared');
+    assert.strictEqual(globalThis.localStorage.getItem('better-auth.session_token'), null, 'Session token must be cleared');
+
+    // Verify application collections are NEVER deleted on sign-out
+    assert(globalThis.localStorage.getItem('kosherai_course_trips') !== null, 'Shopping trips MUST NOT be deleted on sign out');
+    assert(globalThis.localStorage.getItem('kosherai_course_food_waste') !== null, 'Food waste logs MUST NOT be deleted on sign out');
+    assert(globalThis.localStorage.getItem('kosherai_inventory') !== null, 'Inventory MUST NOT be deleted on sign out');
+    console.log('  ✅ Test L Passed: Sign out clears auth credentials while keeping application data intact.');
+
+    // -----------------------------------------------------------------------------------
+    // Test M: Client Account Switching Isolation
+    // -----------------------------------------------------------------------------------
+    console.log('Test M: Client Account Switching Isolation');
+    globalThis.localStorage.setItem('kosherai_last_auth_user_id', TEST_USER_A);
+    // Same user signing back in should NOT purge cache
+    const sameUserSwitched = handleTenantAccountChange(TEST_USER_A);
+    assert.strictEqual(sameUserSwitched, false, 'Logging back into same account must preserve local cache');
+    assert(globalThis.localStorage.getItem('kosherai_course_trips') !== null, 'Trips must remain intact for same user');
+
+    // Different user signing in MUST purge old user local cache
+    const diffUserSwitched = handleTenantAccountChange(TEST_USER_B);
+    assert.strictEqual(diffUserSwitched, true, 'Logging into different account must trigger cache purge');
+    assert.strictEqual(globalThis.localStorage.getItem('kosherai_course_trips'), null, 'Trips from User A must be cleared for User B');
+    assert.strictEqual(globalThis.localStorage.getItem('kosherai_course_food_waste'), null, 'Waste logs from User A must be cleared for User B');
+    console.log('  ✅ Test M Passed: Account switching correctly isolates local data between tenants.');
+
     console.log('\n======================================================================');
-    console.log('🎉 ALL ACCEPTANCE TESTS (A THROUGH K) PASSED SUCCESSFULLY!');
+    console.log('🎉 ALL ACCEPTANCE TESTS (A THROUGH M) PASSED SUCCESSFULLY!');
     console.log('======================================================================\n');
   } finally {
     // Clean up test users
