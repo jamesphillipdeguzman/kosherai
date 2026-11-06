@@ -309,9 +309,9 @@ export function renderTripCard(trip, isEditing = false) {
             <input type="text" id="edit-notes-${trip.id}" name="notes" class="form-input edit-notes" value="${escapeHtml(trip.notes || '')}" />
           </div>
 
-          <div class="trip-card-footer" style="display: flex; gap: 8px; justify-content: flex-end; padding-top: 8px; border-top: 1px solid var(--border-color);">
-            <button type="button" class="btn-secondary cancel-edit-trip-btn" data-cancel-trip="${trip.id}">Cancel</button>
-            <button type="submit" class="btn-primary save-edit-trip-btn" data-save-trip="${trip.id}">Save Changes</button>
+          <div class="trip-card-footer flex items-center justify-end gap-2 mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80">
+            <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/80 transition-all cursor-pointer cancel-edit-trip-btn" data-cancel-trip="${trip.id}">Cancel</button>
+            <button type="submit" class="rounded-lg px-2.5 py-1 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 transition-all shadow-xs cursor-pointer save-edit-trip-btn" data-save-trip="${trip.id}">Save Changes</button>
           </div>
         </form>
       </div>
@@ -379,12 +379,28 @@ export function renderTripCard(trip, isEditing = false) {
         </div>
       ` : ''}
 
-      <div class="trip-card-footer" style="display: flex; gap: 8px; justify-content: flex-end; align-items: center;">
-        <button type="button" class="btn-text edit-trip-btn" data-edit-trip="${trip.id}" title="Edit Trip">
-          ✏️ Edit
+      <div class="trip-card-footer flex items-center justify-end gap-2 mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80">
+        <button
+          type="button"
+          class="rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/40 transition-all inline-flex items-center gap-1.5 cursor-pointer edit-trip-btn"
+          data-edit-trip="${trip.id}"
+          title="Edit Trip"
+        >
+          <svg class="w-3.5 h-3.5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+          </svg>
+          <span>Edit</span>
         </button>
-        <button type="button" class="btn-text delete-trip-btn" data-delete-trip="${trip.id}" title="Delete Trip">
-          🗑️ Delete Trip
+        <button
+          type="button"
+          class="rounded-lg px-2.5 py-1 text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/60 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/40 transition-all inline-flex items-center gap-1.5 cursor-pointer delete-trip-btn"
+          data-delete-trip="${trip.id}"
+          title="Delete Trip"
+        >
+          <svg class="w-3.5 h-3.5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          <span>Delete Trip</span>
         </button>
       </div>
     </div>

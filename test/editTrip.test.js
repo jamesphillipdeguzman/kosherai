@@ -124,10 +124,12 @@ mockStorage.set('kosherai_course_grocery_items', JSON.stringify([sampleItem]));
 const cardHtml = renderTripCard(sampleTrip, false);
 assert.ok(cardHtml.includes('edit-trip-btn'), 'Card must have .edit-trip-btn');
 assert.ok(cardHtml.includes('data-edit-trip="trip_test_101"'), 'Card must have data-edit-trip attribute');
-assert.ok(cardHtml.includes('✏️'), 'Edit button must include pencil icon');
+assert.ok(cardHtml.includes('<svg') || cardHtml.includes('✏️'), 'Edit button must include pencil icon');
+assert.ok(cardHtml.includes('bg-emerald-50'), 'Edit button must have emerald chip styling');
 assert.ok(cardHtml.includes('delete-trip-btn'), 'Card must have .delete-trip-btn');
 assert.ok(cardHtml.includes('data-delete-trip="trip_test_101"'), 'Card must have data-delete-trip attribute');
-console.log('  ✅ Standard trip card contains Edit (pencil icon) and Delete Trip buttons.');
+assert.ok(cardHtml.includes('bg-rose-50'), 'Delete button must have rose chip styling');
+console.log('  ✅ Standard trip card contains Edit (pencil SVG) and Delete Trip (trash SVG) chip buttons.');
 
 // 1.2 renderTripCard inline editing mode
 const inlineEditCardHtml = renderTripCard(sampleTrip, true);
