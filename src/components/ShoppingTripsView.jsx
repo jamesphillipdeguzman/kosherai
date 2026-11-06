@@ -233,24 +233,24 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
               <div className="flex items-center justify-end gap-2 mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 trip-card-footer">
                 <button
                   type="button"
-                  className="rounded-lg px-2.5 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/40 transition-all inline-flex items-center gap-1.5 cursor-pointer edit-trip-btn"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium leading-none rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/70 dark:text-emerald-300 dark:bg-emerald-950/40 dark:border-emerald-800/50 transition-all cursor-pointer edit-trip-btn"
                   data-edit-trip={trip.id}
                   onClick={() => startEdit(trip)}
                   title="Edit Trip"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
                   <span>Edit</span>
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg px-2.5 py-1 text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/60 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/40 transition-all inline-flex items-center gap-1.5 cursor-pointer delete-trip-btn"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium leading-none rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200/70 dark:text-rose-300 dark:bg-rose-950/40 dark:border-rose-800/50 transition-all cursor-pointer delete-trip-btn"
                   data-delete-trip={trip.id}
                   onClick={() => onDelete && onDelete(trip.id)}
                   title="Delete Trip"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                   <span>Delete Trip</span>
