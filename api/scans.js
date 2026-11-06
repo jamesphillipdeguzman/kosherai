@@ -13,6 +13,7 @@ async function ensureTable(sql) {
   await sql`
     CREATE TABLE IF NOT EXISTS scans (
       id TEXT PRIMARY KEY,
+      user_id TEXT,
       title TEXT DEFAULT 'Scanned Food Label',
       status TEXT NOT NULL,
       reason TEXT,
@@ -21,6 +22,9 @@ async function ensureTable(sql) {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `;
+  try {
+    await sql`ALTER TABLE scans ADD COLUMN IF NOT EXISTS user_id TEXT;`;
+  } catch (_) {}
   isTableInitialized = true;
 }
 

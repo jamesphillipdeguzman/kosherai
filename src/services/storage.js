@@ -46,6 +46,15 @@ export function setHouseholdMembers(count) {
       current.household_members = clamped;
       localStorage.setItem(KEYS.SETTINGS, JSON.stringify(current));
       window.dispatchEvent(new CustomEvent('kosherai:household-changed', { detail: { household_members: clamped } }));
+
+      if (typeof fetch === 'function' && typeof navigator !== 'undefined' && navigator.onLine) {
+        fetch('/api/settings', {
+          method: 'POST',
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          credentials: 'include',
+          body: JSON.stringify({ household_members: clamped })
+        }).catch(() => {});
+      }
     } catch (_) {}
   }
   return clamped;
@@ -82,6 +91,16 @@ export function saveSettings(newSettings) {
       } catch (_) {}
     }
     localStorage.setItem(KEYS.SETTINGS, JSON.stringify(updated));
+
+    if (typeof fetch === 'function' && typeof navigator !== 'undefined' && navigator.onLine) {
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        credentials: 'include',
+        body: JSON.stringify({ settings: updated })
+      }).catch(() => {});
+    }
+
     return updated;
   } catch (e) {
     console.error('Failed to save settings', e);

@@ -4,6 +4,7 @@ import { runPaddleOCR, parseStructuredReceiptText } from '../services/paddleOcrS
 import { detectOverBuying, isWarningKeyDismissed, dismissWarningKey } from '../services/overBuyingDetector.js';
 import { getGroceryItems, getFoodWasteRecords } from '../services/courseProjectStorage.js';
 import { getHouseholdMembers } from '../services/storage.js';
+import { uploadReceiptImageToCloudinary } from '../utils/cloudinary.js';
 
 /**
  * ReceiptScannerModal
@@ -406,9 +407,22 @@ export default function ReceiptScannerModal({
   const hasDiscrepancy = Math.abs(sumItems - parsedTotal) > 1.0 && items.length > 0;
 
   // Form Submission
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const trip_type = venueMode === 'wet_market' ? 'wet_market' : 'supermarket';
+
+    let resolvedReceiptUrl = previewUrl;
+    if (venueMode !== 'wet_market' && (currentImageBlob || (previewUrl && (previewUrl.startsWith('blob:') || previewUrl.startsWith('data:'))))) {
+      try {
+        const cUrl = await uploadReceiptImageToCloudinary(currentImageBlob || previewUrl);
+        if (cUrl) {
+          resolvedReceiptUrl = cUrl;
+        }
+      } catch (err) {
+        console.warn('[Cloudinary] Modal upload error:', err);
+      }
+    }
+
     const tripData = {
       storeName: storeName.trim() || (venueMode === 'wet_market' ? 'Wet Market / Palengke' : 'Supermarket'),
       date: purchaseDate,
@@ -416,7 +430,7 @@ export default function ReceiptScannerModal({
       totalAmountPaid: parsedTotal,
       tripType: trip_type,
       trip_type,
-      receiptImageUrl: venueMode === 'wet_market' ? null : previewUrl,
+      receiptImageUrl: venueMode === 'wet_market' ? null : resolvedReceiptUrl,
       notes: venueMode === 'wet_market'
         ? (items.length > 0 ? `Wet market trip (${items.length} item${items.length === 1 ? '' : 's'} recorded)` : 'Manual wet market entry')
         : `Receipt scanned (${items.length} items verified)`

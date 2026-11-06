@@ -407,9 +407,11 @@ function attachEventHandlers() {
         'kosherai_course_food_waste',
         'kosherai_course_expenses',
         'kosherai_course_meal_plans',
+        'kosherai_inventory',
         'kosherai_scan_history',
         'kosherai_current_user',
         'kosherai_user_session',
+        'better-auth.session_token',
         'kosherai_venue_mode'
       ];
       keysToClear.forEach(k => {
@@ -2978,9 +2980,36 @@ async function pushThenRestoreFromNeon({ manual = false } = {}) {
 }
 
 // Initial Render and mount sync from Neon PostgreSQL & IndexedDB
+async function initializeAuthSession() {
+  if (typeof fetch !== 'function') return;
+  try {
+    const rawSession = localStorage.getItem('kosherai_user_session');
+    const directToken = localStorage.getItem('better-auth.session_token');
+    if (!directToken && !rawSession) {
+      const res = await fetch('/api/auth/get-session', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.session?.token && data?.user) {
+          localStorage.setItem('better-auth.session_token', data.session.token);
+          const userWithToken = { ...data.user, token: data.session.token };
+          localStorage.setItem('kosherai_current_user', JSON.stringify(userWithToken));
+          localStorage.setItem('kosherai_user_session', JSON.stringify({
+            token: data.session.token,
+            session: data.session,
+            user: userWithToken
+          }));
+          window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: { user: userWithToken } }));
+        }
+      }
+    }
+  } catch (_) {}
+}
+
 render();
 refreshScanHistory();
-pushThenRestoreFromNeon();
+initializeAuthSession().finally(() => {
+  pushThenRestoreFromNeon();
+});
 fetchAllRecipeInteractions().then(() => render()).catch(() => {});
 syncPendingRecipeInteractions().catch(() => {});
 

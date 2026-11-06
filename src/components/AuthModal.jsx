@@ -99,9 +99,27 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
         throw new Error(errorData.message || (mode === 'signin' ? 'Invalid credentials' : 'Registration failed'));
       }
 
-      const sessionData = await res.json();
-      const token = sessionData.token || sessionData.session?.token;
-      const userObj = sessionData.user || sessionData;
+      const sessionData = await res.json().catch(() => ({}));
+      let token = sessionData.token || sessionData.session?.token;
+      let userObj = sessionData.user || sessionData.data?.user || sessionData;
+
+      // Better Auth stores session in HttpOnly cookie; retrieve active session token via get-session
+      try {
+        const getSessionRes = await fetch('/api/auth/get-session', {
+          method: 'GET',
+          credentials: 'include'
+        });
+        if (getSessionRes.ok) {
+          const sessionInfo = await getSessionRes.json().catch(() => ({}));
+          if (sessionInfo?.session?.token) {
+            token = sessionInfo.session.token;
+          }
+          if (sessionInfo?.user) {
+            userObj = { ...userObj, ...sessionInfo.user };
+          }
+        }
+      } catch (_) {}
+
       const fullUser = {
         ...userObj,
         ...(token ? { token } : {})

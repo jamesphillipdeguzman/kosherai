@@ -227,6 +227,21 @@ export function saveInventoryItem(itemData = {}) {
     const updated = [record, ...items.filter(i => i.id !== id)];
     localStorage.setItem(INVENTORY_STORAGE_KEY, JSON.stringify(updated));
 
+    if (typeof fetch === 'function' && typeof navigator !== 'undefined' && navigator.onLine) {
+      fetch('/api/inventory', {
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        credentials: 'include',
+        body: JSON.stringify({ item: record })
+      }).then(res => {
+        if (res.ok) {
+          record.synced = true;
+          const cur = getInventoryItems().map(i => i.id === id ? { ...i, synced: true } : i);
+          localStorage.setItem(INVENTORY_STORAGE_KEY, JSON.stringify(cur));
+        }
+      }).catch(() => {});
+    }
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('kosherai_inventory_updated'));
       window.dispatchEvent(new Event('kosherai_storage_updated'));
@@ -340,6 +355,14 @@ export function deleteInventoryItem(id) {
   try {
     const items = getInventoryItems().filter(i => i.id !== id);
     localStorage.setItem(INVENTORY_STORAGE_KEY, JSON.stringify(items));
+
+    if (typeof fetch === 'function' && typeof navigator !== 'undefined' && navigator.onLine) {
+      fetch(`/api/inventory?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+        credentials: 'include'
+      }).catch(() => {});
+    }
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('kosherai_inventory_updated'));

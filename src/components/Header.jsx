@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { DIET_PROFILES, getDietProfile, DIET_DESCRIPTIONS, getDietDescription } from '../data/dietProfiles.js';
 import AuthModal from './AuthModal.jsx';
 import { getAuthHeaders } from '../services/authHeaders.js';
+import { syncAndHydrateUserData } from '../services/courseProjectStorage.js';
 
 export { DIET_DESCRIPTIONS, getDietDescription };
 
@@ -128,9 +129,11 @@ export function Header({
         'kosherai_course_food_waste',
         'kosherai_course_expenses',
         'kosherai_course_meal_plans',
+        'kosherai_inventory',
         'kosherai_scan_history',
         'kosherai_current_user',
         'kosherai_user_session',
+        'better-auth.session_token',
         'kosherai_venue_mode'
       ];
       keysToClear.forEach((k) => {
@@ -176,12 +179,7 @@ export function Header({
       if (onSync) {
         await onSync();
       } else {
-        const headers = getAuthHeaders({ 'Accept': 'application/json' });
-        await Promise.allSettled([
-          fetch('/api/scans', { method: 'GET', headers, credentials: 'include' }),
-          fetch('/api/trips', { method: 'GET', headers, credentials: 'include' }),
-          fetch('/api/food-waste', { method: 'GET', headers, credentials: 'include' })
-        ]);
+        await syncAndHydrateUserData();
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('kosherai:sync-data'));
         }

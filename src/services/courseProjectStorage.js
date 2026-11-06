@@ -2,6 +2,7 @@ import { searchDatabase } from './ruleEngine.js';
 import { LID_DATABASE, STATUS } from '../data/lidDatabase.js';
 import { getAuthHeaders, getClientAuthToken } from './authHeaders.js';
 import { resolveFoodCategory } from './overBuyingDetector.js';
+import { uploadReceiptImageToCloudinary } from '../utils/cloudinary.js';
 import {
   saveTripToIndexedDB,
   getTripsFromIndexedDB,
@@ -241,6 +242,16 @@ export async function saveShoppingTrip(tripData, items = []) {
       };
     });
 
+    let receiptUrl = tripData.receiptImageUrl || null;
+    if (receiptUrl && (receiptUrl.startsWith('data:') || receiptUrl.startsWith('blob:'))) {
+      try {
+        const cUrl = await uploadReceiptImageToCloudinary(receiptUrl);
+        if (cUrl) receiptUrl = cUrl;
+      } catch (err) {
+        console.warn('[Cloudinary] Failed to upload receipt image:', err);
+      }
+    }
+
     const tripRecord = {
       id: tripId,
       date,
@@ -250,7 +261,7 @@ export async function saveShoppingTrip(tripData, items = []) {
       trip_type: tripData.trip_type || tripData.tripType || 'Supermarket',
       totalAmountPaid: totalAmount,
       totalScaleWeightKg: scaleWeightKg, // Physical scale weight of whole grocery haul
-      receiptImageUrl: tripData.receiptImageUrl || null,
+      receiptImageUrl: receiptUrl,
       receiptRawText: tripData.receiptRawText || '',
       itemsCount: cleanedItems.length,
       notes: tripData.notes || '',
@@ -598,14 +609,94 @@ async function fetchJsonWithTimeout(url, timeoutMs = 8000) {
 }
 
 /**
- * Pulls all shopping trips (with grocery items) and food waste logs from Neon and
- * re-caches them into localStorage + IndexedDB. Safe to call on every boot:
- * offline / unconfigured / failed responses leave the local cache untouched.
- *
- * @returns {Promise<{ ok: boolean, offline?: boolean, tripsRestored: number, itemsRestored: number, wasteRestored: number, message: string }>}
+ * Auto-retries synchronization of pending offline meal plans to Neon PostgreSQL
  */
-export async function restoreFromNeon() {
-  const empty = { tripsRestored: 0, itemsRestored: 0, wasteRestored: 0 };
+export async function syncPendingMealPlans() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return { syncedCount: 0 };
+  if (typeof fetch !== 'function') return { syncedCount: 0 };
+
+  try {
+    const plans = getMealPlans();
+    const unsynced = plans.filter(p => p.synced === false);
+    if (unsynced.length === 0) return { syncedCount: 0 };
+
+    let syncedCount = 0;
+    for (const plan of unsynced) {
+      try {
+        const res = await fetch('/api/meal-plans', {
+          method: 'POST',
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          credentials: 'include',
+          body: JSON.stringify({ plan })
+        });
+        if (res.ok) {
+          plan.synced = true;
+          syncedCount++;
+        }
+      } catch (_) {}
+    }
+    if (syncedCount > 0) {
+      localStorage.setItem(STORAGE_KEYS.MEAL_PLANS, JSON.stringify(plans));
+    }
+    return { syncedCount };
+  } catch (err) {
+    return { syncedCount: 0 };
+  }
+}
+
+/**
+ * Auto-retries synchronization of pending offline inventory to Neon PostgreSQL
+ */
+export async function syncPendingInventory() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return { syncedCount: 0 };
+  if (typeof fetch !== 'function') return { syncedCount: 0 };
+
+  try {
+    const raw = localStorage.getItem('kosherai_inventory');
+    if (!raw) return { syncedCount: 0 };
+    const items = JSON.parse(raw);
+    const unsynced = items.filter(i => i.synced === false);
+    if (unsynced.length === 0) return { syncedCount: 0 };
+
+    let syncedCount = 0;
+    for (const item of unsynced) {
+      try {
+        const res = await fetch('/api/inventory', {
+          method: 'POST',
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          credentials: 'include',
+          body: JSON.stringify({ item })
+        });
+        if (res.ok) {
+          item.synced = true;
+          syncedCount++;
+        }
+      } catch (_) {}
+    }
+    if (syncedCount > 0) {
+      localStorage.setItem('kosherai_inventory', JSON.stringify(items));
+    }
+    return { syncedCount };
+  } catch (err) {
+    return { syncedCount: 0 };
+  }
+}
+
+/**
+ * Master Synchronization & Re-hydration Orchestrator.
+ * Connects to Neon PostgreSQL and hydrates:
+ * 1. Shopping Trips & Itemized Purchases (/api/trips)
+ * 2. Food Waste Logs (/api/food-waste)
+ * 3. Scan History (/api/scans)
+ * 4. Household Inventory (/api/inventory)
+ * 5. Meal Plans (/api/meal-plans)
+ * 6. Household Settings (/api/settings)
+ *
+ * Guarantees multi-tenant isolation, safe non-destructive merging,
+ * offline fallback preservation, and zero data-loss across logins.
+ */
+export async function syncAndHydrateUserData() {
+  const empty = { tripsRestored: 0, itemsRestored: 0, wasteRestored: 0, scansRestored: 0, inventoryRestored: 0, mealPlansRestored: 0 };
 
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return { ok: false, offline: true, ...empty, message: 'Device is offline. Showing locally cached data.' };
@@ -614,29 +705,75 @@ export async function restoreFromNeon() {
     return { ok: false, ...empty, message: 'Network fetch unavailable.' };
   }
 
-  const [tripsPayload, wastePayload] = await Promise.all([
-    fetchJsonWithTimeout('/api/trips'),
-    fetchJsonWithTimeout('/api/food-waste')
+  // 1. Better Auth session check: If token not in localStorage, check if HttpOnly cookie session is active
+  if (!getClientAuthToken()) {
+    try {
+      const sessRes = await fetch('/api/auth/get-session', { credentials: 'include' });
+      if (sessRes.ok) {
+        const sessData = await sessRes.json().catch(() => null);
+        if (sessData?.session?.token && sessData?.user) {
+          localStorage.setItem('better-auth.session_token', sessData.session.token);
+          const currentUser = JSON.parse(localStorage.getItem('kosherai_current_user') || '{}');
+          const updatedUser = { ...currentUser, ...sessData.user, token: sessData.session.token };
+          localStorage.setItem('kosherai_current_user', JSON.stringify(updatedUser));
+          localStorage.setItem('kosherai_user_session', JSON.stringify({
+            token: sessData.session.token,
+            session: sessData.session,
+            user: updatedUser
+          }));
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 2. Upload pending offline records first (so local unsynced edits are never overwritten)
+  await Promise.allSettled([
+    syncPendingTrips().catch(() => {}),
+    syncPendingFoodWaste().catch(() => {}),
+    syncPendingInventory().catch(() => {}),
+    syncPendingMealPlans().catch(() => {})
   ]);
 
-  // Only trust responses that actually came from Neon (offline fallbacks return empty arrays)
+  // 3. Fetch all 6 resources concurrently from Neon
+  const [tripsRes, wasteRes, scansRes, invRes, mealRes, settingsRes] = await Promise.allSettled([
+    fetchJsonWithTimeout('/api/trips'),
+    fetchJsonWithTimeout('/api/food-waste'),
+    fetchJsonWithTimeout('/api/scans'),
+    fetchJsonWithTimeout('/api/inventory'),
+    fetchJsonWithTimeout('/api/meal-plans'),
+    fetchJsonWithTimeout('/api/settings')
+  ]);
+
+  const tripsPayload = tripsRes.status === 'fulfilled' ? tripsRes.value : null;
+  const wastePayload = wasteRes.status === 'fulfilled' ? wasteRes.value : null;
+  const scansPayload = scansRes.status === 'fulfilled' ? scansRes.value : null;
+  const invPayload = invRes.status === 'fulfilled' ? invRes.value : null;
+  const mealPayload = mealRes.status === 'fulfilled' ? mealRes.value : null;
+  const settingsPayload = settingsRes.status === 'fulfilled' ? settingsRes.value : null;
+
+  // Verify whether response came from authenticated Neon
   const tripsOk = Boolean(tripsPayload && tripsPayload.synced === true && !tripsPayload.offline && Array.isArray(tripsPayload.trips));
   const wasteOk = Boolean(wastePayload && wastePayload.synced === true && !wastePayload.offline && Array.isArray(wastePayload.foodWaste));
+  const scansOk = Boolean(scansPayload && !scansPayload.offline && (Array.isArray(scansPayload.scans) || Array.isArray(scansPayload.data) || Array.isArray(scansPayload)));
+  const invOk = Boolean(invPayload && invPayload.synced === true && !invPayload.offline && Array.isArray(invPayload.inventory));
+  const mealOk = Boolean(mealPayload && mealPayload.synced === true && !mealPayload.offline && Array.isArray(mealPayload.mealPlans));
+  const settingsOk = Boolean(settingsPayload && settingsPayload.synced === true && settingsPayload.settings);
 
-  if (!tripsOk && !wasteOk) {
+  if (!tripsOk && !wasteOk && !scansOk && !invOk && !mealOk && !settingsOk) {
     return {
       ok: false,
       ...empty,
-      message: tripsPayload?.message || wastePayload?.message || 'Neon database is unreachable. Local data kept.'
+      message: 'Cloud data unreachable or unauthenticated. Local cache preserved.'
     };
   }
 
-  const result = mergeRemoteCourseData(
+  // 4. Merge Trips & Food Waste
+  const courseResult = mergeRemoteCourseData(
     tripsOk ? tripsPayload.trips : null,
     wasteOk ? wastePayload.foodWaste : null
   );
 
-  // Mirror restored records into IndexedDB so the offline-first layer matches localStorage
+  // Mirror restored records into IndexedDB
   try {
     if (tripsOk) {
       for (const remote of tripsPayload.trips) {
@@ -653,16 +790,139 @@ export async function restoreFromNeon() {
       }
     }
   } catch (idbErr) {
-    console.warn('[Restore] IndexedDB mirror warning:', idbErr);
+    console.warn('[Hydrate] IndexedDB mirror warning:', idbErr);
   }
 
-  if (typeof window !== 'undefined' && typeof CustomEvent === 'function') {
+  // 5. Merge Scans
+  let scansRestored = 0;
+  if (scansOk) {
+    try {
+      const rawList = Array.isArray(scansPayload)
+        ? scansPayload
+        : (Array.isArray(scansPayload.scans) ? scansPayload.scans : (Array.isArray(scansPayload.data) ? scansPayload.data : []));
+      if (rawList.length > 0) {
+        localStorage.setItem('kosherai_scan_history', JSON.stringify(rawList));
+        scansRestored = rawList.length;
+      }
+    } catch (_) {}
+  }
+
+  // 6. Merge Inventory
+  let inventoryRestored = 0;
+  if (invOk) {
+    try {
+      const remoteItems = invPayload.inventory;
+      const rawLocal = localStorage.getItem('kosherai_inventory');
+      const localItems = rawLocal ? JSON.parse(rawLocal) : [];
+      const localMap = new Map(localItems.map(i => [i.id, i]));
+      const restoredIds = new Set();
+      const restored = [];
+
+      for (const rem of remoteItems) {
+        if (!rem || !rem.id) continue;
+        const loc = localMap.get(rem.id);
+        if (loc && loc.synced === false) continue;
+        restored.push({ ...rem, synced: true });
+        restoredIds.add(rem.id);
+      }
+
+      const kept = localItems.filter(i => !restoredIds.has(i.id));
+      const merged = [...restored, ...kept];
+      localStorage.setItem('kosherai_inventory', JSON.stringify(merged));
+      inventoryRestored = restored.length;
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('kosherai_inventory_updated'));
+      }
+    } catch (invErr) {
+      console.warn('[Hydrate] Inventory merge error:', invErr);
+    }
+  }
+
+  // 7. Merge Meal Plans
+  let mealPlansRestored = 0;
+  if (mealOk) {
+    try {
+      const remotePlans = mealPayload.mealPlans;
+      const localPlans = getMealPlans();
+      const localMap = new Map(localPlans.map(p => [p.id, p]));
+      const restoredIds = new Set();
+      const restored = [];
+
+      for (const rem of remotePlans) {
+        if (!rem || !rem.id) continue;
+        const loc = localMap.get(rem.id);
+        if (loc && loc.synced === false) continue;
+        restored.push({ ...rem, synced: true });
+        restoredIds.add(rem.id);
+      }
+
+      const kept = localPlans.filter(p => !restoredIds.has(p.id));
+      const merged = [...restored, ...kept];
+      localStorage.setItem(STORAGE_KEYS.MEAL_PLANS, JSON.stringify(merged));
+      mealPlansRestored = restored.length;
+    } catch (mealErr) {
+      console.warn('[Hydrate] Meal plans merge error:', mealErr);
+    }
+  }
+
+  // 8. Merge Settings
+  if (settingsOk) {
+    try {
+      const s = settingsPayload.settings;
+      if (s.household_members) {
+        const num = Math.max(1, Math.min(20, Math.round(Number(s.household_members))));
+        localStorage.setItem('kosherai_household_members', String(num));
+        const currentSaved = localStorage.getItem('kosherai_settings');
+        const parsed = currentSaved ? JSON.parse(currentSaved) : {};
+        parsed.household_members = num;
+        if (s.active_diet) parsed.active_diet = s.active_diet;
+        localStorage.setItem('kosherai_settings', JSON.stringify(parsed));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('kosherai:household-changed', { detail: { household_members: num } }));
+        }
+      }
+      if (s.theme && typeof window !== 'undefined') {
+        localStorage.setItem('kosherai_theme', s.theme);
+        localStorage.setItem('theme', s.theme);
+        if (s.theme === 'dark') {
+          document.documentElement.classList.add('dark');
+          document.documentElement.classList.remove('light');
+        } else {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.classList.add('light');
+        }
+      }
+    } catch (setErr) {
+      console.warn('[Hydrate] Settings merge error:', setErr);
+    }
+  }
+
+  const result = {
+    ok: true,
+    tripsRestored: courseResult.tripsRestored,
+    itemsRestored: courseResult.itemsRestored,
+    wasteRestored: courseResult.wasteRestored,
+    scansRestored,
+    inventoryRestored,
+    mealPlansRestored,
+    message: `Restored ${courseResult.tripsRestored} trips, ${courseResult.wasteRestored} waste records, ${inventoryRestored} inventory items, ${mealPlansRestored} meal plans from Neon.`
+  };
+
+  if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('kosherai-neon-restored', { detail: result }));
+    window.dispatchEvent(new CustomEvent('kosherai_storage_updated'));
   }
 
-  const message = `Restored ${result.tripsRestored} trips, ${result.itemsRestored} grocery items, and ${result.wasteRestored} food waste logs from Neon.`;
-  console.info(`[Restore] ${message}`);
-  return { ok: true, ...result, message };
+  console.info(`[Hydrate] ${result.message}`);
+  return result;
+}
+
+/**
+ * Backward-compatible wrapper for restoreFromNeon.
+ * Delegates directly to syncAndHydrateUserData.
+ */
+export async function restoreFromNeon() {
+  return syncAndHydrateUserData();
 }
 
 // Auto-retry when connection restored
@@ -1200,6 +1460,22 @@ export function saveMealPlan(planData) {
 
     const updated = [record, ...plans.filter(p => p.id !== id)];
     localStorage.setItem(STORAGE_KEYS.MEAL_PLANS, JSON.stringify(updated));
+
+    if (typeof fetch === 'function' && typeof navigator !== 'undefined' && navigator.onLine) {
+      fetch('/api/meal-plans', {
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        credentials: 'include',
+        body: JSON.stringify({ plan: record })
+      }).then(res => {
+        if (res.ok) {
+          record.synced = true;
+          const current = getMealPlans().map(p => p.id === id ? { ...p, synced: true } : p);
+          localStorage.setItem(STORAGE_KEYS.MEAL_PLANS, JSON.stringify(current));
+        }
+      }).catch(() => {});
+    }
+
     return record;
   } catch (e) {
     console.error('Failed to save meal plan:', e);
@@ -1211,6 +1487,15 @@ export function deleteMealPlan(id) {
   try {
     const plans = getMealPlans().filter(p => p.id !== id);
     localStorage.setItem(STORAGE_KEYS.MEAL_PLANS, JSON.stringify(plans));
+
+    if (typeof fetch === 'function' && typeof navigator !== 'undefined' && navigator.onLine) {
+      fetch(`/api/meal-plans?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+        credentials: 'include'
+      }).catch(() => {});
+    }
+
     return true;
   } catch (e) {
     console.error('Failed to delete meal plan:', e);

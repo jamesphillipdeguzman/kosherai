@@ -69,7 +69,27 @@ export async function authenticateUser(mode, credentials) {
     email: email.trim().toLowerCase(),
     name: name || email.split('@')[0]
   };
-  const token = data.token || data.session?.token;
+  let token = data.token || data.session?.token;
+
+  // Better Auth stores session in HttpOnly cookie; retrieve active session token via get-session
+  try {
+    const sessionRes = await fetch('/api/auth/get-session', {
+      method: 'GET',
+      credentials: 'include'
+    });
+    if (sessionRes.ok) {
+      const sessionData = await sessionRes.json().catch(() => ({}));
+      if (sessionData?.session?.token) {
+        token = sessionData.session.token;
+      }
+      if (sessionData?.user) {
+        userObj.id = sessionData.user.id || userObj.id;
+        userObj.email = sessionData.user.email || userObj.email;
+        userObj.name = sessionData.user.name || userObj.name;
+      }
+    }
+  } catch (_) {}
+
   if (token) {
     userObj.token = token;
     try { localStorage.setItem('better-auth.session_token', token); } catch (_) {}

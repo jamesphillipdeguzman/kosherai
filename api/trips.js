@@ -14,6 +14,7 @@ export async function ensureTripsTables(sql) {
   await sql`
     CREATE TABLE IF NOT EXISTS shopping_trips (
       id TEXT PRIMARY KEY,
+      user_id TEXT,
       date TEXT NOT NULL,
       project_week INTEGER DEFAULT 1,
       store_name TEXT DEFAULT 'Supermarket',
@@ -31,12 +32,14 @@ export async function ensureTripsTables(sql) {
   `;
 
   try {
+    await sql`ALTER TABLE shopping_trips ADD COLUMN IF NOT EXISTS user_id TEXT;`;
     await sql`ALTER TABLE shopping_trips ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`;
   } catch (_) {}
 
   await sql`
     CREATE TABLE IF NOT EXISTS grocery_purchases (
       id TEXT PRIMARY KEY,
+      user_id TEXT,
       trip_id TEXT NOT NULL REFERENCES shopping_trips(id) ON DELETE CASCADE,
       purchase_date TEXT NOT NULL,
       project_week INTEGER DEFAULT 1,
@@ -56,12 +59,14 @@ export async function ensureTripsTables(sql) {
   `;
 
   try {
+    await sql`ALTER TABLE grocery_purchases ADD COLUMN IF NOT EXISTS user_id TEXT;`;
     await sql`ALTER TABLE grocery_purchases ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`;
   } catch (_) {}
 
   await sql`
     CREATE TABLE IF NOT EXISTS food_waste_logs (
       id TEXT PRIMARY KEY,
+      user_id TEXT,
       date TEXT NOT NULL,
       project_week INTEGER DEFAULT 1,
       item_name TEXT NOT NULL,
@@ -73,6 +78,11 @@ export async function ensureTripsTables(sql) {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `;
+
+  try {
+    await sql`ALTER TABLE food_waste_logs ADD COLUMN IF NOT EXISTS user_id TEXT;`;
+    await sql`ALTER TABLE food_waste_logs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`;
+  } catch (_) {}
 
   isTablesInitialized = true;
 }

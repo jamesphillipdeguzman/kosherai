@@ -4,6 +4,9 @@ import receiptScanHandler from './api/receipt-scan.js';
 import tripsApiHandler from './api/trips.js';
 import foodWasteApiHandler from './api/food-waste.js';
 import recipeInteractionsHandler from './api/recipe-interactions.js';
+import inventoryApiHandler from './api/inventory.js';
+import mealPlansApiHandler from './api/meal-plans.js';
+import settingsApiHandler from './api/settings.js';
 
 export default defineConfig({
   server: {
@@ -115,6 +118,60 @@ export default defineConfig({
               await scansApiHandler(req, res);
             } catch (err) {
               console.error('[Vite Dev API Server Error]:', err);
+              if (!res.headersSent) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  error: 'INTERNAL_SERVER_ERROR',
+                  message: err.message
+                }));
+              }
+            }
+            return;
+          }
+
+          // Intercept /api/inventory route
+          if (url.pathname === '/api/inventory') {
+            try {
+              await inventoryApiHandler(req, res);
+            } catch (err) {
+              console.error('[Vite Inventory API Error]:', err);
+              if (!res.headersSent) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  error: 'INTERNAL_SERVER_ERROR',
+                  message: err.message
+                }));
+              }
+            }
+            return;
+          }
+
+          // Intercept /api/meal-plans route
+          if (url.pathname === '/api/meal-plans') {
+            try {
+              await mealPlansApiHandler(req, res);
+            } catch (err) {
+              console.error('[Vite Meal Plans API Error]:', err);
+              if (!res.headersSent) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  error: 'INTERNAL_SERVER_ERROR',
+                  message: err.message
+                }));
+              }
+            }
+            return;
+          }
+
+          // Intercept /api/settings route
+          if (url.pathname === '/api/settings') {
+            try {
+              await settingsApiHandler(req, res);
+            } catch (err) {
+              console.error('[Vite Settings API Error]:', err);
               if (!res.headersSent) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');

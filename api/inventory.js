@@ -11,6 +11,7 @@ export async function ensureInventoryTable(sql) {
   await sql`
     CREATE TABLE IF NOT EXISTS household_inventory (
       id TEXT PRIMARY KEY,
+      user_id TEXT,
       item_name TEXT NOT NULL,
       category TEXT DEFAULT 'Other Perishables',
       quantity NUMERIC(10, 2) DEFAULT 1,
@@ -30,6 +31,7 @@ export async function ensureInventoryTable(sql) {
   `;
 
   try {
+    await sql`ALTER TABLE household_inventory ADD COLUMN IF NOT EXISTS user_id TEXT;`;
     await sql`ALTER TABLE household_inventory ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`;
   } catch (_) {}
 }
@@ -113,105 +115,129 @@ export default async function handler(req, res) {
     return sendJson(res, 200, { success: false, synced: false, offline: true, inventory: [], message: err.message });
   }
 
-  // 1. GET /api/inventory
-  if (method === 'GET') {
+  try {
+    // Extract authenticated tenant user
+    let user = null;
     try {
-      const rows = await sql`
-        SELECT 
-          id,
-          item_name AS "itemName",
-          category,
-          quantity::float,
-          original_quantity::float AS "originalQuantity",
-          consumed_quantity::float AS "consumedQuantity",
-          wasted_quantity::float AS "wastedQuantity",
-          unit,
-          purchase_date AS "purchaseDate",
-          expiration_date AS "expirationDate",
-          storage_location AS "storageLocation",
-          source,
-          trip_id AS "tripId",
-          notes,
-          created_at AS "createdAt",
-          updated_at AS "updatedAt"
-        FROM household_inventory
-        ORDER BY expiration_date ASC NULLS LAST, purchase_date DESC;
-      `;
-      return sendJson(res, 200, { success: true, synced: true, inventory: rows });
-    } catch (err) {
-      console.error('[API /api/inventory] Query error:', err);
-      return sendJson(res, 500, { success: false, error: err.message });
+      const { getAuthenticatedUser } = await import('../lib/auth.ts');
+      user = await getAuthenticatedUser(req);
+    } catch (_) {}
+
+    const userId = typeof user === 'string' ? user : user?.id;
+
+    if (!userId) {
+      return sendJson(res, 401, {
+        error: 'UNAUTHORIZED',
+        message: 'Authentication required. Please sign in to access inventory.'
+      });
     }
-  }
 
-  // 2. POST /api/inventory (Upsert)
-  if (method === 'POST') {
-    try {
-      const body = await parseRequestBody(req);
-      const items = Array.isArray(body.items) ? body.items : [body.item || body];
-
-      for (const item of items) {
-        if (!item.itemName && !item.name) continue;
-        const id = item.id || `inv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-        const name = item.itemName || item.name;
-        const category = item.category || 'Other Perishables';
-        const qty = Number(item.quantity ?? 1);
-        const origQty = Number(item.originalQuantity ?? qty);
-        const consumed = Number(item.consumedQuantity ?? 0);
-        const wasted = Number(item.wastedQuantity ?? 0);
-        const unit = item.unit || 'pcs';
-        const purchaseDate = item.purchaseDate || new Date().toISOString().split('T')[0];
-        const expDate = item.expirationDate || null;
-        const location = item.storageLocation || 'Refrigerator';
-        const source = item.source || 'manual';
-        const tripId = item.tripId || null;
-        const notes = item.notes || '';
-
-        await sql`
-          INSERT INTO household_inventory (
-            id, item_name, category, quantity, original_quantity, consumed_quantity, wasted_quantity,
-            unit, purchase_date, expiration_date, storage_location, source, trip_id, notes, updated_at
-          ) VALUES (
-            ${id}, ${name}, ${category}, ${qty}, ${origQty}, ${consumed}, ${wasted},
-            ${unit}, ${purchaseDate}, ${expDate}, ${location}, ${source}, ${tripId}, ${notes}, NOW()
-          )
-          ON CONFLICT (id) DO UPDATE SET
-            quantity = EXCLUDED.quantity,
-            consumed_quantity = EXCLUDED.consumed_quantity,
-            wasted_quantity = EXCLUDED.wasted_quantity,
-            expiration_date = EXCLUDED.expiration_date,
-            storage_location = EXCLUDED.storage_location,
-            notes = EXCLUDED.notes,
-            updated_at = NOW();
+    // 1. GET /api/inventory
+    if (method === 'GET') {
+      try {
+        const rows = await sql`
+          SELECT 
+            id,
+            user_id AS "userId",
+            item_name AS "itemName",
+            category,
+            quantity::float,
+            original_quantity::float AS "originalQuantity",
+            consumed_quantity::float AS "consumedQuantity",
+            wasted_quantity::float AS "wastedQuantity",
+            unit,
+            purchase_date AS "purchaseDate",
+            expiration_date AS "expirationDate",
+            storage_location AS "storageLocation",
+            source,
+            trip_id AS "tripId",
+            notes,
+            created_at AS "createdAt",
+            updated_at AS "updatedAt"
+          FROM household_inventory
+          WHERE user_id = ${userId}
+          ORDER BY expiration_date ASC NULLS LAST, purchase_date DESC;
         `;
+        return sendJson(res, 200, { success: true, synced: true, inventory: rows });
+      } catch (err) {
+        console.error('[API /api/inventory] Query error:', err);
+        return sendJson(res, 500, { success: false, error: err.message });
       }
-
-      return sendJson(res, 200, { success: true, synced: true, count: items.length });
-    } catch (err) {
-      console.error('[API /api/inventory] Insert error:', err);
-      return sendJson(res, 500, { success: false, error: err.message });
     }
-  }
 
-  // 3. DELETE /api/inventory
-  if (method === 'DELETE') {
-    try {
-      const query = parseQueryParams(req);
-      const body = await parseRequestBody(req);
-      const id = query.id || body.id;
+    // 2. POST /api/inventory (Upsert)
+    if (method === 'POST') {
+      try {
+        const body = await parseRequestBody(req);
+        const items = Array.isArray(body.items) ? body.items : [body.item || body];
 
-      if (!id) {
-        return sendJson(res, 400, { success: false, error: 'MISSING_ID' });
+        for (const item of items) {
+          if (!item.itemName && !item.name) continue;
+          const id = item.id || `inv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          const name = item.itemName || item.name;
+          const category = item.category || 'Other Perishables';
+          const qty = Number(item.quantity ?? 1);
+          const origQty = Number(item.originalQuantity ?? qty);
+          const consumed = Number(item.consumedQuantity ?? 0);
+          const wasted = Number(item.wastedQuantity ?? 0);
+          const unit = item.unit || 'pcs';
+          const purchaseDate = item.purchaseDate || new Date().toISOString().split('T')[0];
+          const expDate = item.expirationDate || null;
+          const location = item.storageLocation || 'Refrigerator';
+          const source = item.source || 'manual';
+          const tripId = item.tripId || null;
+          const notes = item.notes || '';
+
+          await sql`
+            INSERT INTO household_inventory (
+              id, user_id, item_name, category, quantity, original_quantity, consumed_quantity, wasted_quantity,
+              unit, purchase_date, expiration_date, storage_location, source, trip_id, notes, updated_at
+            ) VALUES (
+              ${id}, ${userId}, ${name}, ${category}, ${qty}, ${origQty}, ${consumed}, ${wasted},
+              ${unit}, ${purchaseDate}, ${expDate}, ${location}, ${source}, ${tripId}, ${notes}, NOW()
+            )
+            ON CONFLICT (id) DO UPDATE SET
+              user_id = EXCLUDED.user_id,
+              quantity = EXCLUDED.quantity,
+              consumed_quantity = EXCLUDED.consumed_quantity,
+              wasted_quantity = EXCLUDED.wasted_quantity,
+              expiration_date = EXCLUDED.expiration_date,
+              storage_location = EXCLUDED.storage_location,
+              notes = EXCLUDED.notes,
+              updated_at = NOW();
+          `;
+        }
+
+        return sendJson(res, 200, { success: true, synced: true, count: items.length });
+      } catch (err) {
+        console.error('[API /api/inventory] Insert error:', err);
+        return sendJson(res, 500, { success: false, error: err.message });
       }
-
-      await sql`DELETE FROM household_inventory WHERE id = ${id};`;
-      return sendJson(res, 200, { success: true, synced: true, deletedId: id });
-    } catch (err) {
-      console.error('[API /api/inventory] Delete error:', err);
-      return sendJson(res, 500, { success: false, error: err.message });
     }
-  }
 
-  return sendJson(res, 405, { error: 'Method not allowed' });
+    // 3. DELETE /api/inventory
+    if (method === 'DELETE') {
+      try {
+        const query = parseQueryParams(req);
+        const body = await parseRequestBody(req);
+        const id = query.id || body.id;
+
+        if (!id) {
+          return sendJson(res, 400, { success: false, error: 'MISSING_ID' });
+        }
+
+        await sql`DELETE FROM household_inventory WHERE id = ${id} AND user_id = ${userId};`;
+        return sendJson(res, 200, { success: true, synced: true, deletedId: id });
+      } catch (err) {
+        console.error('[API /api/inventory] Delete error:', err);
+        return sendJson(res, 500, { success: false, error: err.message });
+      }
+    }
+
+    return sendJson(res, 405, { error: 'Method not allowed' });
+  } catch (authErr) {
+    console.error('[API /api/inventory] Auth processing error:', authErr);
+    return sendJson(res, 500, { error: authErr.message });
+  }
 }
 
