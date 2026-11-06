@@ -173,7 +173,14 @@ const state = {
   selectedWeekView: 1,
   mealPlanWeek: 2,
   insightsPeriod: 'last_30_days',
-  isIntelligenceExpanded: false,
+  // 5 Independently Collapsible Insight Categories (Defaults to Collapsed)
+  insightsSections: {
+    scorecard: false,
+    financial: false,
+    riskAlerts: false,
+    purchasing: false,
+    trends: false
+  },
   receiptModalOpen: false,
   manualTripModalOpen: false,
   editTripModalOpen: false,
@@ -1472,12 +1479,47 @@ Cracked black pepper`;
     });
   });
 
-  // Toggle Food Cost & Spoilage Intelligence Section Collapse/Expand
-  const toggleIntelligenceBtn = document.querySelector('#toggle-food-cost-intelligence-btn');
-  if (toggleIntelligenceBtn) {
-    toggleIntelligenceBtn.addEventListener('click', (e) => {
+  // Independent Insight Section Expand/Collapse Toggles
+  document.querySelectorAll('[data-toggle-insight-section]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
       e.preventDefault();
-      state.isIntelligenceExpanded = !state.isIntelligenceExpanded;
+      e.stopPropagation();
+      const id = btn.getAttribute('data-toggle-insight-section');
+      if (id) {
+        state.insightsSections = state.insightsSections || {};
+        state.insightsSections[id] = !state.insightsSections[id];
+        render();
+      }
+    });
+  });
+
+  // Expand All / Collapse All Insight Sections
+  const expandAllBtn = document.querySelector('#insights-expand-all-btn');
+  if (expandAllBtn) {
+    expandAllBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      state.insightsSections = {
+        scorecard: true,
+        financial: true,
+        riskAlerts: true,
+        purchasing: true,
+        trends: true
+      };
+      render();
+    });
+  }
+
+  const collapseAllBtn = document.querySelector('#insights-collapse-all-btn');
+  if (collapseAllBtn) {
+    collapseAllBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      state.insightsSections = {
+        scorecard: false,
+        financial: false,
+        riskAlerts: false,
+        purchasing: false,
+        trends: false
+      };
       render();
     });
   }
@@ -2869,14 +2911,6 @@ document.addEventListener('click', (e) => {
       banner.style.opacity = '0';
       setTimeout(() => banner.remove(), 150);
     }
-    return;
-  }
-
-  const toggleIntBtn = e.target.closest('#toggle-food-cost-intelligence-btn');
-  if (toggleIntBtn) {
-    e.preventDefault();
-    state.isIntelligenceExpanded = !state.isIntelligenceExpanded;
-    render();
     return;
   }
 
