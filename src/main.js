@@ -162,6 +162,7 @@ const state = {
   courseSubTab: 'dashboard', // 'dashboard' | 'trips' | 'groceries' | 'waste' | 'mealplan' | 'export'
   selectedWeekView: 1,
   mealPlanWeek: 2,
+  insightsPeriod: 'last_30_days',
   receiptModalOpen: false,
   manualTripModalOpen: false,
   editTripModalOpen: false,
@@ -1462,6 +1463,17 @@ Cracked black pepper`;
       const w = parseInt(e.currentTarget.getAttribute('data-mealplan-week'), 10);
       state.mealPlanWeek = w;
       render();
+    });
+  });
+
+  // Household Grocery Insights Reporting Period Filter (Phase 3)
+  document.querySelectorAll('[data-insights-period]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const p = e.currentTarget.getAttribute('data-insights-period');
+      if (p) {
+        state.insightsPeriod = p;
+        render();
+      }
     });
   });
 

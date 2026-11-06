@@ -35,6 +35,7 @@ import {
 } from '../services/courseProjectStorage.js';
 import { getHouseholdMembers } from '../services/storage.js';
 import { detectOverBuying, renderOverBuyingAlertsHtml } from '../services/overBuyingDetector.js';
+import { renderHouseholdInsightsDashboard } from './HouseholdInsightsView.js';
 
 export function handleDownloadClick(e, exportFn) {
   if (e && typeof e.stopPropagation === 'function') {
@@ -126,7 +127,7 @@ export function renderCourseProjectView(state) {
         <!-- Course Sub-navigation Bar -->
         <div class="course-subnav">
           <button class="${getSubNavClasses('dashboard')}" data-subtab="dashboard">
-            <span class="nav-icon text-sm select-none">📊</span> 6-Week Dashboard
+            <span class="nav-icon text-sm select-none">📊</span> Dashboard & Insights
           </button>
           <button class="${getSubNavClasses('trips')}" data-subtab="trips">
             <span class="nav-icon text-sm select-none">🧾</span> Shopping Trips & Receipts
@@ -189,9 +190,25 @@ function renderDashboardTab(comparison, config, state) {
   const week1 = weeklyData[0];
 
   return `
-    <div class="dashboard-grid">
-      <!-- High-Level KPI Summary Cards -->
-      <div class="kpi-cards-row">
+    <div class="dashboard-grid flex flex-col gap-6">
+      <!-- 1. Household Grocery Insights Dashboard (Phase 3) -->
+      ${renderHouseholdInsightsDashboard(state)}
+
+      <!-- 2. Academic Six-Week Research Study Trajectory Section -->
+      <div class="academic-trajectory-section mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div>
+            <h3 class="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <span>🔬</span> Six-Week Research Study Trajectory
+            </h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              Low-Iodine Diet baseline vs. intervention trajectory evaluation (Weeks 1–6).
+            </p>
+          </div>
+        </div>
+
+        <!-- High-Level KPI Summary Cards -->
+        <div class="kpi-cards-row">
         <!-- Week 1 Baseline Card -->
         <div class="kpi-card baseline-card">
           <div class="kpi-card-header">
@@ -392,6 +409,7 @@ function renderDashboardTab(comparison, config, state) {
             <span class="legend-item" style="color: var(--text-muted); font-size: 0.72rem;">*Strictly excludes packaging tare weight</span>
           </div>
         </div>
+      </div>
       </div>
     </div>
   `;
