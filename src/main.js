@@ -854,14 +854,39 @@ function attachEventHandlers() {
     });
   }
 
-  // Ingredient Card Click
-  document.querySelectorAll('.ingredient-card[data-item-id]').forEach(card => {
-    card.addEventListener('click', () => {
+  // Ingredient & Grocery Card Clicks
+  document.querySelectorAll('.ingredient-card[data-item-id], .grocery-card, .grocery-row, [data-grocery-name]').forEach(card => {
+    card.addEventListener('click', (e) => {
+      e.stopPropagation();
       const id = card.getAttribute('data-item-id');
-      const item = LID_DATABASE.find(i => i.id === id);
+      const name = card.getAttribute('data-grocery-name');
+      let item = null;
+      if (id) {
+        item = LID_DATABASE.find(i => i.id === id);
+      }
+      if (!item && name) {
+        item = LID_DATABASE.find(i => i.name.toLowerCase() === name.toLowerCase())
+          || LID_DATABASE.find(i => i.name.toLowerCase().includes(name.toLowerCase()) || name.toLowerCase().includes(i.name.toLowerCase()));
+      }
+      if (!item && name) {
+        item = {
+          id: id || ('grocery-' + name.toLowerCase().replace(/\s+/g, '-')),
+          name: name,
+          category: 'Grocery Purchases',
+          status: 'SAFE',
+          description: `Purchased grocery item recorded from shopping trip receipts.`,
+          clinicalNotes: 'Check packaging label for non-iodized salt, sea salt, or dairy additives on active dietary protocol.'
+        };
+      }
       if (item) {
         state.selectedItem = item;
         render();
+      }
+    });
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        card.click();
       }
     });
   });
@@ -2292,9 +2317,20 @@ Cracked black pepper`;
     });
   }
 
+  // Shopping Trips Week Filter Chips (W01–W06)
+  document.querySelectorAll('.week-filter-chip[data-trips-filter]').forEach(chip => {
+    chip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const val = chip.getAttribute('data-trips-filter');
+      state.tripsWeekFilter = val;
+      render();
+    });
+  });
+
   // Delete Trip
   document.querySelectorAll('.delete-trip-btn[data-delete-trip]').forEach(btn => {
     btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
       const id = e.currentTarget.getAttribute('data-delete-trip');
       if (confirm('Delete this shopping trip and its linked grocery items & expense record?')) {
         await deleteShoppingTrip(id);

@@ -21,13 +21,32 @@ export {
 /**
  * React component representation for React-based harnesses
  */
-export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave, editingTripId }) {
+export default function ShoppingTripsView({
+  trips: propTrips,
+  shoppingTrips,
+  filteredTrips,
+  onEdit,
+  onDelete,
+  onSave,
+  editingTripId,
+  selectedWeek,
+  onSelectGrocery,
+  onSelectTrip
+}) {
+  const rawTrips = propTrips || shoppingTrips || filteredTrips || (typeof getShoppingTrips === 'function' ? getShoppingTrips() : []);
+  const allTrips = Array.isArray(rawTrips) ? rawTrips : [];
+  const [activeWeekFilter, setActiveWeekFilter] = useState(selectedWeek || 'all');
+  const [selectedGrocery, setSelectedGrocery] = useState(null);
   const [editingId, setEditingId] = useState(editingTripId || null);
   const [lightboxTrip, setLightboxTrip] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [itemName, setItemName] = useState('');
   const [itemQuantity, setItemQuantity] = useState(1);
   const [itemUnit, setItemUnit] = useState('kg');
+
+  const trips = (activeWeekFilter && activeWeekFilter !== 'all')
+    ? allTrips.filter(t => Number(t.projectWeek) === Number(activeWeekFilter))
+    : allTrips;
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -110,6 +129,32 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
 
   return (
     <div className="trips-view-container">
+      {/* Week Filter Bar (W01–W06) */}
+      <div className="week-filter-bar flex items-center gap-2 mb-4 overflow-x-auto py-1">
+        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Week Filter:</span>
+        <button
+          type="button"
+          className={`week-filter-chip px-3 py-1 text-xs rounded-full border transition-all cursor-pointer ${activeWeekFilter === 'all' ? 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'}`}
+          onClick={() => setActiveWeekFilter('all')}
+        >
+          All Weeks ({allTrips.length})
+        </button>
+        {[1, 2, 3, 4, 5, 6].map(w => {
+          const count = allTrips.filter(t => Number(t.projectWeek) === w).length;
+          const isSelected = Number(activeWeekFilter) === w;
+          return (
+            <button
+              key={w}
+              type="button"
+              className={`week-filter-chip px-3 py-1 text-xs rounded-full border transition-all cursor-pointer ${isSelected ? 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'}`}
+              onClick={() => setActiveWeekFilter(w)}
+            >
+              W0{w} {count > 0 ? `(${count})` : ''}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="trips-grid">
         {trips.map(trip => {
           const isEditing = editingId === trip.id;
@@ -227,8 +272,36 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
             );
           }
 
+          let items = getGroceryItems(trip.id);
+          if (!items || items.length === 0) {
+            if (Array.isArray(trip.items) && trip.items.length > 0) items = trip.items;
+            else if (Array.isArray(trip.rawItems) && trip.rawItems.length > 0) items = trip.rawItems;
+            else if (Array.isArray(trip.extractedItems) && trip.extractedItems.length > 0) items = trip.extractedItems;
+            else if (Array.isArray(trip.groceryItems) && trip.groceryItems.length > 0) items = trip.groceryItems;
+            else items = [];
+          }
+
           return (
-            <div key={trip.id} className="trip-card" data-trip-id={trip.id}>
+            <div
+              key={trip.id}
+              className={`trip-card ${trip.receiptImageUrl ? 'cursor-pointer' : ''}`}
+              data-trip-id={trip.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                if (trip.receiptImageUrl) {
+                  setLightboxTrip(trip);
+                }
+                if (onSelectTrip) onSelectTrip(trip);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  if (trip.receiptImageUrl) setLightboxTrip(trip);
+                  if (onSelectTrip) onSelectTrip(trip);
+                }
+              }}
+            >
               <div className="trip-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div className="trip-store-name">{trip.storeName}</div>
                 <div className="trip-sync-badge-container">
@@ -250,10 +323,14 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
                   className="trip-receipt-preview cursor-pointer group my-3 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700/80 max-h-[140px] relative"
                   role="button"
                   tabIndex={0}
-                  onClick={() => setLightboxTrip(trip)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setLightboxTrip(trip);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
+                      e.stopPropagation();
                       setLightboxTrip(trip);
                     }
                   }}
@@ -270,13 +347,55 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
                   </span>
                 </div>
               )}
+
+              {/* Extracted Items / Grocery Cards Preview */}
+              {items.length > 0 && (
+                <div className="trip-items-preview my-2.5">
+                  <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">Extracted Items:</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {items.slice(0, 5).map((i, idx) => (
+                      <span
+                        key={i.id || idx}
+                        className={`item-mini-chip grocery-card status-${(i.lidStatus || 'SAFE').toLowerCase()} cursor-pointer hover:opacity-80 transition-opacity`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onSelectGrocery) onSelectGrocery(i);
+                          else setSelectedGrocery(i);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (onSelectGrocery) onSelectGrocery(i);
+                            else setSelectedGrocery(i);
+                          }
+                        }}
+                        title="Click to view food details"
+                      >
+                        {i.name} ({i.quantity} {i.unit})
+                      </span>
+                    ))}
+                    {items.length > 5 ? (
+                      <span className="item-mini-chip" style={{ background: 'var(--bg-card-hover, rgba(148, 163, 184, 0.15))' }}>
+                        +{items.length - 5} more
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-slate-100/80 dark:border-slate-800/80">
                 {/* Modern Edit Button */}
                 <button
                   type="button"
                   className="edit-trip-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200/80 shadow-xs transition-all active:scale-95 cursor-pointer dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60"
                   data-edit-trip={trip.id}
-                  onClick={() => startEdit(trip)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    startEdit(trip);
+                  }}
                   style={{
                     all: 'unset',
                     display: 'inline-flex',
@@ -303,7 +422,10 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
                   type="button"
                   className="delete-trip-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full text-rose-700 bg-rose-50 hover:bg-rose-100/80 border border-rose-200/80 shadow-xs transition-all active:scale-95 cursor-pointer dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60"
                   data-delete-trip={trip.id}
-                  onClick={() => onDelete && onDelete(trip.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onDelete) onDelete(trip.id);
+                  }}
                   style={{
                     all: 'unset',
                     display: 'inline-flex',
@@ -329,6 +451,73 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
           );
         })}
       </div>
+
+      {/* Grocery Item Details Modal */}
+      {selectedGrocery && (
+        <div
+          className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSelectedGrocery(null)}
+        >
+          <div
+            className="modal-content max-w-lg w-full bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <span className="text-xs uppercase font-bold text-slate-400 tracking-wider">Itemized Grocery Record</span>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white m-0">{selectedGrocery.name}</h3>
+              </div>
+              <button
+                type="button"
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                onClick={() => setSelectedGrocery(null)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="my-4">
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl mb-3 flex items-center gap-3">
+                <span className="text-2xl">🥬</span>
+                <div>
+                  <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
+                    {selectedGrocery.lidStatus || 'SAFE'} on Active Diet
+                  </div>
+                  <div className="text-sm font-bold text-emerald-900 dark:text-emerald-100">
+                    {selectedGrocery.quantity} {selectedGrocery.unit} {selectedGrocery.unitPrice ? `• ₱${formatNumber(selectedGrocery.unitPrice)}/${selectedGrocery.unit}` : ''}
+                  </div>
+                </div>
+              </div>
+              {selectedGrocery.totalPrice ? (
+                <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">
+                  <strong>Total Expense:</strong> ₱{formatNumber(selectedGrocery.totalPrice)}
+                </p>
+              ) : null}
+              {selectedGrocery.weightGrams ? (
+                <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">
+                  <strong>Net Weight:</strong> {selectedGrocery.weightGrams} g
+                </p>
+              ) : null}
+              {selectedGrocery.rawReceiptText ? (
+                <p className="text-xs text-slate-500 font-mono mt-2">
+                  <strong>Receipt Line:</strong> {selectedGrocery.rawReceiptText}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                className="btn-secondary px-4 py-2 text-xs font-semibold rounded-lg cursor-pointer"
+                onClick={() => setSelectedGrocery(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Lightbox Modal */}
       {lightboxTrip && (

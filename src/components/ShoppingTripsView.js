@@ -361,7 +361,7 @@ export function renderTripCard(trip, isEditing = false) {
   }
 
   return `
-    <div class="trip-card" data-trip-id="${trip.id}">
+    <div class="trip-card ${trip.receiptImageUrl ? 'cursor-pointer' : ''}" data-trip-id="${trip.id}" ${trip.receiptImageUrl ? `data-lightbox-trip-id="${trip.id}"` : ''}>
       <div class="trip-card-header">
         <div style="display: flex; align-items: center; gap: 10px;">
           <span class="trip-store-icon">${(trip.tripType || '').includes('Wet') ? '🐟' : '🛒'}</span>
@@ -414,7 +414,7 @@ export function renderTripCard(trip, isEditing = false) {
           <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">Extracted Items:</div>
           <div class="trip-items-chips">
             ${items.slice(0, 5).map(i => `
-              <span class="item-mini-chip status-${(i.lidStatus || 'SAFE').toLowerCase()}">
+              <span class="item-mini-chip grocery-card status-${(i.lidStatus || 'SAFE').toLowerCase()} cursor-pointer hover:opacity-85 transition-opacity" data-grocery-name="${escapeHtml(i.name)}" role="button" tabindex="0" title="Click to view food details and guidance">
                 ${escapeHtml(i.name)} (${i.quantity} ${i.unit})
               </span>
             `).join('')}
@@ -458,7 +458,11 @@ export function renderTripCard(trip, isEditing = false) {
  * Renders the Shopping Trips Tab view container
  */
 export function renderShoppingTripsView(state = {}) {
-  const trips = getShoppingTrips();
+  const allTrips = (state.trips && state.trips.length > 0) ? state.trips : getShoppingTrips();
+  const activeWeekFilter = state.tripsWeekFilter || (state.selectedWeekView ? String(state.selectedWeekView) : 'all');
+  const trips = (activeWeekFilter && activeWeekFilter !== 'all')
+    ? allTrips.filter(t => Number(t.projectWeek) === Number(activeWeekFilter))
+    : allTrips;
 
   return `
     <div class="trips-view-container">
@@ -486,6 +490,23 @@ export function renderShoppingTripsView(state = {}) {
           Upon arriving home from grocery shopping, weigh the entire food haul together using a kitchen scale or luggage scale (in kg). 
           This provides the physical mass baseline for food consumption and waste ratio analysis.
         </div>
+      </div>
+
+      <!-- Week Filtering (W01–W06) -->
+      <div class="week-filter-bar flex items-center gap-2 mb-4 overflow-x-auto py-1">
+        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Week Filter:</span>
+        <button type="button" class="week-filter-chip px-3 py-1 text-xs rounded-full border transition-all cursor-pointer ${activeWeekFilter === 'all' ? 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'}" data-trips-filter="all">
+          All Weeks (${allTrips.length})
+        </button>
+        ${[1, 2, 3, 4, 5, 6].map(w => {
+          const count = allTrips.filter(t => Number(t.projectWeek) === w).length;
+          const isSelected = Number(activeWeekFilter) === w;
+          return `
+            <button type="button" class="week-filter-chip px-3 py-1 text-xs rounded-full border transition-all cursor-pointer ${isSelected ? 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'}" data-trips-filter="${w}">
+              W0${w} ${count > 0 ? `(${count})` : ''}
+            </button>
+          `;
+        }).join('')}
       </div>
 
       <!-- Trips List -->

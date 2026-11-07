@@ -71,11 +71,13 @@ import { renderManualTripModal } from './ManualTripModal.js';
 import { renderShoppingTripsView, renderEditTripModal, renderTripCard, renderReceiptLightboxModal } from './ShoppingTripsView.js';
 export { renderManualTripModal, renderShoppingTripsView, renderEditTripModal, renderTripCard, renderReceiptLightboxModal, updateShoppingTrip };
 
-export function renderCourseProjectView(state) {
+export function renderCourseProjectView(state = {}) {
   const activeSubTab = state.courseSubTab || 'dashboard'; // 'dashboard' | 'trips' | 'groceries' | 'waste' | 'mealplan' | 'export'
   const config = getCourseConfig();
   const schedule = getProjectWeekSchedule(config.startDate);
   const comparison = getSixWeekComparison();
+  const trips = (state.trips && state.trips.length > 0) ? state.trips : getShoppingTrips();
+  const lightboxTrip = state.lightboxTripId ? trips.find(t => t.id === state.lightboxTripId) : null;
 
   const getSubNavClasses = (tabKey) => {
     const isActive = activeSubTab === tabKey;
@@ -157,7 +159,7 @@ export function renderCourseProjectView(state) {
       ${state.receiptModalOpen ? renderReceiptScanModal(state) : ''}
       ${state.manualTripModalOpen ? renderManualTripModal(state) : ''}
       ${state.editTripModalOpen ? renderEditTripModal(state) : ''}
-      ${state.lightboxTripId ? renderReceiptLightboxModal(trips.find(t => t.id === state.lightboxTripId)) : ''}
+      ${lightboxTrip ? renderReceiptLightboxModal(lightboxTrip) : ''}
       ${state.wasteModalOpen ? renderFoodWasteModal(state) : ''}
       ${state.mealPlanModalOpen ? renderMealPlanModal(state) : ''}
       ${state.configModalOpen ? renderProjectConfigModal(config) : ''}
@@ -471,10 +473,15 @@ function renderGroceryPurchasesTab(state) {
             <tbody>
               ${items.map(i => {
     const status = (i.lidStatus || 'SAFE').toUpperCase();
+    const dbItem = LID_DATABASE.find(db => db.name.toLowerCase() === (i.name || '').toLowerCase() || db.id === i.id || db.id === i.itemId);
+    const itemId = dbItem?.id || i.itemId || i.id || ('grocery-' + (i.name || '').toLowerCase().replace(/\s+/g, '-'));
     return `
-                  <tr>
+                  <tr class="grocery-row grocery-card cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors" data-item-id="${escapeHtml(itemId)}" data-grocery-name="${escapeHtml(i.name)}" role="button" tabindex="0" title="Click to view food details and clinical guidance">
                     <td>
-                      <div style="font-weight: 700;">${escapeHtml(i.name)}</div>
+                      <div style="font-weight: 700;" class="text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1.5">
+                        <span>${dbItem?.icon || '🥬'}</span>
+                        <span>${escapeHtml(i.name)}</span>
+                      </div>
                       ${i.rawReceiptText && i.rawReceiptText !== i.name ? `
                         <div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">${escapeHtml(i.rawReceiptText)}</div>
                       ` : ''}
