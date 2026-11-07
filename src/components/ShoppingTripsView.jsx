@@ -49,15 +49,21 @@ export default function ShoppingTripsView({
     : allTrips;
 
   useEffect(() => {
+    if (!lightboxTrip) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && lightboxTrip) {
+      if (e.key === 'Escape') {
         setLightboxTrip(null);
       }
     };
-    if (lightboxTrip) {
-      window.addEventListener('keydown', handleKeyDown);
-    }
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [lightboxTrip]);
 
   const startEdit = (trip) => {
@@ -522,28 +528,33 @@ export default function ShoppingTripsView({
       {/* Lightbox Modal */}
       {lightboxTrip && (
         <div
-          className="modal-overlay receipt-lightbox-overlay fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md"
+          className="modal-overlay receipt-lightbox-overlay fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md pb-[max(1rem,env(safe-area-inset-bottom))]"
           role="dialog"
           aria-modal="true"
           aria-label="Receipt Photo Lightbox"
+          style={{ zIndex: 200 }}
           onClick={(e) => { if (e.target === e.currentTarget) setLightboxTrip(null); }}
         >
           <div
-            className="lightbox-modal-content max-w-4xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-4 bg-slate-900/95 text-white rounded-2xl shadow-2xl border border-slate-700/80 relative"
-            style={{ maxHeight: '92vh', overflowY: 'auto' }}
+            className="lightbox-modal-content max-w-lg w-full mx-auto flex flex-col max-h-[85dvh] bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700/80 overflow-hidden relative"
+            style={{ maxHeight: '85dvh' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="lightbox-header flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2.5">
-                <span className="text-xl">🧾</span>
-                <div>
-                  <h3 className="font-bold text-base sm:text-lg text-white m-0">{lightboxTrip.storeName || 'Shopping Trip'}</h3>
-                  <p className="text-xs text-slate-400 m-0">{lightboxTrip.date} • {lightboxTrip.tripType || lightboxTrip.trip_type || 'Supermarket'}</p>
+            {/* Header */}
+            <div className="lightbox-header flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="text-lg shrink-0">🧾</span>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-sm sm:text-base text-white m-0 truncate flex items-center gap-2">
+                    <span className="truncate">{lightboxTrip.storeName || 'Shopping Trip'}</span>
+                    <span className="text-[11px] text-slate-400 font-normal hidden sm:inline shrink-0">(Esc to close)</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 m-0 truncate">{lightboxTrip.date} • {lightboxTrip.tripType || lightboxTrip.trip_type || 'Supermarket'}</p>
                 </div>
               </div>
               <button
                 type="button"
-                className="btn-icon text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-full w-9 h-9 flex items-center justify-center transition-colors cursor-pointer"
+                className="btn-icon text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full w-8 h-8 flex items-center justify-center transition-colors cursor-pointer shrink-0 ml-2"
                 onClick={() => setLightboxTrip(null)}
                 aria-label="Close Lightbox"
               >
@@ -551,46 +562,47 @@ export default function ShoppingTripsView({
               </button>
             </div>
 
-            <div className="lightbox-img-wrapper w-full flex items-center justify-center bg-black/60 rounded-xl overflow-hidden p-2 min-h-[260px] max-h-[65vh]">
+            {/* Full Image Container */}
+            <div className="lightbox-img-wrapper flex-1 min-h-0 w-full flex items-center justify-center bg-slate-950 p-2 sm:p-3 overflow-hidden select-none">
               {lightboxTrip.receiptImageUrl ? (
                 <img
                   src={lightboxTrip.receiptImageUrl}
                   alt={`Full photo for ${lightboxTrip.storeName}`}
-                  className="lightbox-full-img max-h-[62vh] w-auto max-w-full object-contain rounded-lg shadow-lg select-none"
+                  className="lightbox-full-img max-h-[50dvh] sm:max-h-[52dvh] max-w-full w-auto h-auto object-contain rounded-lg shadow-md"
+                  loading="eager"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
                     if (e.currentTarget.parentElement) {
-                      e.currentTarget.parentElement.innerHTML = '<div class="p-8 text-center text-slate-400 text-sm">⚠️ Receipt image could not be loaded or is unavailable.</div>';
+                      e.currentTarget.parentElement.innerHTML = '<div class="p-6 text-center text-slate-400 text-xs sm:text-sm">⚠️ Receipt image could not be loaded or is unavailable.</div>';
                     }
                   }}
                 />
               ) : (
-                <div className="p-8 text-center text-slate-400 text-sm">
+                <div className="p-6 text-center text-slate-400 text-xs sm:text-sm">
                   📷 No photo attached to this shopping trip.
                 </div>
               )}
             </div>
 
-            <div className="lightbox-details-grid grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/60 text-xs">
-              <div>
-                <span className="text-slate-400 block mb-0.5">Total Amount</span>
-                <span className="font-bold text-sm text-emerald-400 font-mono">₱{formatNumber(lightboxTrip.totalAmountPaid)}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block mb-0.5">Whole Scale Weight</span>
-                <span className="font-bold text-sm text-cyan-300 font-mono">{lightboxTrip.totalScaleWeightKg > 0 ? `${Number(lightboxTrip.totalScaleWeightKg).toFixed(2)} kg` : 'Not Weighed'}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block mb-0.5">Items Recorded</span>
-                <span className="font-bold text-sm text-slate-200">{lightboxTrip.itemsCount || (lightboxTrip.items?.length || 0)} items</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block mb-0.5">Venue / Trip Type</span>
-                <span className="font-bold text-sm text-slate-200 capitalize">{lightboxTrip.tripType || lightboxTrip.trip_type || 'Supermarket'}</span>
+            {/* Metadata Footer */}
+            <div className="lightbox-footer shrink-0 px-4 py-3 bg-slate-900 border-t border-slate-800 text-white">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider">Amount Paid</span>
+                  <span className="font-bold text-xs sm:text-sm text-emerald-400 font-mono">₱{formatNumber(lightboxTrip.totalAmountPaid)}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider">Scale Weight</span>
+                  <span className="font-bold text-xs sm:text-sm text-cyan-300 font-mono">{lightboxTrip.totalScaleWeightKg > 0 ? `${Number(lightboxTrip.totalScaleWeightKg).toFixed(2)} kg` : '—'}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider">Items Count</span>
+                  <span className="font-bold text-xs sm:text-sm text-slate-200 font-mono">{lightboxTrip.itemsCount || (lightboxTrip.items?.length || 0)} items</span>
+                </div>
               </div>
               {lightboxTrip.notes ? (
-                <div className="col-span-2 sm:col-span-4 border-t border-slate-700/50 pt-2 text-slate-300">
-                  <strong className="text-slate-400">Notes:</strong> {lightboxTrip.notes}
+                <div className="mt-2.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800/80 text-xs text-slate-300 line-clamp-2">
+                  <strong className="text-slate-400 font-medium">Notes:</strong> {lightboxTrip.notes}
                 </div>
               ) : null}
             </div>

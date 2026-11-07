@@ -536,61 +536,60 @@ export function renderReceiptLightboxModal(trip) {
   if (!trip || !trip.receiptImageUrl) return '';
 
   return `
-    <div class="modal-overlay receipt-lightbox-overlay fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md" id="receipt-lightbox-overlay" role="dialog" aria-modal="true" aria-label="Receipt Photo Lightbox">
-      <div class="lightbox-modal-content max-w-4xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-4 bg-slate-900/95 text-white rounded-2xl shadow-2xl border border-slate-700/80 relative" style="max-height: 92vh; overflow-y: auto;">
+    <div class="modal-overlay receipt-lightbox-overlay fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md pb-[max(1rem,env(safe-area-inset-bottom))]" id="receipt-lightbox-overlay" role="dialog" aria-modal="true" aria-label="Receipt Photo Lightbox" style="z-index: 200;">
+      <div class="lightbox-modal-content max-w-lg w-full mx-auto flex flex-col max-h-[85dvh] bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700/80 overflow-hidden relative" style="max-height: 85dvh;" onclick="event.stopPropagation();">
         
         <!-- Header -->
-        <div class="lightbox-header flex items-center justify-between border-b border-slate-800 pb-3">
-          <div class="flex items-center gap-2.5">
-            <span class="text-xl">🧾</span>
-            <div>
-              <h3 class="font-bold text-base sm:text-lg text-white m-0 flex items-center gap-2">
-                <span>${escapeHtml(trip.storeName || 'Shopping Trip')}</span>
-                <span class="text-xs text-slate-400 font-normal hidden sm:inline">(Esc to close)</span>
+        <div class="lightbox-header flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 shrink-0">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="text-lg shrink-0">🧾</span>
+            <div class="min-w-0">
+              <h3 class="font-bold text-sm sm:text-base text-white m-0 truncate flex items-center gap-2">
+                <span class="truncate">${escapeHtml(trip.storeName || 'Shopping Trip')}</span>
+                <span class="text-[11px] text-slate-400 font-normal hidden sm:inline shrink-0">(Esc to close)</span>
               </h3>
-              <p class="text-xs text-slate-400 m-0">${trip.date} • ${escapeHtml(trip.tripType || trip.trip_type || 'Supermarket')}</p>
+              <p class="text-xs text-slate-400 m-0 truncate">${trip.date} • ${escapeHtml(trip.tripType || trip.trip_type || 'Supermarket')}</p>
             </div>
           </div>
-          <button type="button" class="btn-icon text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-full w-9 h-9 flex items-center justify-center transition-colors cursor-pointer" id="close-lightbox-btn" aria-label="Close Lightbox">✕</button>
+          <button type="button" class="btn-icon text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full w-8 h-8 flex items-center justify-center transition-colors cursor-pointer shrink-0 ml-2" id="close-lightbox-btn" aria-label="Close Lightbox">✕</button>
         </div>
 
         <!-- Full Image Container -->
-        <div class="lightbox-img-wrapper w-full flex items-center justify-center bg-black/60 rounded-xl overflow-hidden p-2 min-h-[260px] max-h-[65vh]">
+        <div class="lightbox-img-wrapper flex-1 min-h-0 w-full flex items-center justify-center bg-slate-950 p-2 sm:p-3 overflow-hidden select-none">
           ${trip.receiptImageUrl ? `
             <img 
               src="${trip.receiptImageUrl}" 
               alt="Full receipt photo for ${escapeHtml(trip.storeName)}" 
-              class="lightbox-full-img max-h-[62vh] w-auto max-w-full object-contain rounded-lg shadow-lg select-none"
-              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'p-8 text-center text-slate-400 text-sm\\'>⚠️ Image could not be loaded or is unavailable.</div>';"
+              class="lightbox-full-img max-h-[50dvh] sm:max-h-[52dvh] max-w-full w-auto h-auto object-contain rounded-lg shadow-md"
+              loading="eager"
+              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'p-6 text-center text-slate-400 text-xs sm:text-sm\\'>⚠️ Image could not be loaded or is unavailable.</div>';"
             />
           ` : `
-            <div class="p-8 text-center text-slate-400 text-sm">
+            <div class="p-6 text-center text-slate-400 text-xs sm:text-sm">
               📷 No photo attached to this shopping trip.
             </div>
           `}
         </div>
 
-        <!-- Trip Details Grid -->
-        <div class="lightbox-details-grid grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/60 text-xs">
-          <div>
-            <span class="text-slate-400 block mb-0.5">Total Amount</span>
-            <span class="font-bold text-sm text-emerald-400 font-mono">₱${formatNumber(trip.totalAmountPaid)}</span>
-          </div>
-          <div>
-            <span class="text-slate-400 block mb-0.5">Whole Scale Weight</span>
-            <span class="font-bold text-sm text-cyan-300 font-mono">${trip.totalScaleWeightKg > 0 ? `${Number(trip.totalScaleWeightKg).toFixed(2)} kg` : 'Not Weighed'}</span>
-          </div>
-          <div>
-            <span class="text-slate-400 block mb-0.5">Items Recorded</span>
-            <span class="font-bold text-sm text-slate-200">${trip.itemsCount || (trip.items?.length || 0)} items</span>
-          </div>
-          <div>
-            <span class="text-slate-400 block mb-0.5">Venue / Trip Type</span>
-            <span class="font-bold text-sm text-slate-200 capitalize">${escapeHtml(trip.tripType || trip.trip_type || 'Supermarket')}</span>
+        <!-- Metadata Footer -->
+        <div class="lightbox-footer shrink-0 px-4 py-3 bg-slate-900 border-t border-slate-800 text-white">
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div class="p-2 rounded-xl bg-slate-950 border border-slate-800">
+              <span class="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider">Amount Paid</span>
+              <span class="font-bold text-xs sm:text-sm text-emerald-400 font-mono">₱${formatNumber(trip.totalAmountPaid)}</span>
+            </div>
+            <div class="p-2 rounded-xl bg-slate-950 border border-slate-800">
+              <span class="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider">Scale Weight</span>
+              <span class="font-bold text-xs sm:text-sm text-cyan-300 font-mono">${trip.totalScaleWeightKg > 0 ? `${Number(trip.totalScaleWeightKg).toFixed(2)} kg` : '—'}</span>
+            </div>
+            <div class="p-2 rounded-xl bg-slate-950 border border-slate-800">
+              <span class="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider">Items Count</span>
+              <span class="font-bold text-xs sm:text-sm text-slate-200 font-mono">${trip.itemsCount || (trip.items?.length || 0)} items</span>
+            </div>
           </div>
           ${trip.notes ? `
-            <div class="col-span-2 sm:col-span-4 border-t border-slate-700/50 pt-2 text-slate-300">
-              <strong class="text-slate-400">Notes:</strong> ${escapeHtml(trip.notes)}
+            <div class="mt-2.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800/80 text-xs text-slate-300 line-clamp-2">
+              <strong class="text-slate-400 font-medium">Notes:</strong> ${escapeHtml(trip.notes)}
             </div>
           ` : ''}
         </div>

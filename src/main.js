@@ -225,6 +225,25 @@ function render() {
   const app = document.querySelector('#app');
   if (!app) return;
 
+  // Manage body scroll locking when any modal or lightbox is active
+  const isAnyModalOpen = Boolean(
+    state.lightboxTripId ||
+    state.receiptModalOpen ||
+    state.manualTripModalOpen ||
+    state.editTripModalOpen ||
+    state.wasteModalOpen ||
+    state.mealPlanModalOpen ||
+    state.settingsOpen ||
+    state.authModalOpen ||
+    state.selectedItem ||
+    state.selectedScanItem
+  );
+  if (isAnyModalOpen) {
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
+  }
+
   // Guarantee mode falls back to diet if project tab is toggled off
   if (!state.showProjectTab && state.appMode === 'course') {
     state.appMode = 'diet';
@@ -2678,7 +2697,8 @@ Cracked black pepper`;
 
   const closeLightboxBtn = document.querySelector('#close-lightbox-btn');
   if (closeLightboxBtn) {
-    closeLightboxBtn.addEventListener('click', () => {
+    closeLightboxBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       state.lightboxTripId = null;
       render();
     });
@@ -2691,6 +2711,13 @@ Cracked black pepper`;
         state.lightboxTripId = null;
         render();
       }
+    });
+  }
+
+  const lightboxModalContent = document.querySelector('.lightbox-modal-content');
+  if (lightboxModalContent) {
+    lightboxModalContent.addEventListener('click', (e) => {
+      e.stopPropagation();
     });
   }
 

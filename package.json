@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node test/courseProject.test.js && node test/householdInsights.test.js && node test/smartMealPlanning.test.js && node test/predictiveSavings.test.js && node test/cloudPersistence.test.js && node test/insightsDashboard.test.js && node test/stepper.test.js && node test/scannerOptimization.test.js && node test/offlineSyncKakabasa.test.js && node test/holisticRehydration.test.js && node test/manualTripModal.test.js && node test/scanningPhotoAndWeight.test.js && node test/cardClicksAndEditModal.test.js",
+    "test": "node test/courseProject.test.js && node test/householdInsights.test.js && node test/smartMealPlanning.test.js && node test/predictiveSavings.test.js && node test/cloudPersistence.test.js && node test/insightsDashboard.test.js && node test/stepper.test.js && node test/scannerOptimization.test.js && node test/offlineSyncKakabasa.test.js && node test/holisticRehydration.test.js && node test/manualTripModal.test.js && node test/scanningPhotoAndWeight.test.js && node test/cardClicksAndEditModal.test.js && node test/lightboxSizingAndFooter.test.js",
     "generate:assets": "node scripts/generate-assets.js"
   },
   "devDependencies": {
