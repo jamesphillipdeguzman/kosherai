@@ -962,7 +962,7 @@ export function normalizeReceiptData(data, source = 'GEMINI_VISION') {
       rawReceiptText: rawText,
       qty,
       quantity: qty,
-      unit: item.unit || 'pcs',
+      unit: item.unit || 'kg',
       price: unitPrice,
       unitPrice,
       total: lineTotal,

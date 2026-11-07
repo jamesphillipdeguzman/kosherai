@@ -630,20 +630,40 @@ export default async function handler(req, res) {
 
       const notes = tripData.notes !== undefined ? tripData.notes : null;
 
+      const hasReceiptImageUrl = tripData.receiptImageUrl !== undefined || tripData.receipt_image_url !== undefined || body.receiptImageUrl !== undefined;
+      const receiptImageUrlVal = tripData.receiptImageUrl !== undefined
+        ? tripData.receiptImageUrl
+        : (tripData.receipt_image_url !== undefined ? tripData.receipt_image_url : (body.receiptImageUrl !== undefined ? body.receiptImageUrl : null));
+
       // 1. Update shopping_trips using parameterized COALESCE query
-      const updatedRows = await sql`
-        UPDATE shopping_trips 
-        SET 
-          store_name = COALESCE(${storeName}, store_name),
-          date = COALESCE(${date}, date),
-          trip_type = COALESCE(${tripType}, trip_type),
-          total_scale_weight_kg = COALESCE(${totalScaleWeightKg}, total_scale_weight_kg),
-          total_amount_paid = COALESCE(${totalAmountPaid}, total_amount_paid),
-          notes = COALESCE(${notes}, notes),
-          updated_at = NOW()
-        WHERE id = ${targetId} AND user_id = ${userId}
-        RETURNING *;
-      `;
+      const updatedRows = hasReceiptImageUrl
+        ? await sql`
+            UPDATE shopping_trips 
+            SET 
+              store_name = COALESCE(${storeName}, store_name),
+              date = COALESCE(${date}, date),
+              trip_type = COALESCE(${tripType}, trip_type),
+              total_scale_weight_kg = COALESCE(${totalScaleWeightKg}, total_scale_weight_kg),
+              total_amount_paid = COALESCE(${totalAmountPaid}, total_amount_paid),
+              notes = COALESCE(${notes}, notes),
+              receipt_image_url = ${receiptImageUrlVal},
+              updated_at = NOW()
+            WHERE id = ${targetId} AND user_id = ${userId}
+            RETURNING *;
+          `
+        : await sql`
+            UPDATE shopping_trips 
+            SET 
+              store_name = COALESCE(${storeName}, store_name),
+              date = COALESCE(${date}, date),
+              trip_type = COALESCE(${tripType}, trip_type),
+              total_scale_weight_kg = COALESCE(${totalScaleWeightKg}, total_scale_weight_kg),
+              total_amount_paid = COALESCE(${totalAmountPaid}, total_amount_paid),
+              notes = COALESCE(${notes}, notes),
+              updated_at = NOW()
+            WHERE id = ${targetId} AND user_id = ${userId}
+            RETURNING *;
+          `;
 
       const row = (updatedRows && updatedRows[0]) || current;
 

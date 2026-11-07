@@ -108,10 +108,16 @@ export default function ReceiptScannerModal({
     if (typeof window !== 'undefined') {
       localStorage.setItem('kosherai_venue_mode', mode);
     }
-    if (mode === 'wet_market' && storeName === 'SM Supermarket') {
-      setStoreName('Wet Market / Palengke');
-    } else if (mode === 'supermarket' && storeName === 'Wet Market / Palengke') {
-      setStoreName('SM Supermarket');
+    if (mode === 'wet_market') {
+      setTripType('wet_market');
+      if (storeName === 'SM Supermarket' || !storeName.trim()) {
+        setStoreName('Wet Market / Palengke');
+      }
+    } else if (mode === 'supermarket') {
+      setTripType('Supermarket');
+      if (storeName === 'Wet Market / Palengke' || !storeName.trim()) {
+        setStoreName('SM Supermarket');
+      }
     }
   };
 
@@ -173,7 +179,7 @@ export default function ReceiptScannerModal({
               id: item.id || idx + 1,
               name: item.name || item.description || '',
               quantity: qty,
-              unit: item.unit || 'pcs',
+              unit: item.unit || 'kg',
               unitPrice: price,
               totalPrice: total
             };
@@ -264,7 +270,7 @@ export default function ReceiptScannerModal({
                 id: item.id || idx + 1,
                 name: item.name || item.description || '',
                 quantity: qty,
-                unit: item.unit || 'pcs',
+                unit: item.unit || 'kg',
                 unitPrice: price,
                 totalPrice: total
               };
@@ -330,7 +336,7 @@ export default function ReceiptScannerModal({
                 id: item.id || idx + 1,
                 name: item.name || item.description || '',
                 quantity: qty,
-                unit: item.unit || 'pcs',
+                unit: item.unit || 'kg',
                 unitPrice: price,
                 totalPrice: total
               };
@@ -357,7 +363,7 @@ export default function ReceiptScannerModal({
         id: Date.now(),
         name: '',
         quantity: 1,
-        unit: 'pcs',
+        unit: 'kg',
         unitPrice: 0,
         totalPrice: 0
       }
@@ -412,7 +418,7 @@ export default function ReceiptScannerModal({
     const trip_type = venueMode === 'wet_market' ? 'wet_market' : 'supermarket';
 
     let resolvedReceiptUrl = previewUrl;
-    if (venueMode !== 'wet_market' && (currentImageBlob || (previewUrl && (previewUrl.startsWith('blob:') || previewUrl.startsWith('data:'))))) {
+    if (currentImageBlob || (previewUrl && (previewUrl.startsWith('blob:') || previewUrl.startsWith('data:')))) {
       try {
         const cUrl = await uploadReceiptImageToCloudinary(currentImageBlob || previewUrl);
         if (cUrl) {
@@ -430,7 +436,7 @@ export default function ReceiptScannerModal({
       totalAmountPaid: parsedTotal,
       tripType: trip_type,
       trip_type,
-      receiptImageUrl: venueMode === 'wet_market' ? null : resolvedReceiptUrl,
+      receiptImageUrl: resolvedReceiptUrl,
       notes: venueMode === 'wet_market'
         ? (items.length > 0 ? `Wet market trip (${items.length} item${items.length === 1 ? '' : 's'} recorded)` : 'Manual wet market entry')
         : `Receipt scanned (${items.length} items verified)`
@@ -471,14 +477,14 @@ export default function ReceiptScannerModal({
               className={`text-lg sm:text-xl font-bold truncate ${theme === 'dark' ? 'text-white' : 'text-slate-900'
                 }`}
             >
-              {venueMode === 'wet_market' ? 'Wet Market Food Intake & Manual Log' : 'Intelligent Supermarket Receipt Scanner'}
+              {venueMode === 'wet_market' ? 'Wet Market Produce & Scale Scanner' : 'Intelligent Supermarket Receipt Scanner'}
             </h2>
             <p
               className={`text-xs sm:text-sm mt-0.5 line-clamp-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
                 }`}
             >
               {venueMode === 'wet_market'
-                ? 'Record palengke and receipt-less produce, scale weights, and itemized batch purchases.'
+                ? 'Scan receipts, palengke produce photos, or weighing-scale displays for instant verification.'
                 : 'AI document OCR extracts store details, itemized purchases, and final amount paid for side-by-side verification.'}
             </p>
           </div>
@@ -578,11 +584,10 @@ export default function ReceiptScannerModal({
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-            {/* Main responsive grid: Split 5/7 on Supermarket, centered max-w-3xl on Wet Market */}
-            <div className={`flex flex-col ${venueMode === 'supermarket' ? 'md:grid md:grid-cols-12' : 'max-w-3xl mx-auto'} gap-6`}>
-              {/* Left Column / Upload Card: only shown when venueMode === 'supermarket' */}
-              {venueMode === 'supermarket' && (
-                <div className="w-full md:col-span-5 flex flex-col">
+            {/* Main responsive grid: Split 5/7 for both Supermarket and Wet Market */}
+            <div className="flex flex-col md:grid md:grid-cols-12 gap-6">
+              {/* Left Column / Upload Card: available in both modes */}
+              <div className="w-full md:col-span-5 flex flex-col">
                   {/* Persistently mounted file input - never unmounted, ref-triggered */}
                   <input
                     type="file"
@@ -682,13 +687,13 @@ export default function ReceiptScannerModal({
                           className={`font-bold text-base sm:text-lg mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-900'
                             }`}
                         >
-                          Take Photo or Upload Receipt
+                          {venueMode === 'wet_market' ? 'Take Photo of Produce, Receipt or Scale' : 'Take Photo or Upload Receipt'}
                         </div>
                         <p
                           className={`text-xs sm:text-sm max-w-xs mb-5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
                             }`}
                         >
-                          Supports high-resolution JPG or PNG directly from your mobile camera
+                          Supports receipts, produce, and weighing-scale photos directly from your mobile camera
                         </p>
                         <button
                           type="button"
@@ -702,7 +707,6 @@ export default function ReceiptScannerModal({
                     )}
                   </div>
                 </div>
-              )}
 
               {/* Right Column / Extracted Editable Form (Full width on mobile, 7 cols on desktop) */}
               <div className="relative w-full md:col-span-7 flex flex-col">
@@ -713,7 +717,7 @@ export default function ReceiptScannerModal({
                       <span className="animate-pulse">{scanStatusMsg?.includes('PaddleOCR') ? '⚡' : '✨'}</span> {scanStatusMsg?.includes('PaddleOCR') ? 'PaddleOCR Engine Active' : 'Gemini Vision Active'}
                     </div>
                     <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">
-                      Analyzing Supermarket Receipt...
+                      {venueMode === 'wet_market' ? 'Analyzing Produce / Receipt...' : 'Analyzing Supermarket Receipt...'}
                     </h3>
                     <p className="text-xs sm:text-sm text-teal-800 dark:text-teal-300 text-center max-w-xs font-medium">
                       {scanStatusMsg || '✨ Gemini Vision is analyzing receipt details & line items...'}

@@ -23,10 +23,23 @@ export {
  */
 export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave, editingTripId }) {
   const [editingId, setEditingId] = useState(editingTripId || null);
+  const [lightboxTrip, setLightboxTrip] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [itemName, setItemName] = useState('');
   const [itemQuantity, setItemQuantity] = useState(1);
-  const [itemUnit, setItemUnit] = useState('pc');
+  const [itemUnit, setItemUnit] = useState('kg');
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && lightboxTrip) {
+        setLightboxTrip(null);
+      }
+    };
+    if (lightboxTrip) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxTrip]);
 
   const startEdit = (trip) => {
     setEditingId(trip.id);
@@ -43,7 +56,7 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
     const currentQty = (item?.quantity !== undefined && item?.quantity !== null && item?.quantity !== '')
       ? Number(item.quantity)
       : 1;
-    const currentUnit = item?.unit || 'pc';
+    const currentUnit = item?.unit || 'kg';
 
     setItemName(currentItemName);
     setItemQuantity(currentQty);
@@ -85,8 +98,8 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
       itemName: itemName ? itemName.trim() : '',
       quantity: (itemQuantity !== undefined && itemQuantity !== null && itemQuantity !== '' && !isNaN(Number(itemQuantity))) ? Number(itemQuantity) : 1,
       itemQuantity: (itemQuantity !== undefined && itemQuantity !== null && itemQuantity !== '' && !isNaN(Number(itemQuantity))) ? Number(itemQuantity) : 1,
-      unit: itemUnit ? itemUnit.trim() : 'pc',
-      itemUnit: itemUnit ? itemUnit.trim() : 'pc'
+      unit: itemUnit ? itemUnit.trim() : 'kg',
+      itemUnit: itemUnit ? itemUnit.trim() : 'kg'
     };
 
     // Instant local-first save without blocking the UI
@@ -230,6 +243,33 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
                   )}
                 </div>
               </div>
+
+              {/* Clickable Receipt / Produce Photo Thumbnail */}
+              {trip.receiptImageUrl && (
+                <div
+                  className="trip-receipt-preview cursor-pointer group my-3 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700/80 max-h-[140px] relative"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setLightboxTrip(trip)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setLightboxTrip(trip);
+                    }
+                  }}
+                  title="Click to view full photo"
+                >
+                  <img
+                    src={trip.receiptImageUrl}
+                    alt={`Receipt photo for ${trip.storeName}`}
+                    className="w-full h-[140px] object-cover block group-hover:scale-102 transition-transform duration-200"
+                    loading="lazy"
+                  />
+                  <span className="receipt-attached-badge absolute bottom-1.5 right-1.5 bg-slate-900/85 text-emerald-400 text-[11px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-sm">
+                    <span>🔍</span> View Full Photo
+                  </span>
+                </div>
+              )}
               <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-slate-100/80 dark:border-slate-800/80">
                 {/* Modern Edit Button */}
                 <button
@@ -289,6 +329,85 @@ export default function ShoppingTripsView({ trips = [], onEdit, onDelete, onSave
           );
         })}
       </div>
+
+      {/* Lightbox Modal */}
+      {lightboxTrip && (
+        <div
+          className="modal-overlay receipt-lightbox-overlay fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Receipt Photo Lightbox"
+          onClick={(e) => { if (e.target === e.currentTarget) setLightboxTrip(null); }}
+        >
+          <div
+            className="lightbox-modal-content max-w-4xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-4 bg-slate-900/95 text-white rounded-2xl shadow-2xl border border-slate-700/80 relative"
+            style={{ maxHeight: '92vh', overflowY: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="lightbox-header flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">🧾</span>
+                <div>
+                  <h3 className="font-bold text-base sm:text-lg text-white m-0">{lightboxTrip.storeName || 'Shopping Trip'}</h3>
+                  <p className="text-xs text-slate-400 m-0">{lightboxTrip.date} • {lightboxTrip.tripType || lightboxTrip.trip_type || 'Supermarket'}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-icon text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-full w-9 h-9 flex items-center justify-center transition-colors cursor-pointer"
+                onClick={() => setLightboxTrip(null)}
+                aria-label="Close Lightbox"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="lightbox-img-wrapper w-full flex items-center justify-center bg-black/60 rounded-xl overflow-hidden p-2 min-h-[260px] max-h-[65vh]">
+              {lightboxTrip.receiptImageUrl ? (
+                <img
+                  src={lightboxTrip.receiptImageUrl}
+                  alt={`Full photo for ${lightboxTrip.storeName}`}
+                  className="lightbox-full-img max-h-[62vh] w-auto max-w-full object-contain rounded-lg shadow-lg select-none"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    if (e.currentTarget.parentElement) {
+                      e.currentTarget.parentElement.innerHTML = '<div class="p-8 text-center text-slate-400 text-sm">⚠️ Receipt image could not be loaded or is unavailable.</div>';
+                    }
+                  }}
+                />
+              ) : (
+                <div className="p-8 text-center text-slate-400 text-sm">
+                  📷 No photo attached to this shopping trip.
+                </div>
+              )}
+            </div>
+
+            <div className="lightbox-details-grid grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/60 text-xs">
+              <div>
+                <span className="text-slate-400 block mb-0.5">Total Amount</span>
+                <span className="font-bold text-sm text-emerald-400 font-mono">₱{formatNumber(lightboxTrip.totalAmountPaid)}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">Whole Scale Weight</span>
+                <span className="font-bold text-sm text-cyan-300 font-mono">{lightboxTrip.totalScaleWeightKg > 0 ? `${Number(lightboxTrip.totalScaleWeightKg).toFixed(2)} kg` : 'Not Weighed'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">Items Recorded</span>
+                <span className="font-bold text-sm text-slate-200">{lightboxTrip.itemsCount || (lightboxTrip.items?.length || 0)} items</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block mb-0.5">Venue / Trip Type</span>
+                <span className="font-bold text-sm text-slate-200 capitalize">{lightboxTrip.tripType || lightboxTrip.trip_type || 'Supermarket'}</span>
+              </div>
+              {lightboxTrip.notes ? (
+                <div className="col-span-2 sm:col-span-4 border-t border-slate-700/50 pt-2 text-slate-300">
+                  <strong className="text-slate-400">Notes:</strong> {lightboxTrip.notes}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

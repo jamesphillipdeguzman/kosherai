@@ -68,8 +68,8 @@ import { getDietProfile } from '../data/dietProfiles.js';
 import { DIET_RECIPES } from '../data/dietRecipes.js';
 import lidRecipes from '../data/lidRecipes.json' with { type: 'json' };
 import { renderManualTripModal } from './ManualTripModal.js';
-import { renderShoppingTripsView, renderEditTripModal, renderTripCard } from './ShoppingTripsView.js';
-export { renderManualTripModal, renderShoppingTripsView, renderEditTripModal, renderTripCard, updateShoppingTrip };
+import { renderShoppingTripsView, renderEditTripModal, renderTripCard, renderReceiptLightboxModal } from './ShoppingTripsView.js';
+export { renderManualTripModal, renderShoppingTripsView, renderEditTripModal, renderTripCard, renderReceiptLightboxModal, updateShoppingTrip };
 
 export function renderCourseProjectView(state) {
   const activeSubTab = state.courseSubTab || 'dashboard'; // 'dashboard' | 'trips' | 'groceries' | 'waste' | 'mealplan' | 'export'
@@ -157,6 +157,7 @@ export function renderCourseProjectView(state) {
       ${state.receiptModalOpen ? renderReceiptScanModal(state) : ''}
       ${state.manualTripModalOpen ? renderManualTripModal(state) : ''}
       ${state.editTripModalOpen ? renderEditTripModal(state) : ''}
+      ${state.lightboxTripId ? renderReceiptLightboxModal(trips.find(t => t.id === state.lightboxTripId)) : ''}
       ${state.wasteModalOpen ? renderFoodWasteModal(state) : ''}
       ${state.mealPlanModalOpen ? renderMealPlanModal(state) : ''}
       ${state.configModalOpen ? renderProjectConfigModal(config) : ''}
@@ -730,7 +731,7 @@ function renderExportTab(comparison, config) {
 function createReceiptItemRowHtml(item = {}, idx = 0, dietProfile = null, isWetMarket = false) {
   const name = item.name || '';
   const qty = item.quantity !== undefined && item.quantity !== null ? item.quantity : (item.qty !== undefined ? item.qty : 1);
-  const unit = item.unit || (isWetMarket ? 'kg' : 'pcs');
+  const unit = item.unit || 'kg';
   const price = item.unitPrice !== undefined && item.unitPrice !== null ? item.unitPrice : (item.price !== undefined ? item.price : '');
   const total = item.totalPrice !== undefined && item.totalPrice !== null ? item.totalPrice : (item.lineTotal !== undefined ? item.lineTotal : (price !== '' ? (Number(qty) * Number(price)).toFixed(2) : ''));
   const category = item.category || (isWetMarket ? 'Wet Market Produce' : 'General Food');
@@ -765,9 +766,9 @@ function createReceiptItemRowHtml(item = {}, idx = 0, dietProfile = null, isWetM
       <td class="item-cell-unit">
         <label class="mobile-cell-label">Unit</label>
         <select class="table-input item-unit-val" style="width: 100%; text-align: center; appearance: none; cursor: pointer;">
-          <option value="kg" ${unit === 'kg' ? 'selected' : ''}>kg</option>
+          <option value="kg" ${unit === 'kg' || !unit ? 'selected' : ''}>kg</option>
           <option value="g" ${unit === 'g' ? 'selected' : ''}>g</option>
-          <option value="pcs" ${unit === 'pcs' || !unit ? 'selected' : ''}>pcs</option>
+          <option value="pcs" ${unit === 'pcs' ? 'selected' : ''}>pcs</option>
           <option value="pack" ${unit === 'pack' ? 'selected' : ''}>pack</option>
           <option value="bundle" ${unit === 'bundle' ? 'selected' : ''}>bundle</option>
           <option value="can" ${unit === 'can' ? 'selected' : ''}>can</option>
@@ -905,7 +906,7 @@ function renderReceiptScanModal(state) {
     itemsHtml = items.map((item, idx) => createReceiptItemRowHtml(item, idx, dietProfile, isWetMarket)).join('');
   } else {
     itemsHtml = createReceiptItemRowHtml(
-      { name: '', quantity: 1, unit: isWetMarket ? 'kg' : 'pcs', unitPrice: '', totalPrice: '' },
+      { name: '', quantity: 1, unit: 'kg', unitPrice: '', totalPrice: '' },
       0,
       dietProfile,
       isWetMarket
@@ -948,47 +949,45 @@ function renderReceiptScanModal(state) {
           </div>
         </div>
 
-        <!-- Main Body: Split or Full Width depending on Venue -->
-        <div class="receipt-scanner-split ${isSupermarket ? 'flex flex-col md:grid md:grid-cols-12 gap-6' : 'flex flex-col gap-6 max-w-3xl mx-auto w-full'} relative">
+        <!-- Main Body: Split 5/7 layout for both Supermarket and Wet Market -->
+        <div class="receipt-scanner-split flex flex-col md:grid md:grid-cols-12 gap-6 relative">
           
-          ${isSupermarket ? `
-            <!-- Left Pane / Upload Card (Mobile: full width on top, Desktop: 5 cols) -->
-            <div class="split-left-pane w-full md:col-span-5">
-              <!-- Persistent file input so camera/file picker can always be triggered -->
-              <input type="file" id="receipt-file-input" accept="image/*" capture="environment" style="display: none;" />
+          <!-- Left Pane / Upload Card (Mobile: full width on top, Desktop: 5 cols) -->
+          <div class="split-left-pane w-full md:col-span-5">
+            <!-- Persistent file input so camera/file picker can always be triggered -->
+            <input type="file" id="receipt-file-input" accept="image/*" capture="environment" style="display: none;" />
 
-              ${state.receiptPreviewUrl ? `
-                <div class="receipt-image-zoom-box relative ${isScanning ? 'scanning-thumbnail-box' : ''}">
-                  <img src="${state.receiptPreviewUrl}" alt="Scanned Receipt Preview" id="receipt-zoom-img" class="${isScanning ? 'opacity-80 transition-opacity' : ''}" />
-                  ${isScanning ? '<div class="scanning-laser-beam"></div>' : ''}
+            ${state.receiptPreviewUrl ? `
+              <div class="receipt-image-zoom-box relative ${isScanning ? 'scanning-thumbnail-box' : ''}">
+                <img src="${state.receiptPreviewUrl}" alt="Scanned Receipt Preview" id="receipt-zoom-img" class="${isScanning ? 'opacity-80 transition-opacity' : ''}" />
+                ${isScanning ? '<div class="scanning-laser-beam"></div>' : ''}
+              </div>
+              ${state.ocrStatusBadge ? `
+                <div class="w-full mt-2 py-1.5 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5">
+                  <span>✓</span> <span>${escapeHtml(state.ocrStatusBadge)}</span>
                 </div>
-                ${state.ocrStatusBadge ? `
-                  <div class="w-full mt-2 py-1.5 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5">
-                    <span>✓</span> <span>${escapeHtml(state.ocrStatusBadge)}</span>
-                  </div>
-                ` : ''}
-                <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px;" class="items-center">
-                  <button type="button" class="btn-secondary" id="reupload-receipt-btn" ${isScanning ? 'disabled' : ''} style="flex: 1; min-width: 110px; min-height: 38px; font-size: 0.8rem;">🔄 Retake Photo</button>
-                  <button type="button" class="btn-secondary" id="rescan-gemini-btn" ${isScanning ? 'disabled' : ''} style="min-height: 38px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;" title="Re-scan receipt using Gemini Vision">
-                    ${state.receiptScanningEngine === 'gemini' ? '<span class="spinner-micro"></span>' : '✨'} Re-scan with Gemini
-                  </button>
-                  <button type="button" class="border border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer" id="trigger-manual-paddle-btn" ${isScanning ? 'disabled' : ''} title="Force local on-device PaddleOCR extraction without Gemini">
-                    ${state.receiptScanningEngine === 'paddle' ? '<span class="spinner-micro"></span>' : '⚡'} On-Device OCR
-                  </button>
-                </div>
-              ` : `
-                <div class="receipt-dropzone" id="receipt-dropzone">
-                  <div class="drop-icon">📷</div>
-                  <div style="font-weight: 700; margin-bottom: 4px; font-size: 1rem;">Take Photo or Upload Receipt</div>
-                  <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 16px;">Supports JPG, PNG from mobile camera</div>
-                  <button type="button" class="btn-primary" id="trigger-receipt-file-btn" style="min-height: 44px; padding: 0 20px;">Choose File or Camera</button>
-                </div>
-              `}
-            </div>
-          ` : ''}
+              ` : ''}
+              <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px;" class="items-center">
+                <button type="button" class="btn-secondary" id="reupload-receipt-btn" ${isScanning ? 'disabled' : ''} style="flex: 1; min-width: 110px; min-height: 38px; font-size: 0.8rem;">🔄 Retake Photo</button>
+                <button type="button" class="btn-secondary" id="rescan-gemini-btn" ${isScanning ? 'disabled' : ''} style="min-height: 38px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;" title="Re-scan receipt using Gemini Vision">
+                  ${state.receiptScanningEngine === 'gemini' ? '<span class="spinner-micro"></span>' : '✨'} Re-scan with Gemini
+                </button>
+                <button type="button" class="border border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer" id="trigger-manual-paddle-btn" ${isScanning ? 'disabled' : ''} title="Force local on-device PaddleOCR extraction without Gemini">
+                  ${state.receiptScanningEngine === 'paddle' ? '<span class="spinner-micro"></span>' : '⚡'} On-Device OCR
+                </button>
+              </div>
+            ` : `
+              <div class="receipt-dropzone" id="receipt-dropzone">
+                <div class="drop-icon">📷</div>
+                <div style="font-weight: 700; margin-bottom: 4px; font-size: 1rem;">${isWetMarket ? 'Take Photo of Produce, Receipt or Scale' : 'Take Photo or Upload Receipt'}</div>
+                <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 16px;">Supports receipts, produce, or weighing-scale photos</div>
+                <button type="button" class="btn-primary" id="trigger-receipt-file-btn" style="min-height: 44px; padding: 0 20px;">Choose File or Camera</button>
+              </div>
+            `}
+          </div>
 
           <!-- Right Pane: Extracted / Manual Editable Fields -->
-          <div class="split-right-pane w-full ${isSupermarket ? 'md:col-span-7' : 'max-w-3xl mx-auto'} relative">
+          <div class="split-right-pane w-full md:col-span-7 relative">
             ${isScanning ? `
               <div class="active-scanning-overlay">
                 <div class="w-12 h-12 rounded-full border-4 border-teal-500/20 border-t-teal-500 animate-spin mb-3"></div>

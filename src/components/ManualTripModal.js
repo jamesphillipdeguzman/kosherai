@@ -6,17 +6,17 @@
 
 export function parseQuantityAndUnit(rawStr) {
   if (!rawStr || typeof rawStr !== 'string') {
-    return { quantity: 1, unit: 'pcs', weightGrams: 0 };
+    return { quantity: 1, unit: 'kg', weightGrams: 1000 };
   }
 
   const trimmed = rawStr.trim();
   if (!trimmed) {
-    return { quantity: 1, unit: 'pcs', weightGrams: 0 };
+    return { quantity: 1, unit: 'kg', weightGrams: 1000 };
   }
 
   const match = trimmed.match(/^([\d.,]+)\s*(.*)$/);
   let quantity = 1;
-  let unit = 'pcs';
+  let unit = 'kg';
 
   if (match) {
     const parsedNum = parseFloat(match[1].replace(/,/g, ''));
@@ -42,6 +42,12 @@ export function parseQuantityAndUnit(rawStr) {
     unit = 'g';
   } else if (unitLower === 'pc' || unitLower === 'pcs' || unitLower === 'piece' || unitLower === 'pieces') {
     unit = 'pcs';
+  } else {
+    // If unit wasn't specified or is unrecognized, default to kg
+    if (!unit || unit === '1') {
+      unit = 'kg';
+      weightGrams = Math.round(quantity * 1000);
+    }
   }
 
   return { quantity, unit, weightGrams };
@@ -57,10 +63,10 @@ export function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-export function createManualItemRowHtml(name = '', qtyUnit = '1 pcs', price = '') {
+export function createManualItemRowHtml(name = '', qtyUnit = '1 kg', price = '') {
   const parsed = parseQuantityAndUnit(qtyUnit);
   const qty = parsed.quantity || 1;
-  const unit = parsed.unit || 'pcs';
+  const unit = parsed.unit || 'kg';
 
   return `
     <tr class="manual-item-row border-b border-slate-200 dark:border-slate-800 transition-colors">
@@ -71,9 +77,9 @@ export function createManualItemRowHtml(name = '', qtyUnit = '1 pcs', price = ''
         <div style="display: flex; gap: 4px; align-items: center;">
           <input type="number" step="any" min="0" class="table-input manual-item-qty" placeholder="Qty" value="${qty}" style="width: 55px; text-align: center;" />
           <select class="table-input manual-item-unit" style="flex: 1; text-align: center; appearance: none; cursor: pointer; padding: 4px 6px;">
-            <option value="kg" ${unit === 'kg' ? 'selected' : ''}>kg</option>
+            <option value="kg" ${unit === 'kg' || !unit ? 'selected' : ''}>kg</option>
             <option value="g" ${unit === 'g' ? 'selected' : ''}>g</option>
-            <option value="pcs" ${unit === 'pcs' || !unit ? 'selected' : ''}>pcs</option>
+            <option value="pcs" ${unit === 'pcs' ? 'selected' : ''}>pcs</option>
             <option value="pack" ${unit === 'pack' ? 'selected' : ''}>pack</option>
             <option value="bundle" ${unit === 'bundle' ? 'selected' : ''}>bundle</option>
             <option value="can" ${unit === 'can' ? 'selected' : ''}>can</option>
@@ -180,7 +186,7 @@ export function renderManualTripModal(state = {}) {
                   </tr>
                 </thead>
                 <tbody id="manual-items-tbody">
-                  ${createManualItemRowHtml('', '1 pcs', '')}
+                  ${createManualItemRowHtml('', '1 kg', '')}
                 </tbody>
               </table>
             </div>

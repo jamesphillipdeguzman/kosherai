@@ -54,13 +54,13 @@ assert.strictEqual(p4.weightGrams, 1500);
 
 const p5 = parseQuantityAndUnit('3');
 assert.strictEqual(p5.quantity, 3);
-assert.strictEqual(p5.unit, 'pcs');
+assert.strictEqual(p5.unit, 'kg');
 
 const p6 = parseQuantityAndUnit('');
 assert.strictEqual(p6.quantity, 1);
-assert.strictEqual(p6.unit, 'pcs');
+assert.strictEqual(p6.unit, 'kg');
 
-console.log('  ✅ parseQuantityAndUnit correctly handles pcs, kg, g, and decimals.');
+console.log('  ✅ parseQuantityAndUnit correctly handles pcs, kg, g, and decimals (defaulting to kg).');
 
 // ----------------------------------------------------
 // Test 2: renderManualTripModal Component Structure

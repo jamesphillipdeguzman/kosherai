@@ -28,6 +28,7 @@ import { searchDatabase, analyzeIngredients, analyzeRecipe } from './services/ru
 import { scaleRecipe } from './services/recipeScaler.js';
 import { detectOverBuying, renderOverBuyingAlertsHtml, dismissWarningKey } from './services/overBuyingDetector.js';
 import { compressImage, compressImageForOCR, runClientOCR, verifyWithGeminiAI, scanSupermarketReceipt, scanReceiptWithPaddleOCR, auditReceiptItemOffline } from './services/aiVerification.js';
+import { uploadReceiptImageToCloudinary } from './utils/cloudinary.js';
 import {
   getSettings,
   saveSettings,
@@ -189,6 +190,10 @@ const state = {
   editTripModalOpen: false,
   editingTripId: null,
   editingTrip: null,
+  editTripPendingFile: null,
+  editTripPendingUrl: null,
+  editTripPhotoRemoved: false,
+  lightboxTripId: null,
   wasteModalOpen: false,
   mealPlanModalOpen: false,
   inventoryModalOpen: false,
@@ -1894,7 +1899,7 @@ Cracked black pepper`;
         const isWet = state.groceryVenueMode === 'wet_market';
         const temp = document.createElement('tbody');
         temp.innerHTML = createReceiptItemRowHtml(
-          { name: '', quantity: 1, unit: isWet ? 'kg' : 'pcs', unitPrice: '', totalPrice: '' },
+          { name: '', quantity: 1, unit: 'kg', unitPrice: '', totalPrice: '' },
           tbody.children.length,
           null,
           isWet
@@ -1985,7 +1990,7 @@ Cracked black pepper`;
         totalAmountPaid: totalAmount,
         tripType,
         trip_type,
-        receiptImageUrl: isWetMarket ? null : (state.receiptPreviewUrl || null),
+        receiptImageUrl: state.receiptPreviewUrl || null,
         notes: isWetMarket
           ? (items.length > 0 ? `Wet market trip (${items.length} item${items.length === 1 ? '' : 's'} recorded)` : 'Manual wet market entry')
           : `Receipt scanned (${items.length} items verified)`,
@@ -2308,6 +2313,9 @@ Cracked black pepper`;
       if (trip) {
         state.editingTripId = id;
         state.editingTrip = trip;
+        state.editTripPendingFile = null;
+        state.editTripPendingUrl = null;
+        state.editTripPhotoRemoved = false;
         state.editTripModalOpen = true;
         render();
       }
@@ -2322,6 +2330,9 @@ Cracked black pepper`;
       state.editTripModalOpen = false;
       state.editingTripId = null;
       state.editingTrip = null;
+      state.editTripPendingFile = null;
+      state.editTripPendingUrl = null;
+      state.editTripPhotoRemoved = false;
       render();
     });
   }
@@ -2330,7 +2341,149 @@ Cracked black pepper`;
       state.editTripModalOpen = false;
       state.editingTripId = null;
       state.editingTrip = null;
+      state.editTripPendingFile = null;
+      state.editTripPendingUrl = null;
+      state.editTripPhotoRemoved = false;
       render();
+    });
+  }
+
+  // Edit Trip Photo Management
+  const triggerChangePhotoBtn = document.querySelector('#trigger-change-photo-btn');
+  const editTripFileInput = document.querySelector('#edit-trip-file-input');
+  if (triggerChangePhotoBtn && editTripFileInput) {
+    triggerChangePhotoBtn.addEventListener('click', () => {
+      editTripFileInput.value = '';
+      editTripFileInput.click();
+    });
+  }
+
+  if (editTripFileInput) {
+    editTripFileInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        state.editTripPendingFile = file;
+        state.editTripPhotoRemoved = false;
+        const objUrl = URL.createObjectURL(file);
+        state.editTripPendingUrl = objUrl;
+
+        const previewContainer = document.querySelector('#edit-trip-photo-preview-container');
+        if (previewContainer) {
+          previewContainer.innerHTML = `
+            <div class="relative w-full rounded-lg overflow-hidden border border-teal-500 bg-black/40 flex items-center justify-center max-h-[180px] p-1">
+              <img id="edit-trip-photo-preview-img" src="${objUrl}" alt="Replacement photo preview" class="max-h-[170px] w-auto max-w-full object-contain rounded" />
+            </div>
+          `;
+        }
+        const badge = document.querySelector('#edit-photo-status-badge');
+        if (badge) {
+          badge.textContent = '📸 New photo selected (unsaved)';
+          badge.className = 'text-[11px] font-semibold text-teal-600 dark:text-teal-400';
+        }
+        const removeBtn = document.querySelector('#remove-trip-photo-btn');
+        if (removeBtn) {
+          removeBtn.style.display = 'inline-flex';
+          removeBtn.classList.remove('hidden');
+        }
+        const rerunBtn = document.querySelector('#rerun-ocr-edit-btn');
+        if (rerunBtn) {
+          rerunBtn.style.display = 'inline-flex';
+          rerunBtn.classList.remove('hidden');
+        }
+        const btnText = document.querySelector('#change-photo-btn-text');
+        if (btnText) btnText.textContent = 'Change Photo';
+      }
+      e.target.value = '';
+    });
+  }
+
+  const removeTripPhotoBtn = document.querySelector('#remove-trip-photo-btn');
+  if (removeTripPhotoBtn) {
+    removeTripPhotoBtn.addEventListener('click', () => {
+      state.editTripPendingFile = null;
+      state.editTripPendingUrl = null;
+      state.editTripPhotoRemoved = true;
+
+      const previewContainer = document.querySelector('#edit-trip-photo-preview-container');
+      if (previewContainer) {
+        previewContainer.innerHTML = `
+          <div id="edit-trip-photo-placeholder" class="w-full border-2 border-dashed border-rose-300 dark:border-rose-900/60 rounded-lg p-4 text-center text-xs text-rose-500">
+            Photo marked for removal (will be removed upon saving).
+          </div>
+        `;
+      }
+      const badge = document.querySelector('#edit-photo-status-badge');
+      if (badge) {
+        badge.textContent = '🗑️ Photo removed (unsaved)';
+        badge.className = 'text-[11px] font-semibold text-rose-500';
+      }
+      removeTripPhotoBtn.style.display = 'none';
+      const rerunBtn = document.querySelector('#rerun-ocr-edit-btn');
+      if (rerunBtn) rerunBtn.style.display = 'none';
+      const btnText = document.querySelector('#change-photo-btn-text');
+      if (btnText) btnText.textContent = 'Add Photo / Scan';
+    });
+  }
+
+  const rerunOcrEditBtn = document.querySelector('#rerun-ocr-edit-btn');
+  if (rerunOcrEditBtn) {
+    rerunOcrEditBtn.addEventListener('click', async () => {
+      const targetImg = state.editTripPendingFile || state.editTripPendingUrl || state.editingTrip?.receiptImageUrl;
+      if (!targetImg) return;
+
+      const confirmed = window.confirm(
+        'Rerun OCR on this photo to detect store name, date, and grocery items?\n\n' +
+        'Click OK to extract and update items, or Cancel to keep current details.'
+      );
+      if (!confirmed) return;
+
+      rerunOcrEditBtn.disabled = true;
+      rerunOcrEditBtn.innerHTML = '<span class="spinner-micro"></span> Scanning...';
+
+      try {
+        const dataUrl = state.editTripPendingFile
+          ? await compressImageForOCR(state.editTripPendingFile, 1600, 0.8)
+          : targetImg;
+
+        const result = await scanSupermarketReceipt(dataUrl, () => {}, state.settings?.geminiApiKey, state.activeDiet || 'lid');
+        if (result) {
+          if (result.storeName && document.querySelector('#edit-store-name')) {
+            document.querySelector('#edit-store-name').value = result.storeName;
+          }
+          if (result.purchaseDate && document.querySelector('#edit-trip-date')) {
+            document.querySelector('#edit-trip-date').value = result.purchaseDate;
+          }
+          if (result.totalAmountPaid && document.querySelector('#edit-total-amount')) {
+            document.querySelector('#edit-total-amount').value = result.totalAmountPaid;
+          }
+          if (Array.isArray(result.items) && result.items.length > 0) {
+            const itemsList = document.querySelector('.edit-items-list');
+            if (itemsList) {
+              itemsList.innerHTML = result.items.map((it, idx) => `
+                <div class="edit-item-row flex items-center gap-2 w-full" data-item-id="extracted_${idx}" style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                  <input type="text" name="itemName" class="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-name" placeholder="e.g. Bangus, Garlic" value="${escapeHtml(it.name)}" required />
+                  <input type="number" step="any" name="itemQty" class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-qty" placeholder="Qty" value="${it.quantity || 1}" />
+                  <input type="text" name="itemUnit" class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-unit" placeholder="Unit (kg, pc)" value="${escapeHtml(it.unit || 'kg')}" />
+                </div>
+              `).join('');
+            } else {
+              const nameInput = document.querySelector('#edit-item-name');
+              if (nameInput) nameInput.value = result.items[0]?.name || '';
+              const qtyInput = document.querySelector('#edit-item-qty');
+              if (qtyInput) qtyInput.value = result.items[0]?.quantity || 1;
+              const unitInput = document.querySelector('#edit-item-unit');
+              if (unitInput) unitInput.value = result.items[0]?.unit || 'kg';
+            }
+          }
+          showToast('OCR extracted new details! Review and click Save Changes.', 'info');
+        }
+      } catch (scanErr) {
+        console.warn('[EditModal] OCR rerun failed:', scanErr);
+        alert('Could not complete OCR on this image. You can continue editing manually.');
+      } finally {
+        rerunOcrEditBtn.disabled = false;
+        rerunOcrEditBtn.innerHTML = '<span>⚡</span> Rerun OCR';
+      }
     });
   }
 
@@ -2341,6 +2494,9 @@ Cracked black pepper`;
       e.preventDefault();
       const tripId = editTripForm.getAttribute('data-trip-id') || state.editingTripId || state.editingTrip?.id;
       if (!tripId) return;
+
+      const trips = getShoppingTrips();
+      const currentTrip = state.editingTrip || trips.find(t => t.id === tripId) || {};
 
       const storeName = document.querySelector('#edit-store-name')?.value?.trim() || 'Supermarket';
       const tripType = document.querySelector('#edit-trip-type')?.value || 'Supermarket';
@@ -2353,7 +2509,7 @@ Cracked black pepper`;
       const itemNameInput = document.querySelector('#edit-item-name');
       const itemName = itemNameInput?.value?.trim() || '';
       const itemQty = parseFloat(document.querySelector('#edit-item-qty')?.value || 1);
-      const itemUnit = document.querySelector('#edit-item-unit')?.value?.trim() || 'pcs';
+      const itemUnit = document.querySelector('#edit-item-unit')?.value?.trim() || 'kg';
 
       // Multiple items support if .edit-item-row exists
       const itemRows = document.querySelectorAll('.edit-item-row');
@@ -2364,9 +2520,24 @@ Cracked black pepper`;
           const id = row.getAttribute('data-item-id');
           const name = row.querySelector('.edit-item-name')?.value?.trim();
           const quantity = parseFloat(row.querySelector('.edit-item-qty')?.value || 1);
-          const unit = row.querySelector('.edit-item-unit')?.value?.trim() || 'pcs';
+          const unit = row.querySelector('.edit-item-unit')?.value?.trim() || 'kg';
           if (name) items.push({ id, name, quantity, unit });
         });
+      }
+
+      // Resolve Photo (preserve existing, upload new replacement, or remove)
+      let resolvedPhotoUrl = currentTrip.receiptImageUrl || null;
+      if (state.editTripPendingFile) {
+        try {
+          const compressed = await compressImage(state.editTripPendingFile, 1600, 0.8);
+          const cUrl = await uploadReceiptImageToCloudinary(compressed);
+          resolvedPhotoUrl = cUrl || compressed;
+        } catch (uploadErr) {
+          console.warn('[EditTrip] Photo upload fallback:', uploadErr);
+          resolvedPhotoUrl = state.editTripPendingUrl || currentTrip.receiptImageUrl;
+        }
+      } else if (state.editTripPhotoRemoved) {
+        resolvedPhotoUrl = null;
       }
 
       // Non-blocking local-first write: update state and close modal instantly
@@ -2377,6 +2548,7 @@ Cracked black pepper`;
         totalScaleWeightKg,
         date,
         notes,
+        receiptImageUrl: resolvedPhotoUrl,
         itemName,
         quantity: itemQty,
         itemQuantity: itemQty,
@@ -2389,6 +2561,9 @@ Cracked black pepper`;
       state.editTripModalOpen = false;
       state.editingTripId = null;
       state.editingTrip = null;
+      state.editTripPendingFile = null;
+      state.editTripPendingUrl = null;
+      state.editTripPhotoRemoved = false;
       showToast('Shopping trip updated! Syncing with Neon...', 'info');
       render();
     });
@@ -2421,7 +2596,7 @@ Cracked black pepper`;
       const notes = card.querySelector('.edit-notes')?.value?.trim() || '';
       const itemName = card.querySelector('.edit-item-name')?.value?.trim() || '';
       const itemQty = parseFloat(card.querySelector('.edit-item-qty')?.value || 1);
-      const itemUnit = card.querySelector('.edit-item-unit')?.value?.trim() || 'pcs';
+      const itemUnit = card.querySelector('.edit-item-unit')?.value?.trim() || 'kg';
 
       updateShoppingTrip(tripId, {
         storeName,
@@ -2445,6 +2620,43 @@ Cracked black pepper`;
       render();
     });
   });
+
+  // Receipt / Produce Photo Lightbox Handlers
+  document.querySelectorAll('[data-lightbox-trip-id]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = el.getAttribute('data-lightbox-trip-id');
+      state.lightboxTripId = id;
+      render();
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = el.getAttribute('data-lightbox-trip-id');
+        state.lightboxTripId = id;
+        render();
+      }
+    });
+  });
+
+  const closeLightboxBtn = document.querySelector('#close-lightbox-btn');
+  if (closeLightboxBtn) {
+    closeLightboxBtn.addEventListener('click', () => {
+      state.lightboxTripId = null;
+      render();
+    });
+  }
+
+  const lightboxOverlay = document.querySelector('#receipt-lightbox-overlay');
+  if (lightboxOverlay) {
+    lightboxOverlay.addEventListener('click', (e) => {
+      if (e.target === lightboxOverlay) {
+        state.lightboxTripId = null;
+        render();
+      }
+    });
+  }
 
   // Food Waste Modal Open & Close
   const openWasteModalBtn = document.querySelector('#open-waste-modal-btn');
@@ -3030,6 +3242,9 @@ window.addEventListener('keydown', (e) => {
       render();
     } else if (state.settingsOpen) {
       state.settingsOpen = false;
+      render();
+    } else if (state.lightboxTripId) {
+      state.lightboxTripId = null;
       render();
     } else if (state.receiptModalOpen) {
       state.receiptModalOpen = false;

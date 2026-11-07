@@ -48,7 +48,7 @@ export function renderEditTripModal(state = {}) {
   const currentQuantity = (primaryItem?.quantity !== undefined && primaryItem?.quantity !== null && primaryItem?.quantity !== '')
     ? primaryItem.quantity
     : (primaryItem?.qty ?? 1);
-  const currentUnit = primaryItem?.unit || 'pc';
+  const currentUnit = primaryItem?.unit || 'kg';
 
   return `
     <div class="modal-overlay" id="edit-trip-overlay">
@@ -111,7 +111,7 @@ export function renderEditTripModal(state = {}) {
                 ${items.map((item, idx) => {
     const rowName = item?.name || item?.raw_receipt_text || item?.rawReceiptText || item?.itemName || '';
     const rowQty = (item?.quantity !== undefined && item?.quantity !== null && item?.quantity !== '') ? item.quantity : (item?.qty ?? 1);
-    const rowUnit = item?.unit || 'pc';
+    const rowUnit = item?.unit || 'kg';
     return `
                     <div class="edit-item-row flex items-center gap-2 w-full" data-item-id="${item.id}" style="display: flex; align-items: center; gap: 8px; width: 100%;">
                       <!-- 1. Item Name Input (Takes up most of the space) -->
@@ -200,6 +200,48 @@ export function renderEditTripModal(state = {}) {
             <input type="text" id="edit-notes" name="notes" class="form-input" value="${escapeHtml(trip.notes || '')}" />
           </div>
 
+          <!-- Receipt / Produce Photo Management -->
+          <div class="form-group edit-trip-photo-section mb-4 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70">
+            <div class="flex items-center justify-between mb-2">
+              <label class="form-label font-bold text-xs uppercase tracking-wider m-0 flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                <span>📷</span> Receipt / Produce Photo
+              </label>
+              <span id="edit-photo-status-badge" class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                ${trip.receiptImageUrl ? 'Photo Attached' : 'No Photo'}
+              </span>
+            </div>
+
+            <!-- Hidden File Input for Mobile Camera & Desktop File Selection -->
+            <input type="file" id="edit-trip-file-input" accept="image/*" capture="environment" style="display: none;" />
+            <input type="hidden" id="edit-trip-receipt-url" name="receiptImageUrl" value="${trip.receiptImageUrl || ''}" />
+
+            <!-- Photo Thumbnail / Preview Box -->
+            <div id="edit-trip-photo-preview-container" class="w-full">
+              ${trip.receiptImageUrl ? `
+                <div class="relative w-full rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 bg-black/40 flex items-center justify-center max-h-[180px] p-1">
+                  <img id="edit-trip-photo-preview-img" src="${trip.receiptImageUrl}" alt="Current receipt photo" class="max-h-[170px] w-auto max-w-full object-contain rounded" />
+                </div>
+              ` : `
+                <div id="edit-trip-photo-placeholder" class="w-full border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-4 text-center text-xs text-slate-500 dark:text-slate-400">
+                  No receipt photo attached yet.
+                </div>
+              `}
+            </div>
+
+            <!-- Photo Action Buttons -->
+            <div class="flex flex-wrap items-center gap-2 mt-3">
+              <button type="button" class="btn-secondary text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer" id="trigger-change-photo-btn">
+                <span>📷</span> <span id="change-photo-btn-text">${trip.receiptImageUrl ? 'Rescan / Change Photo' : 'Add Photo / Scan'}</span>
+              </button>
+              <button type="button" class="btn-secondary text-xs px-3 py-1.5 rounded-lg text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 border-rose-300 dark:border-rose-900/40 cursor-pointer ${trip.receiptImageUrl ? '' : 'hidden'}" id="remove-trip-photo-btn" style="${trip.receiptImageUrl ? '' : 'display: none;'}">
+                <span>🗑️</span> Remove Photo
+              </button>
+              <button type="button" class="border border-teal-500/30 bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer ${trip.receiptImageUrl ? '' : 'hidden'}" id="rerun-ocr-edit-btn" style="${trip.receiptImageUrl ? '' : 'display: none;'}" title="Extract items from photo using OCR">
+                <span>⚡</span> Rerun OCR
+              </button>
+            </div>
+          </div>
+
           <div class="modal-footer-actions">
             <button type="button" class="btn-secondary" id="cancel-edit-trip-btn">Cancel</button>
             <button type="submit" class="btn-primary" id="save-edit-trip-btn">Save Changes</button>
@@ -228,7 +270,7 @@ export function renderTripCard(trip, isEditing = false) {
   const currentQuantity = (primaryItem?.quantity !== undefined && primaryItem?.quantity !== null && primaryItem?.quantity !== '')
     ? primaryItem.quantity
     : (primaryItem?.qty ?? 1);
-  const currentUnit = primaryItem?.unit || 'pc';
+  const currentUnit = primaryItem?.unit || 'kg';
 
   if (isEditing) {
     return `
@@ -358,9 +400,11 @@ export function renderTripCard(trip, isEditing = false) {
       </div>
 
       ${trip.receiptImageUrl ? `
-        <div class="trip-receipt-preview">
-          <img src="${trip.receiptImageUrl}" alt="Receipt image" loading="lazy" />
-          <span class="receipt-attached-badge">Receipt Attached</span>
+        <div class="trip-receipt-preview cursor-pointer group" role="button" tabindex="0" data-lightbox-trip-id="${trip.id}" title="Click to view full photo">
+          <img src="${trip.receiptImageUrl}" alt="Receipt photo for ${escapeHtml(trip.storeName)}" loading="lazy" class="group-hover:opacity-95 transition-opacity" />
+          <span class="receipt-attached-badge flex items-center gap-1">
+            <span>🔍</span> <span>View Full Photo</span>
+          </span>
         </div>
       ` : ''}
 
@@ -459,6 +503,77 @@ export function renderShoppingTripsView(state = {}) {
           ${trips.map(trip => renderTripCard(trip, state.editingTripId === trip.id)).join('')}
         </div>
       `}
+    </div>
+  `;
+}
+
+/**
+ * Renders an accessible full-screen Lightbox Modal displaying the uncropped receipt / produce image
+ * with object-contain and comprehensive trip details.
+ */
+export function renderReceiptLightboxModal(trip) {
+  if (!trip || !trip.receiptImageUrl) return '';
+
+  return `
+    <div class="modal-overlay receipt-lightbox-overlay fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md" id="receipt-lightbox-overlay" role="dialog" aria-modal="true" aria-label="Receipt Photo Lightbox">
+      <div class="lightbox-modal-content max-w-4xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-4 bg-slate-900/95 text-white rounded-2xl shadow-2xl border border-slate-700/80 relative" style="max-height: 92vh; overflow-y: auto;">
+        
+        <!-- Header -->
+        <div class="lightbox-header flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xl">🧾</span>
+            <div>
+              <h3 class="font-bold text-base sm:text-lg text-white m-0 flex items-center gap-2">
+                <span>${escapeHtml(trip.storeName || 'Shopping Trip')}</span>
+                <span class="text-xs text-slate-400 font-normal hidden sm:inline">(Esc to close)</span>
+              </h3>
+              <p class="text-xs text-slate-400 m-0">${trip.date} • ${escapeHtml(trip.tripType || trip.trip_type || 'Supermarket')}</p>
+            </div>
+          </div>
+          <button type="button" class="btn-icon text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-full w-9 h-9 flex items-center justify-center transition-colors cursor-pointer" id="close-lightbox-btn" aria-label="Close Lightbox">✕</button>
+        </div>
+
+        <!-- Full Image Container -->
+        <div class="lightbox-img-wrapper w-full flex items-center justify-center bg-black/60 rounded-xl overflow-hidden p-2 min-h-[260px] max-h-[65vh]">
+          ${trip.receiptImageUrl ? `
+            <img 
+              src="${trip.receiptImageUrl}" 
+              alt="Full receipt photo for ${escapeHtml(trip.storeName)}" 
+              class="lightbox-full-img max-h-[62vh] w-auto max-w-full object-contain rounded-lg shadow-lg select-none"
+              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'p-8 text-center text-slate-400 text-sm\\'>⚠️ Image could not be loaded or is unavailable.</div>';"
+            />
+          ` : `
+            <div class="p-8 text-center text-slate-400 text-sm">
+              📷 No photo attached to this shopping trip.
+            </div>
+          `}
+        </div>
+
+        <!-- Trip Details Grid -->
+        <div class="lightbox-details-grid grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/60 text-xs">
+          <div>
+            <span class="text-slate-400 block mb-0.5">Total Amount</span>
+            <span class="font-bold text-sm text-emerald-400 font-mono">₱${formatNumber(trip.totalAmountPaid)}</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block mb-0.5">Whole Scale Weight</span>
+            <span class="font-bold text-sm text-cyan-300 font-mono">${trip.totalScaleWeightKg > 0 ? `${Number(trip.totalScaleWeightKg).toFixed(2)} kg` : 'Not Weighed'}</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block mb-0.5">Items Recorded</span>
+            <span class="font-bold text-sm text-slate-200">${trip.itemsCount || (trip.items?.length || 0)} items</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block mb-0.5">Venue / Trip Type</span>
+            <span class="font-bold text-sm text-slate-200 capitalize">${escapeHtml(trip.tripType || trip.trip_type || 'Supermarket')}</span>
+          </div>
+          ${trip.notes ? `
+            <div class="col-span-2 sm:col-span-4 border-t border-slate-700/50 pt-2 text-slate-300">
+              <strong class="text-slate-400">Notes:</strong> ${escapeHtml(trip.notes)}
+            </div>
+          ` : ''}
+        </div>
+      </div>
     </div>
   `;
 }

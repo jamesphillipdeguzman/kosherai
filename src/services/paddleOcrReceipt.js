@@ -1154,7 +1154,7 @@ export function createReceiptItem(id, name, price, rawReceiptText, qty = 1, unit
     rawReceiptText,
     qty: parsedQty,
     quantity: parsedQty,
-    unit: 'pcs',
+    unit: 'kg',
     price: parsedUnitPrice,
     unitPrice: parsedUnitPrice,
     total: parsedTotal,

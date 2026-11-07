@@ -803,7 +803,7 @@ export async function syncPendingMealPlans() {
     return { syncedCount };
   } catch (err) {
     return { syncedCount: 0 };
-  }
+  } 
 }
 
 /**
@@ -1231,6 +1231,19 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
       ? updatedFields.notes
       : (existing.notes || '');
 
+    let receiptImageUrl = updatedFields.receiptImageUrl !== undefined
+      ? updatedFields.receiptImageUrl
+      : (updatedFields.receipt_image_url !== undefined ? updatedFields.receipt_image_url : existing.receiptImageUrl);
+
+    if (receiptImageUrl && (receiptImageUrl.startsWith('data:') || receiptImageUrl.startsWith('blob:'))) {
+      try {
+        const cUrl = await uploadReceiptImageToCloudinary(receiptImageUrl);
+        if (cUrl) receiptImageUrl = cUrl;
+      } catch (err) {
+        console.warn('[Cloudinary] Failed to upload updated receipt image:', err);
+      }
+    }
+
     const updatedTrip = {
       ...existing,
       ...updatedFields,
@@ -1243,6 +1256,7 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
       totalAmountPaid,
       totalScaleWeightKg,
       notes,
+      receiptImageUrl,
       updatedAt: new Date().toISOString(),
       synced: false
     };
@@ -1395,6 +1409,8 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
           date,
           notes,
           projectWeek,
+          receiptImageUrl,
+          receipt_image_url: receiptImageUrl,
           itemName: cleanName || (tripItems[0]?.name || null),
           quantity: rawItemQty !== null ? rawItemQty : (tripItems[0]?.quantity ?? 1),
           unit: cleanUnit || (tripItems[0]?.unit || 'pc'),
