@@ -1445,6 +1445,26 @@ export async function deleteGroceryItem(itemId) {
 }
 
 /**
+ * Helper to determine if a trip note is a default or placeholder draft note
+ */
+export function isDraftDefaultNote(note) {
+  if (!note || typeof note !== 'string') return true;
+  const trimmed = note.trim().toLowerCase();
+  if (!trimmed) return true;
+  return (
+    trimmed.includes('(quick capture)') ||
+    trimmed.includes('quick capture') ||
+    trimmed.includes('photo captured draft') ||
+    trimmed.includes('click edit to enter grocery items') ||
+    trimmed.includes('receipt scanned (0 items verified)') ||
+    trimmed === 'wet market draft' ||
+    trimmed === 'supermarket draft' ||
+    trimmed === 'draft' ||
+    trimmed === 'manual wet market entry'
+  );
+}
+
+/**
  * Updates an existing shopping trip's metadata (storeName, tripType, totalAmountPaid, totalScaleWeightKg, date, notes).
  * Updates local item in kosherai_course_trips, triggers UI store refresh, and syncs via PATCH to /api/trips with credentials: "include".
  */
@@ -1507,6 +1527,12 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
       }
     }
 
+    const wasDraft = Boolean(existing.is_draft ?? existing.isDraft ?? false);
+    let isDraft = wasDraft;
+    if (updatedFields.isDraft !== undefined || updatedFields.is_draft !== undefined) {
+      isDraft = Boolean(updatedFields.is_draft ?? updatedFields.isDraft);
+    }
+
     const updatedTrip = {
       ...existing,
       ...updatedFields,
@@ -1520,6 +1546,8 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
       totalScaleWeightKg,
       notes,
       receiptImageUrl,
+      isDraft,
+      is_draft: isDraft,
       updatedAt: new Date().toISOString(),
       synced: false
     };
@@ -1655,6 +1683,27 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
 
     const tripItems = allGroceryItems.filter(i => i.tripId === tripId || i.trip_id === tripId);
     updatedTrip.itemsCount = tripItems.length || Number(existing.itemsCount || 0);
+
+    // If updatedFields did not explicitly specify isDraft/is_draft, determine completion automatically:
+    if (wasDraft && updatedFields.isDraft === undefined && updatedFields.is_draft === undefined) {
+      const validItems = tripItems.filter(it => {
+        if (!it) return false;
+        const name = typeof it.name === 'string' ? it.name.trim() : '';
+        if (!name) return false;
+        const lower = name.toLowerCase();
+        if (lower === 'item' || lower === 'new item' || lower === 'untitled item') return false;
+        return true;
+      });
+      const isComplete = totalScaleWeightKg > 0 && totalAmountPaid > 0 && validItems.length > 0;
+      if (isComplete) {
+        updatedTrip.isDraft = false;
+        updatedTrip.is_draft = false;
+        if (isDraftDefaultNote(updatedTrip.notes)) {
+          updatedTrip.notes = `Receipt scanned (${validItems.length} items verified)`;
+        }
+      }
+    }
+
     trips[index] = updatedTrip;
     localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(trips));
 
@@ -1715,17 +1764,22 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
           totalAmountPaid,
           totalScaleWeightKg,
           date,
-          notes,
+          notes: updatedTrip.notes,
           projectWeek,
           receiptImageUrl,
           receipt_image_url: receiptImageUrl,
+          isDraft: updatedTrip.isDraft,
+          is_draft: updatedTrip.is_draft,
           itemName: cleanName || (tripItems[0]?.name || null),
           quantity: rawItemQty !== null ? rawItemQty : (tripItems[0]?.quantity ?? 1),
           unit: cleanUnit || (tripItems[0]?.unit || 'pc'),
           itemQuantity: rawItemQty !== null ? rawItemQty : (tripItems[0]?.quantity ?? 1),
           itemUnit: cleanUnit || (tripItems[0]?.unit || 'pc'),
           items: tripItems,
-          ...updatedFields
+          ...updatedFields,
+          isDraft: updatedTrip.isDraft,
+          is_draft: updatedTrip.is_draft,
+          notes: updatedTrip.notes
         };
 
         const res = await fetch('/api/trips', {
@@ -2725,3 +2779,8 @@ export function handleExportFoodWaste(activeState = {}) {
   }
   return success;
 }
+
+/**
+ * Alias for updateShoppingTrip to match saveEditedTrip workflow
+ */
+export const saveEditedTrip = updateShoppingTrip;

@@ -5,6 +5,26 @@ import { compressImage } from '../services/aiVerification.js';
 import { uploadReceiptImageToCloudinary } from '../utils/cloudinary.js';
 
 /**
+ * Helper to identify placeholder or default draft notes
+ */
+export function isDraftDefaultNote(note) {
+  if (!note || typeof note !== 'string') return true;
+  const trimmed = note.trim().toLowerCase();
+  if (!trimmed) return true;
+  return (
+    trimmed.includes('(quick capture)') ||
+    trimmed.includes('quick capture') ||
+    trimmed.includes('photo captured draft') ||
+    trimmed.includes('click edit to enter grocery items') ||
+    trimmed.includes('receipt scanned (0 items verified)') ||
+    trimmed === 'wet market draft' ||
+    trimmed === 'supermarket draft' ||
+    trimmed === 'draft' ||
+    trimmed === 'manual wet market entry'
+  );
+}
+
+/**
  * EditShoppingTripModal
  *
  * Dedicated modal for updating shopping trip details with photo management:
@@ -171,15 +191,47 @@ export default function EditShoppingTripModal({
         resolvedPhotoUrl = null;
       }
 
+      // Filter actual valid, named grocery items (excluding blank names and invalid placeholders)
+      const validItems = items.filter(it => {
+        if (!it) return false;
+        const name = typeof it.name === 'string' ? it.name.trim() : '';
+        if (!name) return false;
+        const lower = name.toLowerCase();
+        if (lower === 'item' || lower === 'new item' || lower === 'untitled item') return false;
+        return true;
+      });
+
+      const totalScaleWeightKg = Number(formData.totalScaleWeightKg) || 0;
+      const totalAmountPaid = Number(formData.totalAmountPaid) || 0;
+
+      // Completion requirements:
+      // - Total scale weight is greater than zero
+      // - Total amount paid is greater than zero
+      // - At least one valid, named grocery item is associated with the trip
+      const isComplete = totalScaleWeightKg > 0 && totalAmountPaid > 0 && validItems.length > 0;
+      const wasDraft = Boolean(trip.is_draft ?? trip.isDraft ?? false);
+      const isDraft = wasDraft ? !isComplete : Boolean(trip.is_draft ?? trip.isDraft ?? false);
+
+      let finalNotes = formData.notes.trim();
+      if (wasDraft && isComplete) {
+        // Replace existing pending-review placeholder only when it is still a draft-related default note.
+        // Do not overwrite meaningful notes written by the user.
+        if (isDraftDefaultNote(formData.notes)) {
+          finalNotes = `Receipt scanned (${validItems.length} items verified)`;
+        }
+      }
+
       const updatedPayload = {
         storeName: formData.storeName.trim() || 'Supermarket',
         tripType: formData.tripType,
         trip_type: formData.tripType,
         date: formData.date,
-        totalScaleWeightKg: Number(formData.totalScaleWeightKg) || 0,
-        totalAmountPaid: Number(formData.totalAmountPaid) || 0,
-        notes: formData.notes.trim(),
+        totalScaleWeightKg,
+        totalAmountPaid,
+        notes: finalNotes,
         receiptImageUrl: resolvedPhotoUrl,
+        isDraft,
+        is_draft: isDraft,
         items
       };
 

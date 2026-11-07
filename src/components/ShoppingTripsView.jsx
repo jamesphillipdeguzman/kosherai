@@ -40,7 +40,29 @@ export default function ShoppingTripsView({
   onSearchChange
 }) {
   const rawTrips = propTrips || shoppingTrips || filteredTrips || (typeof getShoppingTrips === 'function' ? getShoppingTrips() : []);
-  const allTrips = Array.isArray(rawTrips) ? rawTrips : [];
+  const [internalTrips, setInternalTrips] = useState(() => (Array.isArray(rawTrips) ? rawTrips : []));
+
+  useEffect(() => {
+    if (propTrips || shoppingTrips || filteredTrips) {
+      setInternalTrips(Array.isArray(rawTrips) ? rawTrips : []);
+    }
+  }, [propTrips, shoppingTrips, filteredTrips]);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      if (typeof getShoppingTrips === 'function') {
+        setInternalTrips(getShoppingTrips());
+      }
+    };
+    window.addEventListener('kosherai-trips-updated', handleUpdate);
+    window.addEventListener('kosherai_storage_updated', handleUpdate);
+    return () => {
+      window.removeEventListener('kosherai-trips-updated', handleUpdate);
+      window.removeEventListener('kosherai_storage_updated', handleUpdate);
+    };
+  }, []);
+
+  const allTrips = (propTrips || shoppingTrips || filteredTrips) ? (Array.isArray(rawTrips) ? rawTrips : []) : internalTrips;
   const [activeWeekFilter, setActiveWeekFilter] = useState(selectedWeek || 'all');
   const [searchQuery, setSearchQuery] = useState(propSearchQuery || '');
   const [selectedGrocery, setSelectedGrocery] = useState(null);
@@ -432,7 +454,7 @@ export default function ShoppingTripsView({
               <div className="trip-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div className="flex items-center gap-2">
                   <div className="trip-store-name">{trip.storeName}</div>
-                  {(trip.isDraft || trip.is_draft) && (
+                  {Boolean(trip.is_draft ?? trip.isDraft) && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-500 border border-amber-500/30">
                       📝 DRAFT
                     </span>
@@ -525,7 +547,7 @@ export default function ShoppingTripsView({
                     ) : null}
                   </div>
                 </div>
-              ) : (trip.isDraft || trip.is_draft) ? (
+              ) : Boolean(trip.is_draft ?? trip.isDraft) ? (
                 <div className="trip-items-preview my-2.5">
                   <div className="text-xs text-slate-400 italic py-1">
                     📝 Photo captured draft. Click Edit to enter grocery items.

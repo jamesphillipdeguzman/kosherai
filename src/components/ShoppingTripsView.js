@@ -375,7 +375,7 @@ export function renderTripCard(trip, isEditing = false, matchingItemsOverride = 
     `;
   }
 
-  const isDraft = Boolean(trip.isDraft ?? trip.is_draft);
+  const isDraft = Boolean(trip.is_draft ?? trip.isDraft);
 
   return `
     <div class="trip-card ${trip.receiptImageUrl ? 'cursor-pointer' : ''}" data-trip-id="${trip.id}" ${trip.receiptImageUrl ? `data-lightbox-trip-id="${trip.id}"` : ''}>
