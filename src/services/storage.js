@@ -248,6 +248,7 @@ export function saveScanResult(scanRecord) {
       reason,
       flaggedIngredients: uniqueFlagged,
       imageUrl,
+      synced: false,
       ...scanRecord
     };
     record.title = title;
@@ -256,6 +257,7 @@ export function saveScanResult(scanRecord) {
     record.reason = reason;
     record.flaggedIngredients = uniqueFlagged;
     record.imageUrl = imageUrl;
+    record.synced = scanRecord.synced === true;
 
     // 1. Save to localStorage as offline backup (keep last 50 scans)
     const updated = [record, ...history.filter(item => item.id !== record.id).slice(0, 49)];
@@ -287,7 +289,13 @@ export function saveScanResult(scanRecord) {
             const errBody = await res.json().catch(() => ({}));
             console.warn('[Storage] Remote POST /api/scans failed with status', res.status, errBody);
           } else {
-            console.log('[Storage] Successfully synced scan record to Neon PostgreSQL:', record.id);
+            const resData = await res.json().catch(() => null);
+            if (resData && (resData.id || resData.success || resData.status)) {
+              console.log('[Storage] Successfully synced scan record to Neon PostgreSQL:', record.id);
+              const currentHistory = getLocalScanHistory();
+              const syncedHistory = currentHistory.map(s => s.id === record.id ? { ...s, synced: true } : s);
+              saveLocalHistory(syncedHistory);
+            }
           }
         })
         .catch((err) => {
@@ -299,6 +307,79 @@ export function saveScanResult(scanRecord) {
   } catch (e) {
     console.error('Failed to save scan result', e);
     return getLocalScanHistory();
+  }
+}
+
+/**
+ * Auto-retries synchronization of pending offline scan records to Neon PostgreSQL
+ */
+export async function syncPendingScans() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return { syncedCount: 0, pendingCount: 0 };
+  if (typeof fetch !== 'function') return { syncedCount: 0, pendingCount: 0 };
+
+  try {
+    const history = getLocalScanHistory();
+    const unsynced = history.filter(s => s && s.synced === false);
+    if (unsynced.length === 0) return { syncedCount: 0, pendingCount: 0 };
+
+    let syncedCount = 0;
+    const syncedIds = new Set();
+
+    for (const scan of unsynced) {
+      try {
+        let imageUrl = scan.imageUrl || null;
+        if (imageUrl && (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:'))) {
+          try {
+            const { uploadReceiptImageToCloudinary } = await import('../utils/cloudinary.js');
+            const cUrl = await uploadReceiptImageToCloudinary(imageUrl).catch(() => null);
+            if (cUrl && typeof cUrl === 'string' && cUrl.startsWith('http')) {
+              imageUrl = cUrl;
+              scan.imageUrl = cUrl;
+            }
+          } catch (_) {}
+        }
+
+        const payload = {
+          id: scan.id,
+          title: scan.title || 'Scanned Food Label',
+          status: scan.status || 'SAFE',
+          reason: scan.reason || '',
+          flaggedIngredients: Array.isArray(scan.flaggedIngredients) ? scan.flaggedIngredients : [],
+          imageUrl,
+          createdAt: scan.createdAt || scan.timestamp || new Date().toISOString()
+        };
+
+        const res = await fetch('/api/scans', {
+          method: 'POST',
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          credentials: 'include',
+          body: JSON.stringify(payload)
+        });
+
+        if (res && res.ok) {
+          const resData = await res.json().catch(() => null);
+          if (resData && (resData.id || resData.success || resData.status)) {
+            syncedIds.add(scan.id);
+            syncedCount++;
+          }
+        }
+      } catch (err) {
+        console.warn(`[Sync] Failed to sync scan ${scan.id}:`, err);
+      }
+    }
+
+    if (syncedCount > 0) {
+      const updatedHistory = history.map(s => syncedIds.has(s.id) ? { ...s, synced: true } : s);
+      saveLocalHistory(updatedHistory);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('kosherai-scans-synced', { detail: { syncedCount } }));
+      }
+    }
+
+    return { syncedCount, pendingCount: unsynced.length - syncedCount };
+  } catch (err) {
+    console.warn('[Sync] Error during syncPendingScans:', err);
+    return { syncedCount: 0, pendingCount: 0 };
   }
 }
 

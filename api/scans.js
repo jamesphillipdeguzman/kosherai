@@ -512,9 +512,10 @@ export default async function handler(req, res) {
     }
     if (method === 'POST') {
       const body = await parseRequestBody(req).catch(() => ({}));
-      return sendJson(res, 200, {
+      return sendJson(res, 500, {
+        success: false,
         synced: false,
-        offline: true,
+        offline: false,
         message: 'Saved locally only. Database error occurred.',
         data: body
       });

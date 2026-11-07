@@ -578,11 +578,11 @@ function renderFoodWasteTab(state) {
                       <span style="font-weight: 700;">${escapeHtml(r.itemName)}</span>
                       ${r.synced ? `
                         <span class="trip-sync-badge synced" title="Synced with Neon PostgreSQL cloud database">
-                          ☁️ Neon
+                          ☁️✓ NEON SYNCED
                         </span>
                       ` : `
                         <span class="trip-sync-badge offline" title="Saved locally in IndexedDB; will auto-sync to Neon when online">
-                          ⚠️ Local
+                          ☁️⏳ OFFLINE
                         </span>
                       `}
                     </div>

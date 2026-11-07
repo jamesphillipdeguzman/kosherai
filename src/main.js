@@ -2243,7 +2243,16 @@ Cracked black pepper`;
       try {
         const res = await syncAndHydrateUserData();
         if (res && res.ok) {
-          showToast?.(`✓ Neon Synchronized: ${res.tripsRestored} trips, ${res.wasteRestored} waste records.`);
+          const totalSynced = (res.tripsSynced || 0) + (res.wasteSynced || 0) + (res.scansSynced || 0) + (res.expensesSynced || 0);
+          const totalFailed = (res.tripsFailed || 0) + (res.wasteFailed || 0) + (res.scansFailed || 0) + (res.expensesFailed || 0);
+
+          if (totalSynced > 0 && totalFailed > 0) {
+            showToast?.(`⚠️ Neon Sync: ${totalSynced} synced, ${totalFailed} pending retry.`);
+          } else if (totalSynced > 0) {
+            showToast?.(`✓ Neon Synchronized: ${res.tripsSynced} trips, ${res.wasteSynced} waste, ${res.scansSynced} scans, ${res.expensesSynced} expenses.`);
+          } else {
+            showToast?.(`✓ Neon Synchronized: Local cache up to date (${res.tripsRestored} cloud trips).`);
+          }
         } else {
           showToast?.(res?.message || 'Sync complete with local cache.');
         }
@@ -3084,11 +3093,10 @@ async function pushThenRestoreFromNeon({ manual = false } = {}) {
   if (manual) render();
 
   try {
-    await syncPendingTrips().catch(() => {});
-    await syncPendingFoodWaste().catch(() => {});
-    const result = await restoreFromNeon();
-    // Silent on boot unless something was actually restored or the user asked
-    if (manual || (result.ok && (result.tripsRestored + result.wasteRestored) > 0)) {
+    const result = await syncAndHydrateUserData();
+    const totalActivity = (result.tripsRestored || 0) + (result.wasteRestored || 0) + (result.tripsSynced || 0) + (result.wasteSynced || 0) + (result.scansSynced || 0);
+    // Silent on boot unless something was actually restored/synced or the user asked
+    if (manual || (result.ok && totalActivity > 0)) {
       state.neonRestoreStatus = { ok: result.ok, message: result.message };
     }
   } catch (err) {

@@ -329,11 +329,11 @@ export function renderTripCard(trip, isEditing = false) {
               <span class="trip-date-pill">Week ${trip.projectWeek} • ${trip.date}</span>
               ${trip.synced === false ? `
                 <span class="trip-sync-badge offline" title="Saved locally in IndexedDB; will auto-sync to Neon when online">
-                  ☁️⏳ Offline
+                  ☁️⏳ OFFLINE
                 </span>
               ` : `
                 <span class="trip-sync-badge synced" title="Synced with Neon PostgreSQL cloud database">
-                  ☁️✓ Synced
+                  ☁️✓ NEON SYNCED
                 </span>
               `}
             </div>

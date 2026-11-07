@@ -392,6 +392,59 @@ export default async function handler(req, res) {
         });
       }
 
+      // Check if this payload is a standalone expense
+      if (body.type === 'expense' || body.action === 'expense' || body.expense || (body.trip && body.trip.type === 'expense') || (body.isTripExpense === false && typeof body.id === 'string' && body.id.startsWith('exp_'))) {
+        const expData = body.expense || body.trip || body;
+        const expId = expData.id || `exp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const expDate = expData.date || new Date().toISOString().split('T')[0];
+        const expWeek = Number(expData.projectWeek || expData.project_week || 1);
+        const expVendor = expData.vendor || expData.storeName || expData.store_name || 'Food Purchase';
+        const expCategory = expData.category || expData.tripType || expData.trip_type || 'Wet Market / Other';
+        const expAmount = Number(expData.amount || expData.totalAmountPaid || expData.total_amount_paid || 0);
+        const expNotes = expData.notes || '[Standalone Expense]';
+
+        await sql`
+          INSERT INTO shopping_trips (
+            id, user_id, date, project_week, store_name, trip_type, 
+            total_amount_paid, total_scale_weight_kg, 
+            receipt_image_url, receipt_raw_text, items_count, 
+            notes, created_at, synced
+          ) VALUES (
+            ${expId}, ${userId}, ${expDate}, ${expWeek}, ${expVendor}, ${expCategory},
+            ${expAmount}, 0,
+            null, '', 0,
+            ${expNotes}, NOW(), true
+          )
+          ON CONFLICT (id) DO UPDATE SET
+            user_id = EXCLUDED.user_id,
+            date = EXCLUDED.date,
+            project_week = EXCLUDED.project_week,
+            store_name = EXCLUDED.store_name,
+            trip_type = EXCLUDED.trip_type,
+            total_amount_paid = EXCLUDED.total_amount_paid,
+            notes = EXCLUDED.notes,
+            synced = true;
+        `;
+
+        return sendJson(res, 201, {
+          success: true,
+          synced: true,
+          id: expId,
+          expense: {
+            id: expId,
+            date: expDate,
+            projectWeek: expWeek,
+            vendor: expVendor,
+            category: expCategory,
+            amount: expAmount,
+            isTripExpense: false,
+            notes: expNotes,
+            synced: true
+          },
+          message: `Standalone expense ${expId} saved to Neon PostgreSQL.`
+        });
+      }
+
       const tripData = body.trip || body;
       const rawItems = (
         (Array.isArray(body.items) && body.items.length > 0 ? body.items : null) ||
@@ -723,9 +776,10 @@ export default async function handler(req, res) {
     return sendJson(res, 405, { error: 'METHOD_NOT_ALLOWED', message: `Method ${method} is not supported.` });
   } catch (err) {
     console.error('[API /api/trips] Database Execution Error:', err);
-    return sendJson(res, 200, {
+    return sendJson(res, 500, {
+      success: false,
       synced: false,
-      offline: true,
+      offline: false,
       message: err.message || 'Database error occurred. Saved locally in client IndexedDB.'
     });
   }

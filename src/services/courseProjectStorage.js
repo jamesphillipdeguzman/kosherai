@@ -3,6 +3,7 @@ import { LID_DATABASE, STATUS } from '../data/lidDatabase.js';
 import { getAuthHeaders, getClientAuthToken } from './authHeaders.js';
 import { resolveFoodCategory } from './overBuyingDetector.js';
 import { uploadReceiptImageToCloudinary } from '../utils/cloudinary.js';
+import { syncPendingScans } from './storage.js';
 import {
   saveTripToIndexedDB,
   getTripsFromIndexedDB,
@@ -15,6 +16,61 @@ import {
   getUnsyncedFoodWasteFromIndexedDB,
   markFoodWasteAsSyncedInIndexedDB
 } from './indexedDbStorage.js';
+
+/**
+ * Resilient image compressor and Cloudinary uploader for receipts.
+ * Prevents HTTP 413 Payload Too Large on Neon sync routes.
+ */
+export async function safeCompressReceiptImage(dataUrlOrFile, maxWidth = 1024, quality = 0.72) {
+  if (!dataUrlOrFile) return null;
+  if (typeof dataUrlOrFile === 'string' && (dataUrlOrFile.startsWith('http://') || dataUrlOrFile.startsWith('https://'))) {
+    return dataUrlOrFile;
+  }
+
+  // 1. Try uploading to Cloudinary
+  try {
+    const cUrl = await uploadReceiptImageToCloudinary(dataUrlOrFile);
+    if (cUrl && typeof cUrl === 'string' && cUrl.startsWith('http')) {
+      return cUrl;
+    }
+  } catch (_) {}
+
+  // 2. Client canvas compression to prevent HTTP 413
+  if (typeof document !== 'undefined' && typeof Image !== 'undefined') {
+    try {
+      return await new Promise((resolve) => {
+        const img = new Image();
+        img.onerror = () => resolve(dataUrlOrFile);
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const maxDim = maxWidth || 1024;
+            if (width > maxDim || height > maxDim) {
+              if (width >= height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } catch {
+            resolve(dataUrlOrFile);
+          }
+        };
+        img.src = dataUrlOrFile;
+      });
+    } catch (_) {}
+  }
+  return dataUrlOrFile;
+}
 
 export const PROJECT_CONFIG = {
   START_DATE: '2026-10-31', // Saturday, October 31, 2026 (Day 1 of Week 1)
@@ -456,11 +512,20 @@ export async function syncPendingTrips() {
         lidReason: item.lidReason || ''
       }));
 
+      let processedReceiptUrl = trip.receiptImageUrl || null;
+      if (processedReceiptUrl && (processedReceiptUrl.startsWith('data:') || processedReceiptUrl.startsWith('blob:'))) {
+        try {
+          processedReceiptUrl = await safeCompressReceiptImage(processedReceiptUrl);
+        } catch (_) {}
+      }
+
       const payload = {
         ...trip,
+        receiptImageUrl: processedReceiptUrl,
         itemsCount: rawItems.length,
         trip: {
           ...trip,
+          receiptImageUrl: processedReceiptUrl,
           itemsCount: rawItems.length
         },
         items: rawItems,
@@ -476,15 +541,30 @@ export async function syncPendingTrips() {
         });
 
         if (res && res.ok) {
-          await markTripAsSyncedInIndexedDB(trip.id);
+          const resData = await res.json().catch(() => null);
+          if (resData && (resData.synced === true || resData.success === true) && !resData.offline) {
+            await markTripAsSyncedInIndexedDB(trip.id);
 
-          // Update localStorage
-          const localTrips = getShoppingTrips().map(t =>
-            t.id === trip.id ? { ...t, synced: true, itemsCount: rawItems.length } : t
-          );
-          localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(localTrips));
+            // Update localStorage trips
+            const localTrips = getShoppingTrips().map(t =>
+              t.id === trip.id ? { ...t, ...trip, receiptImageUrl: processedReceiptUrl, synced: true, itemsCount: rawItems.length } : t
+            );
+            localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(localTrips));
 
-          syncedCount++;
+            // Update localStorage grocery items
+            const localItems = getGroceryItems().map(i =>
+              i.tripId === trip.id ? { ...i, synced: true } : i
+            );
+            localStorage.setItem(STORAGE_KEYS.GROCERY_ITEMS, JSON.stringify(localItems));
+
+            // Update localStorage expenses
+            const localExpenses = getExpenses().map(e =>
+              (e.tripId === trip.id || e.id === `exp_trip_${trip.id}`) ? { ...e, synced: true } : e
+            );
+            localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(localExpenses));
+
+            syncedCount++;
+          }
         }
       } catch (postErr) {
         console.warn(`[Sync] Failed to sync pending trip ${trip.id} to Neon:`, postErr.message);
@@ -549,13 +629,33 @@ export function mergeRemoteCourseData(remoteTrips, remoteWaste) {
     const localTripMap = new Map(localTrips.map(t => [t.id, t]));
 
     const restoredTripIds = new Set();
+    const restoredExpenseIds = new Set();
     const restoredTrips = [];
     const restoredItems = [];
+    const restoredExpenses = [];
 
     for (const remote of remoteTrips) {
       if (!remote || !remote.id) continue;
       const local = localTripMap.get(remote.id);
       if (local && local.synced === false) continue; // Pending local edit wins
+
+      const isStandaloneExpense = remote.id.startsWith('exp_') || (remote.itemsCount === 0 && (remote.notes || '').includes('[Standalone Expense]'));
+      if (isStandaloneExpense) {
+        restoredExpenses.push({
+          id: remote.id,
+          tripId: null,
+          date: remote.date,
+          projectWeek: Number(remote.projectWeek || 1),
+          vendor: remote.storeName || 'Food Purchase',
+          category: remote.tripType || 'Wet Market / Other',
+          amount: Number(remote.totalAmountPaid || 0),
+          isTripExpense: false,
+          notes: (remote.notes || '').replace('[Standalone Expense]', '').trim(),
+          synced: true
+        });
+        restoredExpenseIds.add(remote.id);
+        continue;
+      }
 
       const { items: remoteItems = [], ...tripFields } = remote;
       const items = (Array.isArray(remoteItems) ? remoteItems : []).map(item => ({
@@ -583,9 +683,14 @@ export function mergeRemoteCourseData(remoteTrips, remoteWaste) {
     const keptItems = localItems.filter(i => !restoredTripIds.has(i.tripId));
     const mergedItems = [...keptItems, ...restoredItems];
 
-    const keptExpenses = localExpenses.filter(e => !restoredTripIds.has(e.tripId));
+    const keptExpenses = localExpenses.filter(e => {
+      if (!e.isTripExpense || !e.tripId) {
+        return !restoredExpenseIds.has(e.id);
+      }
+      return !restoredTripIds.has(e.tripId);
+    });
     const rebuiltExpenses = restoredTrips.map(t => buildTripExpenseRecord(t, t.itemsCount));
-    const mergedExpenses = [...rebuiltExpenses, ...keptExpenses];
+    const mergedExpenses = [...rebuiltExpenses, ...restoredExpenses, ...keptExpenses];
 
     localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(mergedTrips));
     localStorage.setItem(STORAGE_KEYS.GROCERY_ITEMS, JSON.stringify(mergedItems));
@@ -774,12 +879,28 @@ export async function syncAndHydrateUserData() {
   } catch (_) {}
 
   // 2. Upload pending offline records first (so local unsynced edits are never overwritten)
-  await Promise.allSettled([
-    syncPendingTrips().catch(() => {}),
-    syncPendingFoodWaste().catch(() => {}),
-    syncPendingInventory().catch(() => {}),
-    syncPendingMealPlans().catch(() => {})
+  const [tripsSyncResult, wasteSyncResult, scansSyncResult, expensesSyncResult, invSyncResult, mealSyncResult] = await Promise.allSettled([
+    syncPendingTrips(),
+    syncPendingFoodWaste(),
+    syncPendingScans(),
+    syncPendingExpenses(),
+    syncPendingInventory(),
+    syncPendingMealPlans()
   ]);
+
+  const tripsSynced = tripsSyncResult.status === 'fulfilled' ? (tripsSyncResult.value?.syncedCount || 0) : 0;
+  const tripsFailed = tripsSyncResult.status === 'fulfilled' ? (tripsSyncResult.value?.pendingCount || 0) : 0;
+
+  const wasteSynced = wasteSyncResult.status === 'fulfilled' ? (wasteSyncResult.value?.syncedCount || 0) : 0;
+  const wasteFailed = wasteSyncResult.status === 'fulfilled' ? (wasteSyncResult.value?.pendingCount || 0) : 0;
+
+  const scansSynced = scansSyncResult.status === 'fulfilled' ? (scansSyncResult.value?.syncedCount || 0) : 0;
+  const scansFailed = scansSyncResult.status === 'fulfilled' ? (scansSyncResult.value?.pendingCount || 0) : 0;
+
+  const expensesSynced = expensesSyncResult.status === 'fulfilled' ? (expensesSyncResult.value?.syncedCount || 0) : 0;
+  const expensesFailed = expensesSyncResult.status === 'fulfilled' ? (expensesSyncResult.value?.pendingCount || 0) : 0;
+
+  const totalUploaded = tripsSynced + wasteSynced + scansSynced + expensesSynced;
 
   // 3. Fetch all 6 resources concurrently from Neon
   const [tripsRes, wasteRes, scansRes, invRes, mealRes, settingsRes] = await Promise.allSettled([
@@ -806,9 +927,17 @@ export async function syncAndHydrateUserData() {
   const mealOk = Boolean(mealPayload && mealPayload.synced === true && !mealPayload.offline && Array.isArray(mealPayload.mealPlans));
   const settingsOk = Boolean(settingsPayload && settingsPayload.synced === true && settingsPayload.settings);
 
-  if (!tripsOk && !wasteOk && !scansOk && !invOk && !mealOk && !settingsOk) {
+  if (!tripsOk && !wasteOk && !scansOk && !invOk && !mealOk && !settingsOk && totalUploaded === 0) {
     return {
       ok: false,
+      tripsSynced,
+      tripsFailed,
+      wasteSynced,
+      wasteFailed,
+      scansSynced,
+      scansFailed,
+      expensesSynced,
+      expensesFailed,
       ...empty,
       message: 'Cloud data unreachable or unauthenticated. Local cache preserved.'
     };
@@ -946,13 +1075,23 @@ export async function syncAndHydrateUserData() {
 
   const result = {
     ok: true,
+    tripsSynced,
+    tripsFailed,
+    wasteSynced,
+    wasteFailed,
+    scansSynced,
+    scansFailed,
+    expensesSynced,
+    expensesFailed,
     tripsRestored: courseResult.tripsRestored,
     itemsRestored: courseResult.itemsRestored,
     wasteRestored: courseResult.wasteRestored,
     scansRestored,
     inventoryRestored,
     mealPlansRestored,
-    message: `Restored ${courseResult.tripsRestored} trips, ${courseResult.wasteRestored} waste records, ${inventoryRestored} inventory items, ${mealPlansRestored} meal plans from Neon.`
+    message: totalUploaded > 0
+      ? `Neon Synchronized: ${totalUploaded} records uploaded (${tripsSynced} trips, ${wasteSynced} waste, ${scansSynced} scans, ${expensesSynced} expenses). Restored ${courseResult.tripsRestored} trips from Neon.`
+      : `Restored ${courseResult.tripsRestored} trips, ${courseResult.wasteRestored} waste records, ${inventoryRestored} inventory items, ${mealPlansRestored} meal plans from Neon.`
   };
 
   if (typeof window !== 'undefined') {
@@ -1311,15 +1450,105 @@ export function saveStandaloneExpense(expenseData) {
       amount: Number(expenseData.amount || 0),
       isTripExpense: false,
       notes: expenseData.notes || '',
-      createdAt: expenseData.createdAt || new Date().toISOString()
+      createdAt: expenseData.createdAt || new Date().toISOString(),
+      synced: expenseData.synced === true
     };
 
     const updated = [record, ...expenses.filter(e => e.id !== id)];
     localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(updated));
+
+    if (typeof fetch === 'function' && typeof navigator !== 'undefined' && navigator.onLine) {
+      fetch('/api/trips', {
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        credentials: 'include',
+        body: JSON.stringify({
+          id,
+          type: 'expense',
+          date,
+          projectWeek,
+          vendor: record.vendor,
+          category: record.category,
+          amount: record.amount,
+          notes: record.notes,
+          createdAt: record.createdAt
+        })
+      }).then(async (res) => {
+        if (res.ok) {
+          const resData = await res.json().catch(() => null);
+          if (resData && (resData.synced || resData.success) && !resData.offline) {
+            record.synced = true;
+            const cur = getExpenses().map(e => e.id === id ? { ...e, synced: true } : e);
+            localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(cur));
+          }
+        }
+      }).catch(() => {});
+    }
+
     return record;
   } catch (e) {
     console.error('Failed to save standalone expense:', e);
     throw e;
+  }
+}
+
+/**
+ * Auto-retries synchronization of pending offline standalone expenses to Neon PostgreSQL
+ */
+export async function syncPendingExpenses() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return { syncedCount: 0, pendingCount: 0 };
+  if (typeof fetch !== 'function') return { syncedCount: 0, pendingCount: 0 };
+
+  try {
+    const expenses = getExpenses();
+    const unsyncedStandalone = expenses.filter(e => (!e.isTripExpense || !e.tripId) && e.synced === false);
+    if (unsyncedStandalone.length === 0) return { syncedCount: 0, pendingCount: 0 };
+
+    let syncedCount = 0;
+    const syncedIds = new Set();
+
+    for (const exp of unsyncedStandalone) {
+      try {
+        const payload = {
+          id: exp.id,
+          type: 'expense',
+          date: exp.date,
+          projectWeek: Number(exp.projectWeek || 1),
+          vendor: exp.vendor || 'Food Purchase',
+          category: exp.category || 'Wet Market / Other',
+          amount: Number(exp.amount || 0),
+          notes: exp.notes ? `${exp.notes} [Standalone Expense]` : '[Standalone Expense]',
+          createdAt: exp.createdAt || new Date().toISOString()
+        };
+
+        const res = await fetch('/api/trips', {
+          method: 'POST',
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          credentials: 'include',
+          body: JSON.stringify(payload)
+        });
+
+        if (res && res.ok) {
+          const resData = await res.json().catch(() => null);
+          if (resData && (resData.synced === true || resData.success === true) && !resData.offline) {
+            syncedIds.add(exp.id);
+            syncedCount++;
+          }
+        }
+      } catch (err) {
+        console.warn(`[Sync] Failed to sync pending expense ${exp.id}:`, err);
+      }
+    }
+
+    if (syncedCount > 0) {
+      const updated = expenses.map(e => syncedIds.has(e.id) ? { ...e, synced: true } : e);
+      localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(updated));
+    }
+
+    return { syncedCount, pendingCount: unsyncedStandalone.length - syncedCount };
+  } catch (err) {
+    console.warn('[Sync] Error during syncPendingExpenses:', err);
+    return { syncedCount: 0, pendingCount: 0 };
   }
 }
 
@@ -1432,7 +1661,7 @@ export async function syncPendingFoodWaste() {
 
         if (res && res.ok) {
           const payload = await res.json().catch(() => null);
-          if (payload && (payload.success || payload.synced)) {
+          if (payload && (payload.success || payload.synced) && !payload.offline) {
             await markFoodWasteAsSyncedInIndexedDB(wasteEntry.id);
             markFoodWasteSynced(wasteEntry.id, true);
             syncedCount++;
