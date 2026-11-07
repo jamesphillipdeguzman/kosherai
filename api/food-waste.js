@@ -92,7 +92,7 @@ export default async function handler(req, res) {
         message: 'DATABASE_URL is not configured. Operating in offline/local mode.'
       });
     }
-    if (method === 'POST') {
+    if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
       const body = await parseRequestBody(req);
       const waste = body.waste || body;
       return sendJson(res, 200, {
@@ -100,6 +100,7 @@ export default async function handler(req, res) {
         synced: false,
         offline: true,
         id: waste.id || `waste_${Date.now()}`,
+        waste,
         message: 'DATABASE_URL is not configured. Food waste saved locally in client IndexedDB.'
       });
     }
@@ -129,7 +130,7 @@ export default async function handler(req, res) {
         message: err.message || 'Database connection error.'
       });
     }
-    if (method === 'POST') {
+    if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
       const body = await parseRequestBody(req);
       const waste = body.waste || body;
       return sendJson(res, 200, {
@@ -137,6 +138,7 @@ export default async function handler(req, res) {
         synced: false,
         offline: true,
         id: waste.id || `waste_${Date.now()}`,
+        waste,
         message: 'Database connection failed. Persisting to client IndexedDB with synced: false.'
       });
     }
@@ -207,29 +209,44 @@ export default async function handler(req, res) {
     }
 
     // ----------------------------------------------------
-    // POST /api/food-waste: Upsert food waste log (Forced user_id)
+    // POST / PUT / PATCH /api/food-waste: Upsert or update food waste log (Forced user_id)
     // ----------------------------------------------------
-    if (method === 'POST') {
+    if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
       const body = await parseRequestBody(req);
       const wasteData = body.waste || body;
 
-      const id = wasteData.id || `waste_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const id = query.id || wasteData.id || `waste_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const date = wasteData.date || new Date().toISOString().split('T')[0];
       const projectWeek = Number(wasteData.projectWeek || wasteData.project_week || 1);
       const itemName = wasteData.itemName || wasteData.item_name || 'Food Waste';
-      const measuredWeightG = Number(wasteData.measuredWeightG || wasteData.measured_weight_g || 0);
+      const measuredWeightG = Math.max(0, Number(wasteData.measuredWeightG || wasteData.measured_weight_g || 0));
       const isEstimated = Boolean(wasteData.isEstimated ?? wasteData.is_estimated);
-      const estimatedCost = Number(wasteData.estimatedCost || wasteData.estimated_cost || 0);
+      const estimatedCost = Math.max(0, Number(wasteData.estimatedCost || wasteData.estimated_cost || 0));
       const reason = wasteData.reason || 'Spoiled / Molded';
       const notes = wasteData.notes || '';
+
+      // Check tombstone: reject resurrection of deleted waste records
+      try {
+        const tombstone = await sql`
+          SELECT id FROM deleted_records WHERE id = ${id} AND user_id = ${userId} LIMIT 1;
+        `;
+        if (tombstone && tombstone.length > 0) {
+          return sendJson(res, 200, {
+            success: true,
+            deleted: true,
+            skipped: true,
+            message: `Food waste record ${id} was deleted and cannot be resurrected.`
+          });
+        }
+      } catch (_) {}
 
       await sql`
         INSERT INTO food_waste_logs (
           id, user_id, date, project_week, item_name, measured_weight_g,
-          is_estimated, estimated_cost, reason, notes, created_at
+          is_estimated, estimated_cost, reason, notes, created_at, updated_at
         ) VALUES (
           ${id}, ${userId}, ${date}, ${projectWeek}, ${itemName}, ${measuredWeightG},
-          ${isEstimated}, ${estimatedCost}, ${reason}, ${notes}, NOW()
+          ${isEstimated}, ${estimatedCost}, ${reason}, ${notes}, NOW(), NOW()
         )
         ON CONFLICT (id) DO UPDATE SET
           user_id = EXCLUDED.user_id,
@@ -240,14 +257,30 @@ export default async function handler(req, res) {
           is_estimated = EXCLUDED.is_estimated,
           estimated_cost = EXCLUDED.estimated_cost,
           reason = EXCLUDED.reason,
-          notes = EXCLUDED.notes;
+          notes = EXCLUDED.notes,
+          updated_at = NOW();
       `;
+
+      const savedWaste = {
+        id,
+        userId,
+        date,
+        projectWeek,
+        itemName,
+        measuredWeightG,
+        isEstimated,
+        estimatedCost,
+        reason,
+        notes,
+        synced: true
+      };
 
       return sendJson(res, 200, {
         success: true,
         synced: true,
         id,
         userId,
+        waste: savedWaste,
         message: `Food waste entry ${id} saved to Neon PostgreSQL.`
       });
     }
@@ -264,7 +297,18 @@ export default async function handler(req, res) {
         return sendJson(res, 400, { error: 'MISSING_ID', message: 'Waste record ID is required for deletion.' });
       }
 
+      // 1. Tombstone in deleted_records
+      try {
+        await sql`
+          INSERT INTO deleted_records (id, user_id, record_type, deleted_at)
+          VALUES (${targetId}, ${userId}, 'waste', NOW())
+          ON CONFLICT (id) DO UPDATE SET deleted_at = NOW();
+        `;
+      } catch (_) {}
+
+      // 2. Delete from Neon
       await sql`DELETE FROM food_waste_logs WHERE id = ${targetId} AND user_id = ${userId};`;
+
       return sendJson(res, 200, {
         success: true,
         deletedId: targetId,

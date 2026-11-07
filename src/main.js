@@ -62,6 +62,7 @@ import {
   handleTenantAccountChange,
   restoreFromNeon,
   saveFoodWasteRecord,
+  updateFoodWasteRecord,
   deleteFoodWasteRecord,
   markFoodWasteSynced,
   syncPendingFoodWaste,
@@ -200,6 +201,8 @@ const state = {
   editTripPhotoRemoved: false,
   lightboxTripId: null,
   wasteModalOpen: false,
+  editWasteModalOpen: false,
+  editingWasteRecord: null,
   mealPlanModalOpen: false,
   inventoryModalOpen: false,
   configModalOpen: false,
@@ -237,6 +240,7 @@ function render() {
     state.manualTripModalOpen ||
     state.editTripModalOpen ||
     state.wasteModalOpen ||
+    state.editWasteModalOpen ||
     state.mealPlanModalOpen ||
     state.settingsOpen ||
     state.authModalOpen ||
@@ -2960,6 +2964,84 @@ Cracked black pepper`;
     });
   }
 
+  // Edit Food Waste Record (Opens edit modal)
+  document.querySelectorAll('.edit-waste-btn[data-edit-waste]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = e.currentTarget.getAttribute('data-edit-waste');
+      const records = getFoodWasteRecords();
+      const record = records.find(r => r.id === id);
+      if (record) {
+        state.editingWasteRecord = record;
+        state.editWasteModalOpen = true;
+        render();
+      }
+    });
+  });
+
+  // Edit Food Waste Modal Close Actions
+  const closeEditWasteModalBtn = document.querySelector('#close-edit-waste-modal-btn');
+  const cancelEditWasteModalBtn = document.querySelector('#cancel-edit-waste-modal-btn');
+  const editWasteModalOverlay = document.querySelector('#edit-waste-modal-overlay');
+
+  if (closeEditWasteModalBtn) {
+    closeEditWasteModalBtn.addEventListener('click', () => {
+      state.editWasteModalOpen = false;
+      state.editingWasteRecord = null;
+      render();
+    });
+  }
+  if (cancelEditWasteModalBtn) {
+    cancelEditWasteModalBtn.addEventListener('click', () => {
+      state.editWasteModalOpen = false;
+      state.editingWasteRecord = null;
+      render();
+    });
+  }
+  if (editWasteModalOverlay) {
+    editWasteModalOverlay.addEventListener('click', (e) => {
+      if (e.target === editWasteModalOverlay) {
+        state.editWasteModalOpen = false;
+        state.editingWasteRecord = null;
+        render();
+      }
+    });
+  }
+
+  // Edit Food Waste Form Submit
+  const editFoodWasteForm = document.querySelector('#edit-food-waste-form');
+  if (editFoodWasteForm) {
+    editFoodWasteForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.querySelector('#edit-waste-id')?.value;
+      if (!id) return;
+
+      const itemName = document.querySelector('#edit-waste-item-name')?.value?.trim() || 'Food Waste';
+      const date = document.querySelector('#edit-waste-date')?.value || new Date().toISOString().split('T')[0];
+      const weightG = Math.max(0, parseFloat(document.querySelector('#edit-waste-weight-g')?.value || 0));
+      const reason = document.querySelector('#edit-waste-reason')?.value || 'Spoiled / Molded';
+      const costEst = Math.max(0, parseFloat(document.querySelector('#edit-waste-cost-est')?.value || 0));
+      const projectWeek = parseInt(document.querySelector('#edit-waste-week')?.value || 1, 10);
+      const notes = document.querySelector('#edit-waste-notes')?.value || '';
+
+      const updatedFields = {
+        itemName,
+        date,
+        projectWeek,
+        measuredWeightG: weightG,
+        estimatedCost: costEst,
+        reason,
+        notes
+      };
+
+      await updateFoodWasteRecord(id, updatedFields);
+      state.editWasteModalOpen = false;
+      state.editingWasteRecord = null;
+      showToast('Food waste record updated! Syncing with Neon...', 'info');
+      render();
+    });
+  }
+
   // Delete Food Waste Record
   document.querySelectorAll('.delete-waste-btn[data-delete-waste]').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -3496,6 +3578,10 @@ window.addEventListener('keydown', (e) => {
       render();
     } else if (state.wasteModalOpen) {
       state.wasteModalOpen = false;
+      render();
+    } else if (state.editWasteModalOpen) {
+      state.editWasteModalOpen = false;
+      state.editingWasteRecord = null;
       render();
     } else if (state.mealPlanModalOpen) {
       state.mealPlanModalOpen = false;

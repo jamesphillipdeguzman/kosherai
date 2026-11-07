@@ -12,6 +12,7 @@ import {
 import { normalizeWeek } from '../utils/weekNormalization.js';
 import ShoppingTripsView from './ShoppingTripsView.jsx';
 import GroceryPurchasesView from './GroceryPurchasesView.jsx';
+import FoodWasteLogView from './FoodWasteLogView.jsx';
 
 /**
  * SixWeekStudyView
@@ -28,6 +29,7 @@ export default function SixWeekStudyView({
   const [activeSubTab, setActiveSubTab] = useState(initialSubTab || 'trips');
   const [trips, setTrips] = useState([]);
   const [groceries, setGroceries] = useState([]);
+  const [waste, setWaste] = useState([]);
   const [comparison, setComparison] = useState({ weeklyData: [], totals: {} });
   const [config, setConfig] = useState({});
   const [schedule, setSchedule] = useState([]);
@@ -35,12 +37,14 @@ export default function SixWeekStudyView({
   const refreshData = () => {
     const freshTrips = getShoppingTrips();
     const freshGroceries = getGroceryItems();
+    const freshWaste = getFoodWasteRecords();
     const freshConfig = getProjectConfig();
     const freshSchedule = getProjectWeekSchedule(freshConfig.startDate);
     const freshComp = getProjectComparison();
 
     setTrips(freshTrips);
     setGroceries(freshGroceries);
+    setWaste(freshWaste);
     setConfig(freshConfig);
     setSchedule(freshSchedule);
     setComparison(freshComp);
@@ -52,11 +56,15 @@ export default function SixWeekStudyView({
     const handleUpdate = () => refreshData();
     window.addEventListener('kosherai-trips-updated', handleUpdate);
     window.addEventListener('kosherai-groceries-updated', handleUpdate);
+    window.addEventListener('kosherai-foodwaste-updated', handleUpdate);
+    window.addEventListener('kosherai-food-waste-synced', handleUpdate);
     window.addEventListener('kosherai_storage_updated', handleUpdate);
 
     return () => {
       window.removeEventListener('kosherai-trips-updated', handleUpdate);
       window.removeEventListener('kosherai-groceries-updated', handleUpdate);
+      window.removeEventListener('kosherai-foodwaste-updated', handleUpdate);
+      window.removeEventListener('kosherai-food-waste-synced', handleUpdate);
       window.removeEventListener('kosherai_storage_updated', handleUpdate);
     };
   }, []);
@@ -180,6 +188,17 @@ export default function SixWeekStudyView({
           >
             🥬 Grocery Purchases
           </button>
+          <button
+            type="button"
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+              activeSubTab === 'waste'
+                ? 'bg-teal-600 text-white dark:bg-teal-500'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+            onClick={() => setActiveSubTab('waste')}
+          >
+            ⚖️ Food Waste Log
+          </button>
         </div>
       </div>
 
@@ -197,6 +216,13 @@ export default function SixWeekStudyView({
           <GroceryPurchasesView
             items={groceries}
             trips={trips}
+            selectedWeek={normWeek}
+            onSelectWeek={handleWeekSelect}
+          />
+        )}
+        {activeSubTab === 'waste' && (
+          <FoodWasteLogView
+            records={waste}
             selectedWeek={normWeek}
             onSelectWeek={handleWeekSelect}
           />

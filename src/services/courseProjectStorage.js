@@ -190,7 +190,10 @@ export async function syncPendingDeletions() {
   for (const del of deletions) {
     try {
       const type = del.type || 'trip';
-      const res = await fetch(`/api/trips?id=${encodeURIComponent(del.id)}&type=${encodeURIComponent(type)}`, {
+      const endpoint = type === 'waste'
+        ? `/api/food-waste?id=${encodeURIComponent(del.id)}`
+        : `/api/trips?id=${encodeURIComponent(del.id)}&type=${encodeURIComponent(type)}`;
+      const res = await fetch(endpoint, {
         method: 'DELETE',
         headers: getAuthHeaders(),
         credentials: 'include'
@@ -891,6 +894,7 @@ export function mergeRemoteCourseData(remoteTrips, remoteWaste, remoteDeletedIds
 
     for (const remote of remoteWaste) {
       if (!remote || !remote.id) continue;
+      if (tombstonedIds.has(remote.id)) continue; // Tombstoned waste! Never resurrect!
       const local = localWasteMap.get(remote.id);
       if (local && local.synced === false) continue; // Pending local edit wins
       restoredWaste.push({
@@ -903,7 +907,7 @@ export function mergeRemoteCourseData(remoteTrips, remoteWaste, remoteDeletedIds
       restoredIds.add(remote.id);
     }
 
-    const mergedWaste = [...restoredWaste, ...localWaste.filter(w => !restoredIds.has(w.id))].sort((a, b) =>
+    const mergedWaste = [...restoredWaste, ...localWaste.filter(w => !restoredIds.has(w.id) && !tombstonedIds.has(w.id))].sort((a, b) =>
       String(b.date || '').localeCompare(String(a.date || '')) ||
       String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
     );
@@ -2048,10 +2052,154 @@ export async function syncPendingFoodWaste() {
   }
 }
 
+/**
+ * Updates an existing food waste log entry with offline-first persistence.
+ * Preserves the original record ID, validates numeric fields (preventing negative values),
+ * updates localStorage, mirrors to IndexedDB, dispatches storage update events,
+ * and attempts authenticated Neon sync when online without losing pending edits.
+ *
+ * @param {string} wasteId - Unique identifier of the waste record to update
+ * @param {Object} updatedFields - Fields to update (itemName, measuredWeightG, estimatedCost, reason, date, projectWeek, notes)
+ * @returns {Promise<Object|null>} The updated waste record, or null if not found
+ */
+export async function updateFoodWasteRecord(wasteId, updatedFields = {}) {
+  if (!wasteId) return null;
+  try {
+    const records = getFoodWasteRecords();
+    const index = records.findIndex(r => r.id === wasteId);
+    if (index === -1) {
+      console.warn(`[Storage] Waste record ${wasteId} not found for update`);
+      return null;
+    }
+
+    const existing = records[index];
+    const config = getCourseConfig();
+
+    const date = updatedFields.date || existing.date;
+    const projectWeek = updatedFields.projectWeek !== undefined
+      ? Number(updatedFields.projectWeek)
+      : (updatedFields.date ? getProjectWeekForDate(date, config.startDate) : existing.projectWeek);
+
+    const itemName = updatedFields.itemName !== undefined
+      ? String(updatedFields.itemName).trim()
+      : (updatedFields.item_name !== undefined ? String(updatedFields.item_name).trim() : existing.itemName);
+
+    const measuredWeightG = updatedFields.measuredWeightG !== undefined
+      ? Math.max(0, Number(updatedFields.measuredWeightG) || 0)
+      : (updatedFields.measured_weight_g !== undefined ? Math.max(0, Number(updatedFields.measured_weight_g) || 0) : existing.measuredWeightG);
+
+    const isEstimated = updatedFields.isEstimated !== undefined
+      ? Boolean(updatedFields.isEstimated)
+      : (updatedFields.is_estimated !== undefined ? Boolean(updatedFields.is_estimated) : existing.isEstimated);
+
+    const estimatedCost = updatedFields.estimatedCost !== undefined
+      ? Math.max(0, Number(updatedFields.estimatedCost) || 0)
+      : (updatedFields.estimated_cost !== undefined ? Math.max(0, Number(updatedFields.estimated_cost) || 0) : existing.estimatedCost);
+
+    const reason = updatedFields.reason !== undefined ? updatedFields.reason : existing.reason;
+    const notes = updatedFields.notes !== undefined ? updatedFields.notes : (existing.notes || '');
+    const category = updatedFields.category || resolveFoodCategory(itemName);
+
+    const updatedRecord = {
+      ...existing,
+      ...updatedFields,
+      id: wasteId,
+      date,
+      projectWeek,
+      itemName,
+      measuredWeightG,
+      isEstimated,
+      estimatedCost,
+      reason,
+      category,
+      notes,
+      updatedAt: new Date().toISOString(),
+      synced: false
+    };
+
+    records[index] = updatedRecord;
+    localStorage.setItem(STORAGE_KEYS.FOOD_WASTE, JSON.stringify(records));
+
+    // Mirror to IndexedDB
+    try {
+      await saveFoodWasteToIndexedDB(updatedRecord, false);
+    } catch (idbErr) {
+      console.warn('[Storage] IndexedDB saveFoodWaste error:', idbErr);
+    }
+
+    // Dispatch update events for immediate UI refresh across components
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('kosherai-foodwaste-updated', { detail: { record: updatedRecord } }));
+      window.dispatchEvent(new CustomEvent('kosherai_storage_updated', { detail: { key: STORAGE_KEYS.FOOD_WASTE } }));
+    }
+
+    // Attempt remote synchronization when online
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    if (isOnline && typeof fetch === 'function') {
+      try {
+        const res = await fetch('/api/food-waste', {
+          method: 'POST',
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          credentials: 'include',
+          body: JSON.stringify(updatedRecord)
+        });
+
+        if (res && res.ok) {
+          const resData = await res.json().catch(() => null);
+          if (resData && (resData.synced === true || resData.success === true) && !resData.offline) {
+            updatedRecord.synced = true;
+            records[index] = { ...updatedRecord, synced: true };
+            localStorage.setItem(STORAGE_KEYS.FOOD_WASTE, JSON.stringify(records));
+            await markFoodWasteAsSyncedInIndexedDB(wasteId).catch(() => {});
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('kosherai-foodwaste-updated', { detail: { record: updatedRecord } }));
+            }
+          }
+        } else {
+          console.warn(`[Storage] Remote update food waste failed with HTTP ${res?.status}; retained as synced: false for retry`);
+        }
+      } catch (netErr) {
+        console.warn('[Storage] Network error updating food waste, retained as synced: false:', netErr?.message);
+      }
+    }
+
+    return updatedRecord;
+  } catch (err) {
+    console.error('Failed to update food waste record:', err);
+    throw err;
+  }
+}
+
 export function deleteFoodWasteRecord(id) {
   try {
     const records = getFoodWasteRecords().filter(r => r.id !== id);
     localStorage.setItem(STORAGE_KEYS.FOOD_WASTE, JSON.stringify(records));
+
+    // Add to persistent pending deletions
+    addPendingDeletion(id, 'waste');
+
+    // Dispatch UI refresh events
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('kosherai-foodwaste-updated', { detail: { deletedId: id } }));
+      window.dispatchEvent(new CustomEvent('kosherai_storage_updated', { detail: { key: STORAGE_KEYS.FOOD_WASTE } }));
+    }
+
+    // Attempt remote delete if online
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    if (isOnline && typeof fetch === 'function') {
+      fetch(`/api/food-waste?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+        credentials: 'include'
+      }).then(res => {
+        if (res && (res.ok || res.status === 404)) {
+          removePendingDeletion(id);
+        }
+      }).catch(delErr => {
+        console.warn('[Storage] Remote delete food waste queued for sync:', delErr?.message);
+      });
+    }
+
     return true;
   } catch (e) {
     console.error('Failed to delete food waste record:', e);

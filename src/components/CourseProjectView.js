@@ -175,6 +175,7 @@ export function renderCourseProjectView(state = {}) {
       ${state.editTripModalOpen ? renderEditTripModal(state) : ''}
       ${lightboxTrip ? renderReceiptLightboxModal(lightboxTrip) : ''}
       ${state.wasteModalOpen ? renderFoodWasteModal(state) : ''}
+      ${state.editWasteModalOpen ? renderEditWasteModal(state) : ''}
       ${state.mealPlanModalOpen ? renderMealPlanModal(state) : ''}
       ${state.configModalOpen ? renderProjectConfigModal(config) : ''}
       ${state.inventoryModalOpen ? renderInventoryModal(state) : ''}
@@ -706,6 +707,9 @@ function renderFoodWasteTab(state) {
                     ₱${formatNumber(r.estimatedCost)}
                   </td>
                   <td>
+                    <button class="btn-icon edit-waste-btn" data-edit-waste="${r.id}" title="Edit waste record" style="margin-right: 4px;">
+                      ✏️
+                    </button>
                     <button class="btn-icon delete-waste-btn" data-delete-waste="${r.id}" title="Delete waste record">
                       🗑️
                     </button>
@@ -1315,6 +1319,102 @@ function renderFoodWasteModal(state) {
           <div class="modal-footer-actions">
             <button type="button" class="btn-secondary" id="cancel-waste-modal-btn">Cancel</button>
             <button type="submit" class="btn-primary">Save Waste Record</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Edit Food Waste Modal
+ */
+function renderEditWasteModal(state) {
+  const r = state.editingWasteRecord || {};
+  const itemName = escapeHtml(r.itemName || '');
+  const date = r.date || new Date().toISOString().split('T')[0];
+  const weightG = r.measuredWeightG != null ? r.measuredWeightG : 0;
+  const reason = r.reason || 'Spoiled / Molded';
+  const costEst = r.estimatedCost != null ? r.estimatedCost : 0;
+  const projectWeek = Number(r.projectWeek || 1);
+  const notes = escapeHtml(r.notes || '');
+
+  const reasons = [
+    'Spoiled / Molded',
+    'Cooked Excess / Leftover',
+    'Expired Package',
+    'Peels & Trimmings',
+    'Diet Protocol Mismatch',
+    'Accidental Spillage / Dropped',
+    'Burnt / Cooking Error',
+    'Cross-Contamination',
+    'Freezer Burn / Storage Defect',
+    'Stale / Texture Loss',
+    'Plate Scraping / Uneaten Portion',
+    'Other'
+  ];
+
+  return `
+    <div class="modal-overlay" id="edit-waste-modal-overlay">
+      <div class="modal-content" role="dialog" aria-modal="true" style="width: min(92vw, 520px); max-height: 90dvh; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
+        <div class="modal-header" style="flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border-color, #334155);">
+          <div>
+            <h2 class="modal-title" style="margin: 0; font-size: 1.1rem; font-weight: 700;">Edit Food Waste Record</h2>
+            <div style="font-size: 0.75rem; color: var(--text-muted, #94a3b8);">Update discarded food, weight, reason, or cost</div>
+          </div>
+          <button class="btn-icon" id="close-edit-waste-modal-btn">✕</button>
+        </div>
+
+        <form id="edit-food-waste-form" style="display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; margin: 0;">
+          <input type="hidden" id="edit-waste-id" value="${r.id || ''}" />
+          <div class="modal-body" style="flex: 1 1 0%; min-height: 0; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px;">
+            <div class="form-group">
+              <label class="form-label" for="edit-waste-item-name">Discarded Food Item</label>
+              <input type="text" id="edit-waste-item-name" class="form-input" value="${itemName}" required />
+            </div>
+
+            <div class="form-row-grid">
+              <div class="form-group">
+                <label class="form-label" for="edit-waste-date">Date Discarded</label>
+                <input type="date" id="edit-waste-date" class="form-input" value="${date}" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="edit-waste-weight-g">Scale Weight (grams)</label>
+                <input type="number" step="any" min="0" id="edit-waste-weight-g" class="form-input" value="${weightG}" required />
+              </div>
+            </div>
+
+            <div class="form-row-grid">
+              <div class="form-group">
+                <label class="form-label" for="edit-waste-week">Study Project Week</label>
+                <select id="edit-waste-week" class="form-input">
+                  ${[1, 2, 3, 4, 5, 6].map(w => `<option value="${w}" ${projectWeek === w ? 'selected' : ''}>Week ${w}</option>`).join('')}
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="edit-waste-reason">Disposal Reason</label>
+                <select id="edit-waste-reason" class="form-input">
+                  ${reasons.map(res => `<option value="${res}" ${reason === res ? 'selected' : ''}>${res}</option>`).join('')}
+                  ${!reasons.includes(reason) ? `<option value="${reason}" selected>${reason}</option>` : ''}
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="edit-waste-cost-est">Estimated Cost (₱ PHP)</label>
+              <input type="number" step="any" min="0" id="edit-waste-cost-est" class="form-input" value="${costEst}" />
+              <div class="form-help">Tracked strictly as a food loss indicator; never added to food expenses.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="edit-waste-notes">Notes</label>
+              <textarea id="edit-waste-notes" class="form-input" rows="2" style="resize: none;">${notes}</textarea>
+            </div>
+          </div>
+
+          <div class="modal-footer-actions" style="flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border-color, #334155);">
+            <button type="button" class="btn-secondary" id="cancel-edit-waste-modal-btn">Cancel</button>
+            <button type="submit" class="btn-primary" id="save-edit-waste-btn">Save Changes</button>
           </div>
         </form>
       </div>
