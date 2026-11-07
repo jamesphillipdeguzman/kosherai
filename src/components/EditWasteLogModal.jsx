@@ -7,6 +7,10 @@ import { updateFoodWasteRecord, getCourseConfig, getProjectWeekForDate } from '.
 export const WASTE_REASONS = [
   'Spoiled / Molded',
   'Cooked Excess / Leftover',
+  'Accidental Spillage / Dropped',
+  'Expired Pantry Item',
+  'Plate Waste / Unfinished Meal',
+  'Preparation Waste (Inedible/Trimmed)',
   'Expired Package',
   'Trimmings / Inedible',
   'Plate Scrapings',
@@ -26,11 +30,15 @@ export const WASTE_REASONS = [
  * - Preserves existing record ID and metadata
  */
 export default function EditWasteLogModal({
-  isOpen = false,
+  isOpen,
   record,
+  log,
   onClose,
   onSave
 }) {
+  const targetRecord = log || record;
+  const isModalOpen = isOpen !== undefined ? Boolean(isOpen) : Boolean(targetRecord);
+
   const [formData, setFormData] = useState({
     itemName: '',
     date: '',
@@ -46,36 +54,36 @@ export default function EditWasteLogModal({
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
-    if (record && isOpen) {
+    if (targetRecord && isModalOpen) {
       setFormData({
-        itemName: record.itemName || record.item_name || '',
-        date: record.date || new Date().toISOString().split('T')[0],
-        projectWeek: Number(record.projectWeek || record.project_week || 1),
-        measuredWeightG: Math.max(0, Number(record.measuredWeightG || record.measured_weight_g || 0)),
-        estimatedCost: Math.max(0, Number(record.estimatedCost || record.estimated_cost || 0)),
-        reason: record.reason || 'Spoiled / Molded',
-        isEstimated: Boolean(record.isEstimated ?? record.is_estimated ?? false),
-        notes: record.notes || ''
+        itemName: targetRecord.itemName || targetRecord.item_name || targetRecord.foodDiscarded || targetRecord.name || '',
+        date: targetRecord.date || targetRecord.wasteDate || new Date().toISOString().split('T')[0],
+        projectWeek: Number(targetRecord.projectWeek || targetRecord.project_week || targetRecord.week || 1),
+        measuredWeightG: Math.max(0, Number(targetRecord.measuredWeightG ?? targetRecord.measured_weight_g ?? targetRecord.scaleWeight ?? targetRecord.weight ?? 0)),
+        estimatedCost: Math.max(0, Number(targetRecord.estimatedCost ?? targetRecord.estimated_cost ?? targetRecord.cost ?? 0)),
+        reason: targetRecord.reason || targetRecord.disposalReason || 'Spoiled / Molded',
+        isEstimated: Boolean(targetRecord.isEstimated ?? targetRecord.is_estimated ?? false),
+        notes: targetRecord.notes || ''
       });
       setIsSaving(false);
       setErrorMessage('');
     }
-  }, [record, isOpen]);
+  }, [targetRecord, isModalOpen]);
 
   // Handle escape key to dismiss
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isOpen && !isSaving) {
+      if (e.key === 'Escape' && isModalOpen && !isSaving) {
         onClose();
       }
     };
-    if (isOpen) {
+    if (isModalOpen) {
       window.addEventListener('keydown', handleKeyDown);
     }
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isSaving, onClose]);
+  }, [isModalOpen, isSaving, onClose]);
 
-  if (!isOpen || !record) return null;
+  if (!isModalOpen || !targetRecord) return null;
 
   const handleDateChange = (newDate) => {
     const config = getCourseConfig();
@@ -124,10 +132,10 @@ export default function EditWasteLogModal({
         notes: formData.notes.trim()
       };
 
-      const updatedRecord = await updateFoodWasteRecord(record.id, updatedFields);
+      const updatedRecord = await updateFoodWasteRecord(targetRecord.id, updatedFields);
 
       if (onSave) {
-        onSave(record.id, updatedRecord || updatedFields);
+        await onSave(updatedRecord || { ...targetRecord, ...updatedFields }, targetRecord.id);
       }
       onClose();
     } catch (err) {

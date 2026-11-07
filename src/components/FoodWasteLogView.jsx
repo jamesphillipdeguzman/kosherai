@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   getFoodWasteRecords,
+  updateFoodWasteRecord,
   deleteFoodWasteRecord,
   saveFoodWasteToIndexedDB,
   saveFoodWasteRecord,
@@ -24,7 +25,7 @@ export default function FoodWasteLogView({
   onDeleteWaste
 }) {
   const [wasteList, setWasteList] = useState([]);
-  const [editingWaste, setEditingWaste] = useState(null);
+  const [editingLog, setEditingLog] = useState(null);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [newForm, setNewForm] = useState({
     itemName: '',
@@ -37,8 +38,16 @@ export default function FoodWasteLogView({
   });
 
   const refreshWaste = () => {
-    const records = typeof getFoodWasteRecords === 'function' ? getFoodWasteRecords() : [];
-    setWasteList(records);
+    try {
+      if (typeof getFoodWasteRecords === 'function') {
+        const records = getFoodWasteRecords();
+        if (Array.isArray(records)) {
+          setWasteList(records);
+        }
+      }
+    } catch (err) {
+      console.warn('[FoodWasteLogView] Could not refresh food waste records:', err);
+    }
   };
 
   useEffect(() => {
@@ -83,18 +92,31 @@ export default function FoodWasteLogView({
     }
   };
 
-  const handleEditClick = (record) => {
-    if (onEditWaste) {
-      onEditWaste(record);
-      return;
-    }
-    setEditingWaste(record);
-  };
+  const handleSaveEditedLog = async (firstArg, secondArg) => {
+    const updatedData = (firstArg && typeof firstArg === 'object') ? firstArg : secondArg;
+    const targetId = (typeof firstArg === 'string' && firstArg) ? firstArg : (secondArg?.id || updatedData?.id || editingLog?.id);
 
-  const handleSavedEdit = (wasteId, updatedRecord) => {
-    setWasteList(prev => prev.map(r => r.id === wasteId ? { ...r, ...updatedRecord } : r));
-    setEditingWaste(null);
-    refreshWaste();
+    if (!targetId || !updatedData) return;
+
+    try {
+      // 1. Update in the centralized storage service (courseProjectStorage.js)
+      const savedRecord = await updateFoodWasteRecord(targetId, updatedData);
+      const mergedRecord = savedRecord || { ...editingLog, ...updatedData, id: targetId };
+
+      // 2. Update existing waste log in the current UI state immediately
+      setWasteList(prev => prev.map(r => r.id === targetId ? { ...r, ...mergedRecord } : r));
+
+      // 3. Close the modal after local save succeeds
+      setEditingLog(null);
+
+      // 4. Notify parent if onEditWaste callback provided
+      if (onEditWaste) {
+        onEditWaste(mergedRecord);
+      }
+    } catch (err) {
+      console.error('[FoodWasteLogView] Failed to save edited waste log:', err);
+      throw err;
+    }
   };
 
   const handleCreateNewSubmit = async (e) => {
@@ -272,7 +294,10 @@ export default function FoodWasteLogView({
                         type="button"
                         className="edit-waste-btn inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200/80 shadow-xs transition-all active:scale-95 cursor-pointer dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60"
                         data-edit-waste={r.id}
-                        onClick={() => handleEditClick(r)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingLog(r);
+                        }}
                         title="Edit food waste log"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -304,12 +329,11 @@ export default function FoodWasteLogView({
       )}
 
       {/* Edit Food Waste Modal */}
-      {editingWaste && (
+      {editingLog && (
         <EditWasteLogModal
-          isOpen={!!editingWaste}
-          record={editingWaste}
-          onClose={() => setEditingWaste(null)}
-          onSave={handleSavedEdit}
+          log={editingLog}
+          onClose={() => setEditingLog(null)}
+          onSave={handleSaveEditedLog}
         />
       )}
 
