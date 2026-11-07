@@ -590,7 +590,7 @@ export function renderReceiptLightboxModal(trip) {
             </div>
           </div>
           ${trip.notes ? `
-            <div class="lightbox-notes-box" style="margin-top: 8px; background: #020617; border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 10px; padding: 6px 10px; font-size: 11px; color: #cbd5e1; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+            <div class="lightbox-notes-box" style="margin-top: 8px; background: #020617; border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 10px; padding: 6px 10px; font-size: 11px; color: #cbd5e1; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
               <strong style="color: #94a3b8; font-weight: 600;">Notes:</strong> ${escapeHtml(trip.notes)}
             </div>
           ` : ''}

@@ -656,7 +656,7 @@ export default function ShoppingTripsView({
               {lightboxTrip.notes ? (
                 <div
                   className="lightbox-notes-box mt-2.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800/80 text-xs text-slate-300 line-clamp-2"
-                  style={{ marginTop: '8px', background: '#020617', border: '1px solid rgba(51, 65, 85, 0.7)', borderRadius: '10px', padding: '6px 10px', fontSize: '11px', color: '#cbd5e1', lineHeight: '1.35', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                  style={{ marginTop: '8px', background: '#020617', border: '1px solid rgba(51, 65, 85, 0.7)', borderRadius: '10px', padding: '6px 10px', fontSize: '11px', color: '#cbd5e1', lineHeight: '1.35', display: '-webkit-box', WebkitLineClamp: 2, lineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
                 >
                   <strong style={{ color: '#94a3b8', fontWeight: 600 }}>Notes:</strong> {lightboxTrip.notes}
                 </div>
