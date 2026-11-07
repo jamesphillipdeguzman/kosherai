@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useId, useRef, useMemo } from 'react';
-import { sanitizeCurrency } from '../services/aiVerification.js';
+import { sanitizeCurrency, compressImage } from '../services/aiVerification.js';
 import { runPaddleOCR, parseStructuredReceiptText } from '../services/paddleOcrService.js';
 import { detectOverBuying, isWarningKeyDismissed, dismissWarningKey } from '../services/overBuyingDetector.js';
 import { getGroceryItems, getFoodWasteRecords } from '../services/courseProjectStorage.js';
-import { getHouseholdMembers } from '../services/storage.js';
+import { getHouseholdMembers, isOcrScanEnabled, setOcrScanEnabled } from '../services/storage.js';
 import { uploadReceiptImageToCloudinary } from '../utils/cloudinary.js';
 
 /**
@@ -99,9 +99,23 @@ export default function ReceiptScannerModal({
   });
   const [previewUrl, setPreviewUrl] = useState(initialImage);
   const [currentImageBlob, setCurrentImageBlob] = useState(null);
-  const [items, setItems] = useState([
-    { id: 1, name: 'Chicken Breast (Fresh)', quantity: 1.2, unit: 'kg', unitPrice: 280, totalPrice: 336 }
-  ]);
+  const [items, setItems] = useState(() => (initialData && Array.isArray(initialData.items)) ? initialData.items : []);
+  const [enableOcrScan, setEnableOcrScan] = useState(() => isOcrScanEnabled());
+
+  useEffect(() => {
+    const handleOcrSettingsChanged = (e) => {
+      if (e?.detail && typeof e.detail.enableOcrScan === 'boolean') {
+        setEnableOcrScan(e.detail.enableOcrScan);
+      }
+    };
+    window.addEventListener('kosherai:ocr-settings-changed', handleOcrSettingsChanged);
+    return () => window.removeEventListener('kosherai:ocr-settings-changed', handleOcrSettingsChanged);
+  }, []);
+
+  const handleToggleOcrScan = (enabled) => {
+    setEnableOcrScan(enabled);
+    setOcrScanEnabled(enabled);
+  };
 
   const handleVenueChange = (mode) => {
     setVenueMode(mode);
@@ -216,19 +230,42 @@ export default function ReceiptScannerModal({
   };
 
   // Handle Photo / File Selection
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setCurrentImageBlob(file);
-      const objectUrl = URL.createObjectURL(file);
-      setPreviewUrl(objectUrl);
-      if (typeof onPhotoSelected === 'function') {
-        onPhotoSelected(file, objectUrl);
-      }
-    }
-    // Always clear input value after reading so consecutive retakes re-trigger
     if (e.target) {
       e.target.value = '';
+    }
+    if (!file) return;
+
+    try {
+      let compressedFile = file;
+      try {
+        const compressedDataUrl = await compressImage(file, 1600, 0.75);
+        if (compressedDataUrl && compressedDataUrl.startsWith('data:image')) {
+          const res = await fetch(compressedDataUrl);
+          compressedFile = await res.blob();
+        }
+      } catch (cErr) {
+        console.warn('[ReceiptScannerModal] Local compression fallback:', cErr);
+      }
+
+      setCurrentImageBlob(compressedFile);
+      const objectUrl = URL.createObjectURL(compressedFile);
+      setPreviewUrl(objectUrl);
+      if (typeof onPhotoSelected === 'function') {
+        onPhotoSelected(compressedFile, objectUrl);
+      }
+
+      // Offline Quick Capture: Only trigger OCR automatically if enabled AND online
+      const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+      if (enableOcrScan && isOnline) {
+        handleRescanGemini();
+      } else if (enableOcrScan && !isOnline) {
+        setOcrStatusBadge('Offline: Photo captured. Auto-OCR skipped.');
+        setTimeout(() => setOcrStatusBadge(null), 5000);
+      }
+    } catch (err) {
+      console.error('[ReceiptScannerModal] File capture error:', err);
     }
   };
 
@@ -429,6 +466,8 @@ export default function ReceiptScannerModal({
       }
     }
 
+    const cleanedItems = items.filter(it => it && it.name && it.name.trim().length > 0);
+
     const tripData = {
       storeName: storeName.trim() || (venueMode === 'wet_market' ? 'Wet Market / Palengke' : 'Supermarket'),
       date: purchaseDate,
@@ -437,13 +476,54 @@ export default function ReceiptScannerModal({
       tripType: trip_type,
       trip_type,
       receiptImageUrl: resolvedReceiptUrl,
+      isDraft: false,
+      is_draft: false,
       notes: venueMode === 'wet_market'
-        ? (items.length > 0 ? `Wet market trip (${items.length} item${items.length === 1 ? '' : 's'} recorded)` : 'Manual wet market entry')
-        : `Receipt scanned (${items.length} items verified)`
+        ? (cleanedItems.length > 0 ? `Wet market trip (${cleanedItems.length} item${cleanedItems.length === 1 ? '' : 's'} recorded)` : 'Manual wet market entry')
+        : `Receipt scanned (${cleanedItems.length} items verified)`
     };
 
     if (onSave) {
-      onSave(tripData, items);
+      onSave(tripData, cleanedItems);
+    }
+    if (onClose) {
+      onClose();
+    }
+  };
+
+  // Quick Save Incomplete Trip Draft (Offline Quick Capture)
+  const handleQuickSaveDraft = async () => {
+    const trip_type = venueMode === 'wet_market' ? 'wet_market' : 'supermarket';
+
+    let resolvedReceiptUrl = previewUrl;
+    if (currentImageBlob || (previewUrl && (previewUrl.startsWith('blob:') || previewUrl.startsWith('data:')))) {
+      try {
+        const cUrl = await uploadReceiptImageToCloudinary(currentImageBlob || previewUrl);
+        if (cUrl) {
+          resolvedReceiptUrl = cUrl;
+        }
+      } catch (err) {
+        console.warn('[Cloudinary] Modal quick draft upload error:', err);
+      }
+    }
+
+    const cleanedItems = items.filter(it => it && it.name && it.name.trim().length > 0);
+
+    const tripData = {
+      storeName: storeName.trim() || (venueMode === 'wet_market' ? 'Wet Market / Palengke' : 'Supermarket'),
+      date: purchaseDate,
+      totalScaleWeightKg: parseFloat(scaleWeight) || 0,
+      totalAmountPaid: parsedTotal,
+      tripType: trip_type,
+      trip_type,
+      receiptImageUrl: resolvedReceiptUrl,
+      isDraft: true,
+      is_draft: true,
+      notes: (venueMode === 'wet_market' ? 'Wet market draft' : 'Supermarket draft') + ' (Quick Capture)'
+    };
+
+    if (onSave) {
+      onSave(tripData, cleanedItems);
     }
     if (onClose) {
       onClose();
@@ -562,6 +642,61 @@ export default function ReceiptScannerModal({
             >
               🥬 Wet Market
             </button>
+          </div>
+        </div>
+
+        {/* AI / Neural OCR Scanning Toggle Switch */}
+        <div className="px-4 sm:px-6 pt-2 pb-1">
+          <div
+            className={`p-2.5 sm:p-3 rounded-xl border flex items-center justify-between gap-3 transition-colors ${
+              theme === 'dark'
+                ? 'bg-slate-900/60 border-slate-800'
+                : 'bg-white border-slate-200 shadow-xs'
+            }`}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-xl select-none shrink-0">🤖</span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span
+                    className={`text-xs sm:text-sm font-bold truncate ${
+                      theme === 'dark' ? 'text-white' : 'text-slate-900'
+                    }`}
+                  >
+                    AI / Neural OCR Scanning
+                  </span>
+                  <span
+                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                      enableOcrScan
+                        ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
+                        : 'bg-slate-700/40 text-slate-400 border border-slate-600/30'
+                    }`}
+                  >
+                    {enableOcrScan ? 'Enabled' : 'Off (Quick Capture)'}
+                  </span>
+                </div>
+                <p
+                  className={`text-[11px] sm:text-xs mt-0.5 line-clamp-1 ${
+                    theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
+                  }`}
+                >
+                  {enableOcrScan
+                    ? 'Automatically extracts store, total amount, and items when online.'
+                    : 'Capture and save photos instantly without AI delay. Finish items later at home.'}
+                </p>
+              </div>
+            </div>
+
+            <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-2" title="Toggle AI / Neural OCR Scanning">
+              <input
+                type="checkbox"
+                id="ocr-scan-toggle"
+                checked={enableOcrScan}
+                onChange={(e) => handleToggleOcrScan(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
+            </label>
           </div>
         </div>
 
@@ -815,7 +950,6 @@ export default function ReceiptScannerModal({
                         type="number"
                         step="0.01"
                         min="0"
-                        required
                         disabled={isScanning}
                         value={scaleWeight}
                         onChange={e => setScaleWeight(e.target.value)}
@@ -856,7 +990,6 @@ export default function ReceiptScannerModal({
                         type="number"
                         step="0.01"
                         min="0"
-                        required
                         value={totalAmount}
                         onChange={e => setTotalAmount(e.target.value)}
                         className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-lg text-base font-bold font-mono transition-colors border outline-none ${theme === 'dark'
@@ -1099,7 +1232,7 @@ export default function ReceiptScannerModal({
 
                   {/* Footer Actions */}
                   <div
-                    className={`flex items-center justify-end gap-3 pt-4 border-t ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
+                    className={`flex items-center justify-end gap-3 pt-4 border-t flex-wrap ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
                       }`}
                   >
                     <button
@@ -1113,6 +1246,18 @@ export default function ReceiptScannerModal({
                         }`}
                     >
                       Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleQuickSaveDraft}
+                      disabled={isScanning}
+                      className={`min-h-[44px] px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all flex items-center justify-center gap-1.5 ${isScanning ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'} ${theme === 'dark'
+                        ? 'bg-amber-950/30 text-amber-300 border-amber-600/50 hover:bg-amber-900/40'
+                        : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                      }`}
+                      title="Quick save photo draft to finish entering items later"
+                    >
+                      <span>📝</span> Quick Save Draft
                     </button>
                     <button
                       type="submit"

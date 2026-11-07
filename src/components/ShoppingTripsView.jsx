@@ -424,7 +424,14 @@ export default function ShoppingTripsView({
               }}
             >
               <div className="trip-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div className="trip-store-name">{trip.storeName}</div>
+                <div className="flex items-center gap-2">
+                  <div className="trip-store-name">{trip.storeName}</div>
+                  {(trip.isDraft || trip.is_draft) && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-500 border border-amber-500/30">
+                      📝 DRAFT
+                    </span>
+                  )}
+                </div>
                 <div className="trip-sync-badge-container">
                   {trip.synced === false ? (
                     <span className="trip-sync-badge offline" title="Saved locally in IndexedDB; will auto-sync to Neon when online">
@@ -470,7 +477,7 @@ export default function ShoppingTripsView({
               )}
 
               {/* Extracted Items / Grocery Cards Preview */}
-              {items.length > 0 && (
+              {items.length > 0 ? (
                 <div className="trip-items-preview my-2.5">
                   <div className={`text-[11px] font-bold ${cleanQuery ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'} mb-1`}>
                     {cleanQuery ? `Matching Groceries (${items.length}):` : 'Extracted Items:'}
@@ -512,7 +519,13 @@ export default function ShoppingTripsView({
                     ) : null}
                   </div>
                 </div>
-              )}
+              ) : (trip.isDraft || trip.is_draft) ? (
+                <div className="trip-items-preview my-2.5">
+                  <div className="text-xs text-slate-400 italic py-1">
+                    📝 Photo captured draft. Click Edit to enter grocery items.
+                  </div>
+                </div>
+              ) : null}
                   </div>
                 </div>
               )}

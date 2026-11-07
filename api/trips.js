@@ -28,6 +28,7 @@ export async function ensureTripsTables(sql) {
       notes TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW(),
+      is_draft BOOLEAN DEFAULT FALSE,
       synced BOOLEAN DEFAULT TRUE
     );
   `;
@@ -35,6 +36,7 @@ export async function ensureTripsTables(sql) {
   try {
     await sql`ALTER TABLE shopping_trips ADD COLUMN IF NOT EXISTS user_id TEXT;`;
     await sql`ALTER TABLE shopping_trips ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`;
+    await sql`ALTER TABLE shopping_trips ADD COLUMN IF NOT EXISTS is_draft BOOLEAN DEFAULT FALSE;`;
   } catch (_) {}
 
   await sql`
@@ -333,6 +335,8 @@ export default async function handler(req, res) {
         itemsCount: Number(row.items_count || (itemsByTrip.get(row.id)?.length || 0)),
         notes: row.notes || '',
         createdAt: row.created_at,
+        isDraft: Boolean(row.is_draft),
+        is_draft: Boolean(row.is_draft),
         synced: true,
         items: itemsByTrip.get(row.id) || []
       }));
@@ -466,6 +470,7 @@ export default async function handler(req, res) {
       const receiptRawText = tripData.receiptRawText || tripData.receipt_raw_text || '';
       const notes = tripData.notes || '';
       const createdAt = tripData.createdAt || tripData.created_at || new Date().toISOString();
+      const isDraft = Boolean(tripData.isDraft ?? tripData.is_draft ?? false);
 
       // 1. Insert into shopping_trips (Strict user_id scoped)
       await sql`
@@ -473,12 +478,12 @@ export default async function handler(req, res) {
           id, user_id, date, project_week, store_name, trip_type, 
           total_amount_paid, total_scale_weight_kg, 
           receipt_image_url, receipt_raw_text, items_count, 
-          notes, created_at, synced
+          notes, created_at, is_draft, synced
         ) VALUES (
           ${tripId}, ${userId}, ${date}, ${projectWeek}, ${storeName}, ${tripType},
           ${totalAmountPaid}, ${totalScaleWeightKg},
           ${receiptImageUrl}, ${receiptRawText}, ${rawItems.length},
-          ${notes}, ${createdAt}, true
+          ${notes}, ${createdAt}, ${isDraft}, true
         )
         ON CONFLICT (id) DO UPDATE SET
           user_id = EXCLUDED.user_id,
@@ -492,6 +497,7 @@ export default async function handler(req, res) {
           receipt_raw_text = EXCLUDED.receipt_raw_text,
           items_count = EXCLUDED.items_count,
           notes = EXCLUDED.notes,
+          is_draft = EXCLUDED.is_draft,
           synced = true;
       `;
 
@@ -570,6 +576,8 @@ export default async function handler(req, res) {
         itemsCount: savedItems.length,
         notes,
         createdAt,
+        isDraft,
+        is_draft: isDraft,
         synced: true,
         items: savedItems
       };
@@ -629,6 +637,9 @@ export default async function handler(req, res) {
           : null);
 
       const notes = tripData.notes !== undefined ? tripData.notes : null;
+      const isDraftVal = (tripData.isDraft !== undefined || tripData.is_draft !== undefined)
+        ? Boolean(tripData.isDraft ?? tripData.is_draft)
+        : null;
 
       const hasReceiptImageUrl = tripData.receiptImageUrl !== undefined || tripData.receipt_image_url !== undefined || body.receiptImageUrl !== undefined;
       const receiptImageUrlVal = tripData.receiptImageUrl !== undefined
@@ -646,6 +657,7 @@ export default async function handler(req, res) {
               total_scale_weight_kg = COALESCE(${totalScaleWeightKg}, total_scale_weight_kg),
               total_amount_paid = COALESCE(${totalAmountPaid}, total_amount_paid),
               notes = COALESCE(${notes}, notes),
+              is_draft = COALESCE(${isDraftVal}, is_draft),
               receipt_image_url = ${receiptImageUrlVal},
               updated_at = NOW()
             WHERE id = ${targetId} AND user_id = ${userId}
@@ -660,6 +672,7 @@ export default async function handler(req, res) {
               total_scale_weight_kg = COALESCE(${totalScaleWeightKg}, total_scale_weight_kg),
               total_amount_paid = COALESCE(${totalAmountPaid}, total_amount_paid),
               notes = COALESCE(${notes}, notes),
+              is_draft = COALESCE(${isDraftVal}, is_draft),
               updated_at = NOW()
             WHERE id = ${targetId} AND user_id = ${userId}
             RETURNING *;
@@ -754,6 +767,8 @@ export default async function handler(req, res) {
         receiptRawText: row.receipt_raw_text || '',
         itemsCount: formattedItems.length || Number(row.items_count || 0),
         notes: row.notes || '',
+        isDraft: Boolean(row.is_draft),
+        is_draft: Boolean(row.is_draft),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         synced: true,

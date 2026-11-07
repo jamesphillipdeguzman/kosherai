@@ -359,11 +359,12 @@ export async function saveShoppingTrip(tripData, items = []) {
       }
     }
 
+    const isDraft = Boolean(tripData.isDraft ?? tripData.is_draft);
     const tripRecord = {
       id: tripId,
       date,
       projectWeek,
-      storeName: tripData.storeName || 'Supermarket',
+      storeName: tripData.storeName || (tripData.tripType?.includes('Wet') ? 'Wet Market / Palengke' : 'Supermarket'),
       tripType: tripData.tripType || tripData.trip_type || 'Supermarket',
       trip_type: tripData.trip_type || tripData.tripType || 'Supermarket',
       totalAmountPaid: totalAmount,
@@ -373,6 +374,8 @@ export async function saveShoppingTrip(tripData, items = []) {
       itemsCount: cleanedItems.length,
       notes: tripData.notes || '',
       createdAt: tripData.createdAt || new Date().toISOString(),
+      isDraft,
+      is_draft: isDraft,
       synced: false
     };
 
@@ -1301,8 +1304,10 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
 
     if (Array.isArray(updatedFields.items) && updatedFields.items.length > 0) {
       const itemUpdatesMap = new Map(updatedFields.items.map(i => [i.id, i]));
+      const existingTripItemIds = new Set();
       allGroceryItems.forEach(item => {
         if (item.tripId === tripId || item.trip_id === tripId) {
+          existingTripItemIds.add(item.id);
           const update = itemUpdatesMap.get(item.id);
           if (update) {
             if (update.name) {
@@ -1313,9 +1318,37 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
             }
             if (update.quantity !== undefined && !isNaN(update.quantity)) item.quantity = Number(update.quantity);
             if (update.unit) item.unit = update.unit.trim();
+            if (update.unitPrice !== undefined) item.unitPrice = Number(update.unitPrice);
+            if (update.totalPrice !== undefined) item.totalPrice = Number(update.totalPrice);
             item.synced = false;
             groceryItemsUpdated = true;
           }
+        }
+      });
+
+      // Also append any new items from updatedFields.items that were not already in allGroceryItems (e.g. Completing an empty draft)
+      updatedFields.items.forEach((newItem, idx) => {
+        if (!existingTripItemIds.has(newItem.id)) {
+          const lidEval = evaluateItemLidStatus(newItem.name || newItem.itemName);
+          allGroceryItems.push({
+            id: newItem.id || `item_${tripId}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+            tripId,
+            purchaseDate: date,
+            projectWeek,
+            name: newItem.name || 'Grocery Item',
+            raw_receipt_text: newItem.rawReceiptText || newItem.name || '',
+            rawReceiptText: newItem.rawReceiptText || newItem.name || '',
+            quantity: Number(newItem.quantity || newItem.qty || 1),
+            unit: newItem.unit || 'pcs',
+            unitPrice: Number(newItem.unitPrice || newItem.price || 0),
+            totalPrice: Number(newItem.totalPrice || newItem.lineTotal || (Number(newItem.quantity || 1) * Number(newItem.unitPrice || 0))),
+            weightGrams: Number(newItem.weightGrams || 0),
+            category: newItem.category || resolveFoodCategory(newItem.name),
+            lidStatus: newItem.lidStatus || lidEval.status,
+            lidReason: newItem.lidReason || lidEval.reason || '',
+            synced: false
+          });
+          groceryItemsUpdated = true;
         }
       });
     } else if (cleanName || rawItemQty !== null || cleanUnit) {

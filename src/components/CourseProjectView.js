@@ -33,7 +33,7 @@ import {
   hasCourseData,
   PROJECT_CONFIG
 } from '../services/courseProjectStorage.js';
-import { getHouseholdMembers } from '../services/storage.js';
+import { getHouseholdMembers, isOcrScanEnabled } from '../services/storage.js';
 import { detectOverBuying, renderOverBuyingAlertsHtml } from '../services/overBuyingDetector.js';
 import { renderHouseholdInsightsDashboard } from './HouseholdInsightsView.js';
 import { renderSmartMealPlanner, renderInventoryModal } from './SmartMealPlanningView.js';
@@ -908,6 +908,7 @@ function renderReceiptScanModal(state) {
   const activeVenue = state.groceryVenueMode || (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_venue_mode') : null) || 'supermarket';
   const isSupermarket = activeVenue === 'supermarket';
   const isWetMarket = !isSupermarket;
+  const ocrEnabled = isOcrScanEnabled();
 
   // Math check
   let mathAlertHtml = '';
@@ -1048,6 +1049,32 @@ function renderReceiptScanModal(state) {
           </div>
         </div>
 
+        <!-- AI / Neural OCR Scanning Toggle Switch -->
+        <div class="px-4 sm:px-6 pt-1 pb-2" style="padding: 4px 16px 10px 16px;">
+          <div class="ocr-toggle-card" style="padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border-color, #334155); background: var(--bg-card, rgba(15, 23, 42, 0.6)); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+              <span style="font-size: 1.25rem; user-select: none; flex-shrink: 0;">🤖</span>
+              <div style="min-width: 0;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary, #fff);">AI / Neural OCR Scanning</span>
+                  <span style="font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 9999px; text-transform: uppercase; ${ocrEnabled ? 'background: rgba(20, 184, 166, 0.2); color: #2dd4bf; border: 1px solid rgba(20, 184, 166, 0.3);' : 'background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.3);'}">
+                    ${ocrEnabled ? 'Enabled' : 'Off (Quick Capture)'}
+                  </span>
+                </div>
+                <div style="font-size: 0.72rem; color: var(--text-muted, #94a3b8); margin-top: 2px;">
+                  ${ocrEnabled ? 'Automatically extracts store, total amount, and items when online.' : 'Capture and save photos instantly without AI delay. Finish items later at home.'}
+                </div>
+              </div>
+            </div>
+            <label class="toggle-switch" style="position: relative; display: inline-flex; align-items: center; cursor: pointer; flex-shrink: 0;" title="Toggle AI / Neural OCR Scanning">
+              <input type="checkbox" id="ocr-scan-toggle" ${ocrEnabled ? 'checked' : ''} style="display: none;" />
+              <div class="toggle-track" style="width: 44px; height: 24px; border-radius: 9999px; background: ${ocrEnabled ? '#0d9488' : '#475569'}; transition: background 0.2s ease; position: relative;">
+                <div class="toggle-thumb" style="width: 20px; height: 20px; border-radius: 50%; background: #ffffff; position: absolute; top: 2px; left: ${ocrEnabled ? '22px' : '2px'}; transition: left 0.2s ease;"></div>
+              </div>
+            </label>
+          </div>
+        </div>
+
         <!-- Main Body: Split 5/7 layout for both Supermarket and Wet Market -->
         <div class="receipt-scanner-split flex flex-col md:grid md:grid-cols-12 gap-6 relative">
           
@@ -1150,7 +1177,7 @@ function renderReceiptScanModal(state) {
                   ⚖️ Whole-Grocery Scale Weight (kg)
                 </label>
                 <div class="scale-weight-wrapper relative flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white focus-within:border-emerald-500">
-                  <input type="number" step="0.01" min="0" id="edit-scale-weight" class="scale-weight-input w-full bg-transparent text-slate-900 dark:text-white font-semibold outline-none border-none focus:ring-0 placeholder-slate-400 dark:placeholder-slate-500" placeholder="0.00" value="${scanData?.totalScaleWeightKg || ''}" ${isScanning ? 'disabled' : ''} required />
+                  <input type="number" step="0.01" min="0" id="edit-scale-weight" class="scale-weight-input w-full bg-transparent text-slate-900 dark:text-white font-semibold outline-none border-none focus:ring-0 placeholder-slate-400 dark:placeholder-slate-500" placeholder="0.00" value="${scanData?.totalScaleWeightKg || ''}" ${isScanning ? 'disabled' : ''} />
                   <span class="scale-weight-unit ml-2 select-none text-xs font-bold uppercase text-slate-500 dark:text-slate-400">kg</span>
                 </div>
                 <p class="scale-weight-help mt-1 text-[11px] leading-tight text-slate-500 dark:text-slate-400">
@@ -1165,7 +1192,7 @@ function renderReceiptScanModal(state) {
                     <label class="form-label" for="edit-total-amount">Final Amount Paid (₱ PHP)</label>
                     <button type="button" id="apply-items-sum-btn" class="text-[11px] text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer">⚡ Apply Sum of Items</button>
                   </div>
-                  <input type="number" step="0.01" min="0" id="edit-total-amount" class="form-input w-full min-h-[44px]" style="font-size: 1.1rem; font-weight: 800; font-family: var(--font-mono);" value="${scanData?.totalAmountPaid || 0}" required />
+                  <input type="number" step="0.01" min="0" id="edit-total-amount" class="form-input w-full min-h-[44px]" style="font-size: 1.1rem; font-weight: 800; font-family: var(--font-mono);" value="${scanData?.totalAmountPaid || 0}" />
                   <div class="form-help" style="margin-top: 4px; font-size: 0.72rem;">Recorded ONCE as a household food expense.</div>
                 </div>
                 <div class="form-group">
@@ -1212,6 +1239,7 @@ function renderReceiptScanModal(state) {
 
               <div class="modal-footer-actions">
                 <button type="button" class="btn-secondary" id="cancel-receipt-modal-btn" ${isScanning ? 'disabled' : ''} style="min-height: 44px; padding: 0 18px;">Cancel</button>
+                <button type="button" class="btn-secondary" id="quick-save-draft-btn" ${isScanning ? 'disabled' : ''} style="min-height: 44px; padding: 0 16px; border-color: rgba(245, 158, 11, 0.5); color: #f59e0b;" title="Save photo draft to complete details later">📝 Quick Save Draft</button>
                 <button type="submit" class="btn-primary" id="save-receipt-trip-btn" ${isScanning ? 'disabled' : ''} style="min-height: 44px; padding: 0 22px;">💾 Save Verified Shopping Trip</button>
               </div>
             </form>

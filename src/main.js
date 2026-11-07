@@ -43,7 +43,9 @@ import {
   getChecklistState,
   saveChecklistState,
   isScannerEnabled,
-  setScannerEnabled
+  setScannerEnabled,
+  isOcrScanEnabled,
+  setOcrScanEnabled
 } from './services/storage.js';
 
 import {
@@ -1752,7 +1754,7 @@ Cracked black pepper`;
     reuploadReceiptBtn.addEventListener('click', handleRetakeReceiptPhoto);
   }
 
-  // Handle Receipt File Selection & AI Scan
+  // Handle Receipt File Selection & Photo Capture (Offline Quick Capture & Optional OCR)
   if (receiptFileInput) {
     receiptFileInput.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
@@ -1761,13 +1763,36 @@ Cracked black pepper`;
       if (!file) return;
 
       try {
-        state.receiptScanning = true;
-        state.receiptProgress = 0.15;
-        state.receiptStatusMsg = 'Uploading receipt image...';
-        render();
-
         const dataUrl = await compressImageForOCR(file, 1600, 0.8);
         state.receiptPreviewUrl = dataUrl;
+
+        const ocrEnabled = isOcrScanEnabled();
+        const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+
+        // If OCR is disabled or device is offline, skip OCR completely and enable instant photo capture
+        if (!ocrEnabled || !isOnline) {
+          state.receiptScanning = false;
+          if (ocrEnabled && !isOnline) {
+            state.ocrStatusBadge = 'Offline: Photo captured. Auto-OCR skipped.';
+            setTimeout(() => {
+              state.ocrStatusBadge = null;
+              render();
+            }, 5000);
+          }
+          state.scannedReceiptData = {
+            storeName: state.groceryVenueMode === 'wet_market' ? 'Wet Market / Palengke' : 'SM Supermarket',
+            purchaseDate: new Date().toISOString().split('T')[0],
+            tripType: state.groceryVenueMode === 'wet_market' ? 'wet_market' : 'Supermarket',
+            items: [],
+            totalAmountPaid: 0,
+            totalScaleWeightKg: 0
+          };
+          render();
+          return;
+        }
+
+        // OCR is enabled and device is online: Proceed with AI receipt scan
+        state.receiptScanning = true;
         state.receiptProgress = 0.15;
         state.receiptStatusMsg = 'Uploading receipt image...';
         render();
@@ -1794,15 +1819,27 @@ Cracked black pepper`;
         alert('Could not complete receipt scan. You can enter details manually.');
         state.receiptScanning = false;
         state.scannedReceiptData = {
-          storeName: 'Supermarket',
+          storeName: state.groceryVenueMode === 'wet_market' ? 'Wet Market / Palengke' : 'Supermarket',
           purchaseDate: new Date().toISOString().split('T')[0],
-          tripType: 'Supermarket',
+          tripType: state.groceryVenueMode === 'wet_market' ? 'wet_market' : 'Supermarket',
           items: [],
           totalAmountPaid: 0,
           totalScaleWeightKg: 0
         };
         render();
       }
+    });
+  }
+
+  // AI / Neural OCR Scanning In-Modal Toggle Listener
+  const ocrScanToggle = document.querySelector('#ocr-scan-toggle');
+  if (ocrScanToggle) {
+    ocrScanToggle.addEventListener('change', (e) => {
+      setOcrScanEnabled(e.target.checked);
+      if (state.settings) {
+        state.settings.enableOcrScan = e.target.checked;
+      }
+      render();
     });
   }
 
@@ -2082,10 +2119,89 @@ Cracked black pepper`;
         notes: isWetMarket
           ? (items.length > 0 ? `Wet market trip (${items.length} item${items.length === 1 ? '' : 's'} recorded)` : 'Manual wet market entry')
           : `Receipt scanned (${items.length} items verified)`,
+        isDraft: false,
+        is_draft: false,
         items,
         rawItems: items
       }, items);
 
+      state.receiptModalOpen = false;
+      state.scannedReceiptData = null;
+      state.receiptPreviewUrl = null;
+      render();
+    });
+  }
+
+  // Quick Save Draft Button (Offline Quick Capture)
+  const quickSaveDraftBtn = document.querySelector('#quick-save-draft-btn');
+  if (quickSaveDraftBtn) {
+    quickSaveDraftBtn.addEventListener('click', async () => {
+      const activeVenue = state.groceryVenueMode || (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_venue_mode') : null) || 'supermarket';
+      const isWetMarket = activeVenue === 'wet_market';
+      const trip_type = isWetMarket ? 'wet_market' : 'supermarket';
+      const tripType = trip_type;
+
+      const storeNameInput = document.querySelector('#edit-store-name')?.value?.trim();
+      const defaultStore = isWetMarket ? 'Wet Market / Palengke' : 'Supermarket';
+      const storeName = storeNameInput || defaultStore;
+      const purchaseDate = document.querySelector('#edit-purchase-date')?.value || new Date().toISOString().split('T')[0];
+      const scaleWeight = parseFloat(document.querySelector('#edit-scale-weight')?.value || 0) || 0;
+      const totalAmount = parseFloat(document.querySelector('#edit-total-amount')?.value || 0) || 0;
+
+      const items = [];
+      document.querySelectorAll('#receipt-items-tbody tr').forEach((row, idx) => {
+        const name = row.querySelector('.item-name-val')?.value?.trim();
+        const qty = parseFloat(row.querySelector('.item-qty-val')?.value || 1);
+        const unit = row.querySelector('.item-unit-val')?.value?.trim() || (isWetMarket ? 'kg' : 'pcs');
+        const price = parseFloat(row.querySelector('.item-price-val')?.value || 0);
+        const total = parseFloat(row.querySelector('.item-total-val')?.value || (qty * price) || price || 0);
+        const category = row.getAttribute('data-item-category') || (isWetMarket ? 'Wet Market Produce' : 'General Food');
+        const lidStatus = row.getAttribute('data-item-status') || 'SAFE';
+        const lidReason = row.getAttribute('data-item-reason') || '';
+
+        let weightGrams = 0;
+        const unitLower = unit.toLowerCase();
+        if (unitLower === 'kg' || unitLower === 'kgs' || unitLower === 'kilo' || unitLower === 'kilos') {
+          weightGrams = Math.round(qty * 1000);
+        } else if (unitLower === 'g' || unitLower === 'gm' || unitLower === 'gram' || unitLower === 'grams') {
+          weightGrams = Math.round(qty);
+        }
+
+        if (name) {
+          items.push({
+            id: `item_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+            name,
+            rawReceiptText: `${name} (${qty} ${unit})`.trim(),
+            quantity: qty,
+            unit,
+            unitPrice: price,
+            totalPrice: total,
+            lineTotal: total,
+            price: total,
+            weightGrams,
+            category,
+            lidStatus,
+            lidReason
+          });
+        }
+      });
+
+      await saveShoppingTrip({
+        storeName,
+        date: purchaseDate,
+        totalScaleWeightKg: scaleWeight,
+        totalAmountPaid: totalAmount,
+        tripType,
+        trip_type,
+        receiptImageUrl: state.receiptPreviewUrl || null,
+        notes: (isWetMarket ? 'Wet market draft' : 'Supermarket draft') + ' (Quick Capture)',
+        isDraft: true,
+        is_draft: true,
+        items,
+        rawItems: items
+      }, items);
+
+      showToast('Shopping trip saved locally. You can complete the details later.');
       state.receiptModalOpen = false;
       state.scannedReceiptData = null;
       state.receiptPreviewUrl = null;

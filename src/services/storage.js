@@ -49,8 +49,42 @@ const DEFAULT_SETTINGS = {
   cloudinaryPreset: import.meta.env?.VITE_CLOUDINARY_UPLOAD_PRESET || '',
   prepDate: '',
   targetMaxIodine: 50,
-  household_members: 4
+  household_members: 4,
+  enableOcrScan: false // Default: OFF for fast offline photo capture
 };
+
+export function isOcrScanEnabled() {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    const direct = localStorage.getItem('kosherai_enable_ocr_scan');
+    if (direct !== null) return direct === 'true' || direct === '1';
+    const saved = localStorage.getItem('kosherai_settings');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.enableOcrScan !== undefined) return Boolean(parsed.enableOcrScan);
+      if (parsed.enable_ocr_scan !== undefined) return Boolean(parsed.enable_ocr_scan);
+    }
+  } catch (_) {}
+  return false; // Default: OFF
+}
+
+export function setOcrScanEnabled(enabled) {
+  const bool = Boolean(enabled);
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem('kosherai_enable_ocr_scan', String(bool));
+      const current = getSettings();
+      current.enableOcrScan = bool;
+      localStorage.setItem(KEYS.SETTINGS, JSON.stringify(current));
+    } catch (_) {}
+  }
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    try {
+      window.dispatchEvent(new CustomEvent('kosherai:ocr-settings-changed', { detail: { enableOcrScan: bool } }));
+    } catch (_) {}
+  }
+  return bool;
+}
 
 export function getHouseholdMembers() {
   if (typeof window === 'undefined') return 4;
@@ -111,7 +145,8 @@ export function getSettings() {
     prepDate: parsed.prepDate || '',
     targetMaxIodine: parsed.targetMaxIodine ?? 50,
     household_members: getHouseholdMembers(),
-    scannerEnabled: isScannerEnabled()
+    scannerEnabled: isScannerEnabled(),
+    enableOcrScan: isOcrScanEnabled()
   };
 }
 
@@ -124,6 +159,13 @@ export function saveSettings(newSettings) {
       updated.household_members = hVal;
       try {
         localStorage.setItem('kosherai_household_members', String(hVal));
+      } catch (_) {}
+    }
+    if (newSettings.enableOcrScan !== undefined || newSettings.enable_ocr_scan !== undefined) {
+      const bool = Boolean(newSettings.enableOcrScan ?? newSettings.enable_ocr_scan);
+      updated.enableOcrScan = bool;
+      try {
+        localStorage.setItem('kosherai_enable_ocr_scan', String(bool));
       } catch (_) {}
     }
     localStorage.setItem(KEYS.SETTINGS, JSON.stringify(updated));

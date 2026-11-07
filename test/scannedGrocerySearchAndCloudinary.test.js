@@ -289,3 +289,4 @@ console.log('  ✅ Search results retain parent trip info and display only match
 console.log('\n======================================================================');
 console.log('🎉 ALL SCANNED GROCERY SEARCH & CLOUDINARY UPLOAD TESTS PASSED!');
 console.log('======================================================================\n');
+

@@ -375,6 +375,8 @@ export function renderTripCard(trip, isEditing = false, matchingItemsOverride = 
     `;
   }
 
+  const isDraft = Boolean(trip.isDraft ?? trip.is_draft);
+
   return `
     <div class="trip-card ${trip.receiptImageUrl ? 'cursor-pointer' : ''}" data-trip-id="${trip.id}" ${trip.receiptImageUrl ? `data-lightbox-trip-id="${trip.id}"` : ''}>
       <div class="trip-card-header">
@@ -384,6 +386,11 @@ export function renderTripCard(trip, isEditing = false, matchingItemsOverride = 
             <div class="trip-store-name">${escapeHtml(trip.storeName)}</div>
             <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 2px;">
               <span class="trip-date-pill">Week ${trip.projectWeek} (W0${trip.projectWeek}) • ${trip.date}</span>
+              ${isDraft ? `
+                <span class="trip-draft-badge" style="background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.4); color: #f59e0b; font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 9999px;">
+                  📝 DRAFT
+                </span>
+              ` : ''}
               ${trip.synced === false ? `
                 <span class="trip-sync-badge offline" title="Saved locally in IndexedDB; will auto-sync to Neon when online">
                   ☁️⏳ OFFLINE
@@ -443,7 +450,13 @@ export function renderTripCard(trip, isEditing = false, matchingItemsOverride = 
             ${items.length > 8 ? `<span class="item-mini-chip" style="background: var(--bg-card-hover);">+${items.length - 8} more</span>` : ''}
           </div>
         </div>
-      ` : ''}
+      ` : (isDraft ? `
+        <div class="trip-items-preview">
+          <div style="font-size: 0.78rem; color: var(--text-muted); font-style: italic; padding: 6px 0;">
+            📝 Photo captured draft. Click Edit to enter grocery items.
+          </div>
+        </div>
+      ` : '')}
 
       <div class="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-slate-100/80 dark:border-slate-800/80">
         <!-- Modern Edit Button -->
