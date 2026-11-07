@@ -2,6 +2,7 @@
 // Connects to Neon PostgreSQL using DATABASE_URL
 import { neon } from '@neondatabase/serverless';
 import 'dotenv/config';
+import { setCorsHeaders } from '../lib/auth.js';
 
 let isTablesInitialized = false;
 
@@ -47,9 +48,6 @@ function sendJson(res, statusCode, data) {
   }
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.end(JSON.stringify(data));
 }
 
@@ -115,12 +113,11 @@ export function isValidPostgresUrl(url) {
  * Main HTTP Handler for /api/recipe-interactions
  */
 export default async function handler(req, res) {
+  setCorsHeaders(req, res);
   // CORS Preflight
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    return sendJson(res, 200, { ok: true });
+    res.statusCode = 204;
+    return res.end();
   }
 
   const dbUrl = process.env.DATABASE_URL;

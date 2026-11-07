@@ -24,7 +24,33 @@ export async function authenticateUser(mode, credentials) {
         if (res?.error) {
           throw new Error(res.error.message || 'Invalid email or password. Please verify credentials.');
         }
-        return res?.data?.user || res?.data || { id: 'usr_' + Date.now(), email, name: email.split('@')[0] };
+        const userObj = res?.data?.user || res?.data || { id: 'usr_' + Date.now(), email, name: email.split('@')[0] };
+        let token = res?.data?.token || res?.data?.session?.token;
+        if (!token && typeof authModule.getSession === 'function') {
+          try {
+            const sess = await authModule.getSession();
+            if (sess?.data?.session?.token) token = sess.data.session.token;
+          } catch (_) {}
+        }
+        if (!token) {
+          try {
+            const sessionRes = await fetch('/api/auth/get-session', { method: 'GET', credentials: 'include' });
+            if (sessionRes.ok) {
+              const sessionData = await sessionRes.json().catch(() => ({}));
+              if (sessionData?.session?.token) token = sessionData.session.token;
+              if (sessionData?.user) {
+                userObj.id = sessionData.user.id || userObj.id;
+                userObj.email = sessionData.user.email || userObj.email;
+                userObj.name = sessionData.user.name || userObj.name;
+              }
+            }
+          } catch (_) {}
+        }
+        if (token) {
+          userObj.token = token;
+          try { localStorage.setItem('better-auth.session_token', token); } catch (_) {}
+        }
+        return userObj;
       } else if (mode === 'signup' && authModule.signUp?.email) {
         const res = await authModule.signUp.email({
           name: (name || '').trim(),
@@ -34,7 +60,33 @@ export async function authenticateUser(mode, credentials) {
         if (res?.error) {
           throw new Error(res.error.message || 'Account registration failed. Please try again.');
         }
-        return res?.data?.user || res?.data || { id: 'usr_' + Date.now(), email, name };
+        const userObj = res?.data?.user || res?.data || { id: 'usr_' + Date.now(), email, name };
+        let token = res?.data?.token || res?.data?.session?.token;
+        if (!token && typeof authModule.getSession === 'function') {
+          try {
+            const sess = await authModule.getSession();
+            if (sess?.data?.session?.token) token = sess.data.session.token;
+          } catch (_) {}
+        }
+        if (!token) {
+          try {
+            const sessionRes = await fetch('/api/auth/get-session', { method: 'GET', credentials: 'include' });
+            if (sessionRes.ok) {
+              const sessionData = await sessionRes.json().catch(() => ({}));
+              if (sessionData?.session?.token) token = sessionData.session.token;
+              if (sessionData?.user) {
+                userObj.id = sessionData.user.id || userObj.id;
+                userObj.email = sessionData.user.email || userObj.email;
+                userObj.name = sessionData.user.name || userObj.name;
+              }
+            }
+          } catch (_) {}
+        }
+        if (token) {
+          userObj.token = token;
+          try { localStorage.setItem('better-auth.session_token', token); } catch (_) {}
+        }
+        return userObj;
       }
     }
   } catch (err) {

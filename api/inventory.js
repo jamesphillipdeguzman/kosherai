@@ -3,6 +3,7 @@
 import { neon } from '@neondatabase/serverless';
 import 'dotenv/config';
 import { isValidPostgresUrl } from './trips.js';
+import { getAuthenticatedUser, setCorsHeaders } from '../lib/auth.js';
 
 /**
  * Ensures household_inventory table exists in Neon
@@ -42,9 +43,6 @@ function sendJson(res, statusCode, data) {
   }
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.end(JSON.stringify(data));
 }
 
@@ -86,10 +84,8 @@ function parseQueryParams(req) {
 }
 
 export default async function handler(req, res) {
+  setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.statusCode = 204;
     return res.end();
   }
@@ -119,9 +115,10 @@ export default async function handler(req, res) {
     // Extract authenticated tenant user
     let user = null;
     try {
-      const { getAuthenticatedUser } = await import('../lib/auth.ts');
       user = await getAuthenticatedUser(req);
-    } catch (_) {}
+    } catch (authErr) {
+      console.warn('[API /api/inventory] Authentication check error:', authErr);
+    }
 
     const userId = typeof user === 'string' ? user : user?.id;
 

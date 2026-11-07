@@ -1,6 +1,7 @@
 // Serverless API Route for Intelligent Supermarket Receipt Scanning
 // Connects to Google Gemini Vision with server-side API key protection
 import 'dotenv/config';
+import { setCorsHeaders } from '../lib/auth.js';
 
 export const config = {
   maxDuration: 30, // Extends max execution time up to 30s
@@ -23,9 +24,6 @@ function sendJson(res, statusCode, data) {
   }
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.end(JSON.stringify(data));
 }
 
@@ -200,11 +198,9 @@ export function sanitizeReceiptData(data, activeDiet = 'lid') {
 }
 
 export default async function handler(req, res) {
+  setCorsHeaders(req, res);
   // CORS Preflight
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.statusCode = 204;
     return res.end();
   }

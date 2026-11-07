@@ -3,6 +3,7 @@
 import { neon } from '@neondatabase/serverless';
 import 'dotenv/config';
 import { isValidPostgresUrl } from './trips.js';
+import { getAuthenticatedUser, setCorsHeaders } from '../lib/auth.js';
 
 export async function ensureMealPlansTable(sql) {
   await sql`
@@ -34,9 +35,6 @@ function sendJson(res, statusCode, data) {
   }
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.end(JSON.stringify(data));
 }
 
@@ -78,10 +76,8 @@ function parseQueryParams(req) {
 }
 
 export default async function handler(req, res) {
+  setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.statusCode = 204;
     return res.end();
   }
@@ -109,7 +105,6 @@ export default async function handler(req, res) {
   try {
     let user = null;
     try {
-      const { getAuthenticatedUser } = await import('../lib/auth.ts');
       user = await getAuthenticatedUser(req);
     } catch (_) {}
 

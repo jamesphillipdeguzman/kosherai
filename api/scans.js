@@ -2,6 +2,7 @@
 // Connects to Neon PostgreSQL using DATABASE_URL
 import { neon } from '@neondatabase/serverless';
 import 'dotenv/config';
+import { getAuthenticatedUser, setCorsHeaders } from '../lib/auth.js';
 
 let isTableInitialized = false;
 
@@ -37,9 +38,6 @@ function sendJson(res, statusCode, data) {
   }
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.end(JSON.stringify(data));
 }
 
@@ -110,10 +108,8 @@ export function isValidPostgresUrl(url) {
  */
 export default async function handler(req, res) {
   // CORS Preflight
+  setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.statusCode = 204;
     return res.end();
   }
@@ -190,9 +186,10 @@ export default async function handler(req, res) {
     // Extract authenticated tenant user (strictly verified via Better Auth session)
     let user = null;
     try {
-      const { getAuthenticatedUser } = await import('../lib/auth.ts');
       user = await getAuthenticatedUser(req);
-    } catch (_) {}
+    } catch (authErr) {
+      console.warn('[API /api/scans] Authentication check error:', authErr);
+    }
 
     const query = parseQueryParams(req);
     const userId = typeof user === 'string' ? user : user?.id;

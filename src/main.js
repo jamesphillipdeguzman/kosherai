@@ -14,7 +14,7 @@ import { renderItemDetailModal } from './components/ItemDetailModal.js';
 import { renderCourseProjectView, createReceiptItemRowHtml } from './components/CourseProjectView.js';
 import { parseQuantityAndUnit, createManualItemRowHtml } from './components/ManualTripModal.js';
 import { renderAuthModalHtml, authenticateUser, isValidEmail } from './components/AuthModal.jsx';
-import { getAuthHeaders } from './services/authHeaders.js';
+import { getAuthHeaders, getClientAuthToken } from './services/authHeaders.js';
 import {
   toggleRecipeLike,
   recordRecipeView,
@@ -3118,9 +3118,8 @@ async function pushThenRestoreFromNeon({ manual = false } = {}) {
 async function initializeAuthSession() {
   if (typeof fetch !== 'function') return;
   try {
-    const rawSession = localStorage.getItem('kosherai_user_session');
-    const directToken = localStorage.getItem('better-auth.session_token');
-    if (!directToken && !rawSession) {
+    const activeToken = getClientAuthToken();
+    if (!activeToken) {
       const res = await fetch('/api/auth/get-session', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json().catch(() => null);
