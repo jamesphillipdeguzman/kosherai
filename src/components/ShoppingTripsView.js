@@ -530,66 +530,68 @@ export function renderShoppingTripsView(state = {}) {
 
 /**
  * Renders an accessible full-screen Lightbox Modal displaying the uncropped receipt / produce image
- * with object-contain and comprehensive trip details.
+ * with strict dimensions (min(92vw, 420px), max-h-[80dvh], image max-h-[35dvh], object-contain)
+ * and guaranteed visible metadata footer.
  */
 export function renderReceiptLightboxModal(trip) {
   if (!trip || !trip.receiptImageUrl) return '';
 
   return `
-    <div class="modal-overlay receipt-lightbox-overlay fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md pb-[max(1rem,env(safe-area-inset-bottom))]" id="receipt-lightbox-overlay" role="dialog" aria-modal="true" aria-label="Receipt Photo Lightbox" style="z-index: 200;">
-      <div class="lightbox-modal-content max-w-lg w-full mx-auto flex flex-col max-h-[85dvh] bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700/80 overflow-hidden relative" style="max-height: 85dvh;" onclick="event.stopPropagation();">
+    <div class="modal-overlay receipt-lightbox-overlay" id="receipt-lightbox-overlay" role="dialog" aria-modal="true" aria-label="Receipt Photo Lightbox" style="position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; background: rgba(2, 6, 23, 0.88); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: 12px; padding-bottom: max(16px, env(safe-area-inset-bottom, 16px)); box-sizing: border-box;">
+      <div class="lightbox-dialog lightbox-modal-content" style="width: min(92vw, 420px); max-width: 420px; max-height: 80vh; max-height: 80dvh; height: auto; display: flex; flex-direction: column; overflow: hidden; background: #0f172a; color: #ffffff; border-radius: 16px; border: 1px solid #334155; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7); margin: auto; box-sizing: border-box;" onclick="event.stopPropagation();">
         
-        <!-- Header -->
-        <div class="lightbox-header flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 shrink-0">
-          <div class="flex items-center gap-2.5 min-w-0">
-            <span class="text-lg shrink-0">🧾</span>
-            <div class="min-w-0">
-              <h3 class="font-bold text-sm sm:text-base text-white m-0 truncate flex items-center gap-2">
-                <span class="truncate">${escapeHtml(trip.storeName || 'Shopping Trip')}</span>
-                <span class="text-[11px] text-slate-400 font-normal hidden sm:inline shrink-0">(Esc to close)</span>
+        <!-- Header: Fixed Natural Height -->
+        <div class="lightbox-header" style="flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #0f172a; border-bottom: 1px solid #1e293b; box-sizing: border-box;">
+          <div style="display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden;">
+            <span style="font-size: 1.1rem; flex-shrink: 0;">🧾</span>
+            <div style="min-width: 0; overflow: hidden;">
+              <h3 style="font-weight: 700; font-size: 0.9rem; color: #ffffff; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px;">
+                <span style="overflow: hidden; text-overflow: ellipsis;">${escapeHtml(trip.storeName || 'Shopping Trip')}</span>
+                <span style="font-size: 11px; color: #94a3b8; font-weight: 400; flex-shrink: 0;">(Esc to close)</span>
               </h3>
-              <p class="text-xs text-slate-400 m-0 truncate">${trip.date} • ${escapeHtml(trip.tripType || trip.trip_type || 'Supermarket')}</p>
+              <p style="font-size: 11px; color: #94a3b8; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${trip.date} • ${escapeHtml(trip.tripType || trip.trip_type || 'Supermarket')}</p>
             </div>
           </div>
-          <button type="button" class="btn-icon text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full w-8 h-8 flex items-center justify-center transition-colors cursor-pointer shrink-0 ml-2" id="close-lightbox-btn" aria-label="Close Lightbox">✕</button>
+          <button type="button" class="btn-icon" id="close-lightbox-btn" aria-label="Close Lightbox" style="color: #94a3b8; background: #1e293b; border: none; border-radius: 9999px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; margin-left: 8px;">✕</button>
         </div>
 
-        <!-- Full Image Container -->
-        <div class="lightbox-img-wrapper flex-1 min-h-0 w-full flex items-center justify-center bg-slate-950 p-2 sm:p-3 overflow-hidden select-none">
+        <!-- Image Area: Strictly Max 35dvh with Dark Neutral Background -->
+        <div class="lightbox-image-stage lightbox-img-wrapper" style="flex: 0 1 auto; max-height: 35vh; max-height: 35dvh; min-height: 80px; height: auto; width: 100%; display: flex; align-items: center; justify-content: center; background: #020617; padding: 6px; overflow: hidden; box-sizing: border-box; user-select: none;">
           ${trip.receiptImageUrl ? `
             <img 
               src="${trip.receiptImageUrl}" 
               alt="Full receipt photo for ${escapeHtml(trip.storeName)}" 
-              class="lightbox-full-img max-h-[50dvh] sm:max-h-[52dvh] max-w-full w-auto h-auto object-contain rounded-lg shadow-md"
+              class="lightbox-photo lightbox-full-img object-contain"
+              style="width: auto; height: auto; max-width: 100%; max-height: 35vh; max-height: 35dvh; object-fit: contain; display: block; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); margin: 0 auto;"
               loading="eager"
-              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'p-6 text-center text-slate-400 text-xs sm:text-sm\\'>⚠️ Image could not be loaded or is unavailable.</div>';"
+              onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\\'padding: 16px; text-align: center; color: #94a3b8; font-size: 12px;\\'>⚠️ Image could not be loaded or is unavailable.</div>';"
             />
           ` : `
-            <div class="p-6 text-center text-slate-400 text-xs sm:text-sm">
+            <div style="padding: 16px; text-align: center; color: #94a3b8; font-size: 12px;">
               📷 No photo attached to this shopping trip.
             </div>
           `}
         </div>
 
-        <!-- Metadata Footer -->
-        <div class="lightbox-footer shrink-0 px-4 py-3 bg-slate-900 border-t border-slate-800 text-white">
-          <div class="grid grid-cols-3 gap-2 text-center">
-            <div class="p-2 rounded-xl bg-slate-950 border border-slate-800">
-              <span class="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider">Amount Paid</span>
-              <span class="font-bold text-xs sm:text-sm text-emerald-400 font-mono">₱${formatNumber(trip.totalAmountPaid)}</span>
+        <!-- Details Footer: Solid Opaque Background, Always Visible (flex-shrink: 0) -->
+        <div class="lightbox-footer-card lightbox-footer" style="flex-shrink: 0; background: #0f172a; border-top: 1px solid #1e293b; padding: 10px 14px; box-sizing: border-box; color: #ffffff;">
+          <div class="lightbox-metadata-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center;">
+            <div class="lightbox-meta-box" style="background: #020617; border: 1px solid #1e293b; border-radius: 10px; padding: 6px 4px; display: flex; flex-direction: column; justify-content: center;">
+              <span class="lightbox-meta-label" style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 2px;">Amount Paid</span>
+              <span class="lightbox-meta-val" style="font-size: 13px; font-weight: 700; color: #34d399; font-family: monospace;">₱${formatNumber(trip.totalAmountPaid)}</span>
             </div>
-            <div class="p-2 rounded-xl bg-slate-950 border border-slate-800">
-              <span class="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider">Scale Weight</span>
-              <span class="font-bold text-xs sm:text-sm text-cyan-300 font-mono">${trip.totalScaleWeightKg > 0 ? `${Number(trip.totalScaleWeightKg).toFixed(2)} kg` : '—'}</span>
+            <div class="lightbox-meta-box" style="background: #020617; border: 1px solid #1e293b; border-radius: 10px; padding: 6px 4px; display: flex; flex-direction: column; justify-content: center;">
+              <span class="lightbox-meta-label" style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 2px;">Scale Weight</span>
+              <span class="lightbox-meta-val" style="font-size: 13px; font-weight: 700; color: #67e8f9; font-family: monospace;">${trip.totalScaleWeightKg > 0 ? `${Number(trip.totalScaleWeightKg).toFixed(2)} kg` : '—'}</span>
             </div>
-            <div class="p-2 rounded-xl bg-slate-950 border border-slate-800">
-              <span class="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider">Items Count</span>
-              <span class="font-bold text-xs sm:text-sm text-slate-200 font-mono">${trip.itemsCount || (trip.items?.length || 0)} items</span>
+            <div class="lightbox-meta-box" style="background: #020617; border: 1px solid #1e293b; border-radius: 10px; padding: 6px 4px; display: flex; flex-direction: column; justify-content: center;">
+              <span class="lightbox-meta-label" style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 2px;">Items Count</span>
+              <span class="lightbox-meta-val" style="font-size: 13px; font-weight: 700; color: #e2e8f0; font-family: monospace;">${trip.itemsCount || (trip.items?.length || 0)} items</span>
             </div>
           </div>
           ${trip.notes ? `
-            <div class="mt-2.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800/80 text-xs text-slate-300 line-clamp-2">
-              <strong class="text-slate-400 font-medium">Notes:</strong> ${escapeHtml(trip.notes)}
+            <div class="lightbox-notes-box" style="margin-top: 8px; background: #020617; border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 10px; padding: 6px 10px; font-size: 11px; color: #cbd5e1; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+              <strong style="color: #94a3b8; font-weight: 600;">Notes:</strong> ${escapeHtml(trip.notes)}
             </div>
           ` : ''}
         </div>

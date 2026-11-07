@@ -528,81 +528,137 @@ export default function ShoppingTripsView({
       {/* Lightbox Modal */}
       {lightboxTrip && (
         <div
-          className="modal-overlay receipt-lightbox-overlay fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md pb-[max(1rem,env(safe-area-inset-bottom))]"
+          className="modal-overlay receipt-lightbox-overlay fixed inset-0 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md pb-[max(1rem,env(safe-area-inset-bottom))]"
           role="dialog"
           aria-modal="true"
           aria-label="Receipt Photo Lightbox"
-          style={{ zIndex: 200 }}
+          style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(2, 6, 23, 0.88)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', padding: '12px', paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))', boxSizing: 'border-box' }}
           onClick={(e) => { if (e.target === e.currentTarget) setLightboxTrip(null); }}
         >
           <div
-            className="lightbox-modal-content max-w-lg w-full mx-auto flex flex-col max-h-[85dvh] bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700/80 overflow-hidden relative"
-            style={{ maxHeight: '85dvh' }}
+            className="lightbox-dialog lightbox-modal-content max-w-lg w-full mx-auto flex flex-col bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-700/80 overflow-hidden relative"
+            style={{ width: 'min(92vw, 420px)', maxWidth: '420px', maxHeight: '80dvh', height: 'auto', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#0f172a', color: '#ffffff', borderRadius: '16px', border: '1px solid #334155', boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)', margin: 'auto', boxSizing: 'border-box' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="lightbox-header flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 shrink-0">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="text-lg shrink-0">🧾</span>
-                <div className="min-w-0">
-                  <h3 className="font-bold text-sm sm:text-base text-white m-0 truncate flex items-center gap-2">
-                    <span className="truncate">{lightboxTrip.storeName || 'Shopping Trip'}</span>
-                    <span className="text-[11px] text-slate-400 font-normal hidden sm:inline shrink-0">(Esc to close)</span>
+            {/* Header: Fixed Natural Height */}
+            <div
+              className="lightbox-header flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 shrink-0"
+              style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#0f172a', borderBottom: '1px solid #1e293b', boxSizing: 'border-box' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, overflow: 'hidden' }}>
+                <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>🧾</span>
+                <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                  <h3 style={{ fontWeight: 700, fontSize: '0.9rem', color: '#ffffff', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{lightboxTrip.storeName || 'Shopping Trip'}</span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 400, flexShrink: 0 }} className="hidden sm:inline">(Esc to close)</span>
                   </h3>
-                  <p className="text-xs text-slate-400 m-0 truncate">{lightboxTrip.date} • {lightboxTrip.tripType || lightboxTrip.trip_type || 'Supermarket'}</p>
+                  <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lightboxTrip.date} • {lightboxTrip.tripType || lightboxTrip.trip_type || 'Supermarket'}</p>
                 </div>
               </div>
               <button
                 type="button"
-                className="btn-icon text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full w-8 h-8 flex items-center justify-center transition-colors cursor-pointer shrink-0 ml-2"
+                className="btn-icon"
                 onClick={() => setLightboxTrip(null)}
                 aria-label="Close Lightbox"
+                style={{ color: '#94a3b8', background: '#1e293b', border: 'none', borderRadius: '9999px', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, marginLeft: '8px' }}
               >
                 ✕
               </button>
             </div>
 
-            {/* Full Image Container */}
-            <div className="lightbox-img-wrapper flex-1 min-h-0 w-full flex items-center justify-center bg-slate-950 p-2 sm:p-3 overflow-hidden select-none">
+            {/* Image Area: Strictly Max 35dvh with Dark Neutral Background */}
+            <div
+              className="lightbox-image-stage lightbox-img-wrapper flex-1 min-h-0 w-full flex items-center justify-center bg-slate-950 p-2 sm:p-3 overflow-hidden select-none"
+              style={{ flex: '0 1 auto', maxHeight: '35dvh', minHeight: '80px', height: 'auto', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#020617', padding: '6px', overflow: 'hidden', boxSizing: 'border-box', userSelect: 'none' }}
+            >
               {lightboxTrip.receiptImageUrl ? (
                 <img
                   src={lightboxTrip.receiptImageUrl}
                   alt={`Full photo for ${lightboxTrip.storeName}`}
-                  className="lightbox-full-img max-h-[50dvh] sm:max-h-[52dvh] max-w-full w-auto h-auto object-contain rounded-lg shadow-md"
+                  className="lightbox-photo lightbox-full-img rounded-lg shadow-md"
+                  style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '35dvh', objectFit: 'contain', display: 'block', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)', margin: '0 auto' }}
                   loading="eager"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
                     if (e.currentTarget.parentElement) {
-                      e.currentTarget.parentElement.innerHTML = '<div class="p-6 text-center text-slate-400 text-xs sm:text-sm">⚠️ Receipt image could not be loaded or is unavailable.</div>';
+                      e.currentTarget.parentElement.innerHTML = '<div style="padding: 16px; text-align: center; color: #94a3b8; font-size: 12px;">⚠️ Receipt image could not be loaded or is unavailable.</div>';
                     }
                   }}
                 />
               ) : (
-                <div className="p-6 text-center text-slate-400 text-xs sm:text-sm">
+                <div style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontSize: '12px' }}>
                   📷 No photo attached to this shopping trip.
                 </div>
               )}
             </div>
 
-            {/* Metadata Footer */}
-            <div className="lightbox-footer shrink-0 px-4 py-3 bg-slate-900 border-t border-slate-800 text-white">
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider">Amount Paid</span>
-                  <span className="font-bold text-xs sm:text-sm text-emerald-400 font-mono">₱{formatNumber(lightboxTrip.totalAmountPaid)}</span>
+            {/* Details Footer: Solid Opaque Background, Always Visible (flex-shrink: 0) */}
+            <div
+              className="lightbox-footer-card lightbox-footer shrink-0 px-4 py-3 bg-slate-900 border-t border-slate-800 text-white"
+              style={{ flexShrink: 0, background: '#0f172a', borderTop: '1px solid #1e293b', padding: '10px 14px', boxSizing: 'border-box', color: '#ffffff' }}
+            >
+              <div
+                className="lightbox-metadata-grid grid grid-cols-3 gap-2 text-center"
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', textAlign: 'center' }}
+              >
+                <div
+                  className="lightbox-meta-box p-2 rounded-xl bg-slate-950 border border-slate-800"
+                  style={{ background: '#020617', border: '1px solid #1e293b', borderRadius: '10px', padding: '6px 4px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
+                >
+                  <span
+                    className="lightbox-meta-label text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider"
+                    style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', marginBottom: '2px' }}
+                  >
+                    Amount Paid
+                  </span>
+                  <span
+                    className="lightbox-meta-val font-bold text-xs sm:text-sm text-emerald-400 font-mono"
+                    style={{ fontSize: '13px', fontWeight: 700, color: '#34d399', fontFamily: 'monospace' }}
+                  >
+                    ₱{formatNumber(lightboxTrip.totalAmountPaid)}
+                  </span>
                 </div>
-                <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider">Scale Weight</span>
-                  <span className="font-bold text-xs sm:text-sm text-cyan-300 font-mono">{lightboxTrip.totalScaleWeightKg > 0 ? `${Number(lightboxTrip.totalScaleWeightKg).toFixed(2)} kg` : '—'}</span>
+                <div
+                  className="lightbox-meta-box p-2 rounded-xl bg-slate-950 border border-slate-800"
+                  style={{ background: '#020617', border: '1px solid #1e293b', borderRadius: '10px', padding: '6px 4px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
+                >
+                  <span
+                    className="lightbox-meta-label text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider"
+                    style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', marginBottom: '2px' }}
+                  >
+                    Scale Weight
+                  </span>
+                  <span
+                    className="lightbox-meta-val font-bold text-xs sm:text-sm text-cyan-300 font-mono"
+                    style={{ fontSize: '13px', fontWeight: 700, color: '#67e8f9', fontFamily: 'monospace' }}
+                  >
+                    {lightboxTrip.totalScaleWeightKg > 0 ? `${Number(lightboxTrip.totalScaleWeightKg).toFixed(2)} kg` : '—'}
+                  </span>
                 </div>
-                <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider">Items Count</span>
-                  <span className="font-bold text-xs sm:text-sm text-slate-200 font-mono">{lightboxTrip.itemsCount || (lightboxTrip.items?.length || 0)} items</span>
+                <div
+                  className="lightbox-meta-box p-2 rounded-xl bg-slate-950 border border-slate-800"
+                  style={{ background: '#020617', border: '1px solid #1e293b', borderRadius: '10px', padding: '6px 4px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
+                >
+                  <span
+                    className="lightbox-meta-label text-[10px] uppercase font-semibold text-slate-400 block mb-0.5 tracking-wider"
+                    style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', marginBottom: '2px' }}
+                  >
+                    Items Count
+                  </span>
+                  <span
+                    className="lightbox-meta-val font-bold text-xs sm:text-sm text-slate-200 font-mono"
+                    style={{ fontSize: '13px', fontWeight: 700, color: '#e2e8f0', fontFamily: 'monospace' }}
+                  >
+                    {lightboxTrip.itemsCount || (lightboxTrip.items?.length || 0)} items
+                  </span>
                 </div>
               </div>
               {lightboxTrip.notes ? (
-                <div className="mt-2.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800/80 text-xs text-slate-300 line-clamp-2">
-                  <strong className="text-slate-400 font-medium">Notes:</strong> {lightboxTrip.notes}
+                <div
+                  className="lightbox-notes-box mt-2.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800/80 text-xs text-slate-300 line-clamp-2"
+                  style={{ marginTop: '8px', background: '#020617', border: '1px solid rgba(51, 65, 85, 0.7)', borderRadius: '10px', padding: '6px 10px', fontSize: '11px', color: '#cbd5e1', lineHeight: '1.35', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                >
+                  <strong style={{ color: '#94a3b8', fontWeight: 600 }}>Notes:</strong> {lightboxTrip.notes}
                 </div>
               ) : null}
             </div>

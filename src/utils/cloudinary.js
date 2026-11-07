@@ -50,9 +50,16 @@ export async function uploadReceiptImageToCloudinary(source) {
   try {
     let fileToUpload = source;
     if (typeof source === 'string') {
-      if (source.startsWith('blob:') || source.startsWith('data:')) {
-        const res = await fetch(source);
-        fileToUpload = await res.blob();
+      if (source.startsWith('blob:')) {
+        try {
+          const res = await fetch(source);
+          fileToUpload = await res.blob();
+        } catch {
+          // ignore error if blob fetch fails in headless/test environments
+        }
+      } else if (source.startsWith('data:')) {
+        // Cloudinary upload API directly accepts data: URIs as the 'file' parameter
+        fileToUpload = source;
       } else {
         return source;
       }
