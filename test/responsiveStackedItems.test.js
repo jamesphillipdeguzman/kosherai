@@ -18,40 +18,36 @@ for (const unit of supportedUnits) {
 }
 console.log('  ✅ Unit dropdown with all 7 ergonomic options verified (kg, g, pcs, pack, bundle, can, bottle).');
 
-// B. Mobile View 2-Tier Stacked Card verification
+// B. Mobile View 2-Line Responsive Card verification
 assert.ok(
-  receiptModalCode.includes('hidden sm:grid sm:grid-cols-12'),
-  'Desktop column header must be hidden on mobile screens (hidden sm:grid)'
+  receiptModalCode.includes('w-9 h-9 shrink-0 flex items-center justify-center'),
+  'Must include dedicated remove button on Line 1'
 );
 assert.ok(
-  receiptModalCode.includes('space-y-2 sm:space-y-0'),
-  'Item card container must use responsive spacing (space-y-2 on mobile, space-y-0 on desktop)'
+  receiptModalCode.includes('grid grid-cols-4 gap-2 items-end'),
+  'Line 2 must use a 4-column balanced grid with items-end alignment'
 );
 assert.ok(
-  receiptModalCode.includes('sm:hidden'),
-  'Must include mobile-only delete button (sm:hidden)'
+  receiptModalCode.includes('>Qty<') || receiptModalCode.includes('Qty\n') || receiptModalCode.includes('Qty</label>'),
+  'Must include compact Qty label'
 );
 assert.ok(
-  receiptModalCode.includes('grid grid-cols-12 gap-2 sm:contents'),
-  'Tier 2 cluster must use grid-cols-12 on mobile and sm:contents on desktop'
+  receiptModalCode.includes('>Unit<') || receiptModalCode.includes('Unit\n') || receiptModalCode.includes('Unit</label>'),
+  'Must include compact Unit label'
 );
 assert.ok(
-  receiptModalCode.includes('col-span-5') && receiptModalCode.includes('sm:col-span-3'),
-  'Qty & Unit selector must span 5 cols on mobile and 3 cols on desktop'
+  receiptModalCode.includes('Price (₱)'),
+  'Must include compact Price (₱) label'
 );
 assert.ok(
-  receiptModalCode.includes('col-span-4') && receiptModalCode.includes('sm:col-span-2'),
-  'Price input must span 4 cols on mobile and 2 cols on desktop'
+  receiptModalCode.includes('>Total<') || receiptModalCode.includes('Total\n') || receiptModalCode.includes('Total</label>'),
+  'Must include compact Total label'
 );
 assert.ok(
-  receiptModalCode.includes('col-span-3') && receiptModalCode.includes('sm:col-span-2'),
-  'Line total badge must span 3 cols on mobile and 2 cols on desktop'
+  receiptModalCode.includes('text-emerald-500') || receiptModalCode.includes('text-emerald-400'),
+  'Line total must display formatted emerald total'
 );
-assert.ok(
-  receiptModalCode.includes('hidden sm:flex sm:col-span-1'),
-  'Desktop delete button must be hidden on mobile and span 1 col on desktop'
-);
-console.log('  ✅ Mobile 2-tier stacked card layout and desktop 12-col grid integration verified.');
+console.log('  ✅ Responsive 2-line card layout (Line 1: Item Name & Remove; Line 2: 4-col Qty, Unit, Price, Total) verified.');
 
 // 2. Verify CourseProjectView.js createReceiptItemRowHtml unit dropdown
 console.log('\nTest 2: CourseProjectView.js createReceiptItemRowHtml Unit Dropdown');
