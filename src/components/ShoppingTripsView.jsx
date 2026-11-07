@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getGroceryItems, updateShoppingTrip } from '../services/courseProjectStorage.js';
+import EditShoppingTripModal from './EditShoppingTripModal.jsx';
 import {
   escapeHtml,
   formatNumber,
@@ -15,7 +16,8 @@ export {
   TRIP_TYPES,
   renderEditTripModal,
   renderTripCard,
-  renderShoppingTripsView
+  renderShoppingTripsView,
+  EditShoppingTripModal
 };
 
 /**
@@ -38,6 +40,7 @@ export default function ShoppingTripsView({
   const [activeWeekFilter, setActiveWeekFilter] = useState(selectedWeek || 'all');
   const [selectedGrocery, setSelectedGrocery] = useState(null);
   const [editingId, setEditingId] = useState(editingTripId || null);
+  const [modalTrip, setModalTrip] = useState(null);
   const [lightboxTrip, setLightboxTrip] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [itemName, setItemName] = useState('');
@@ -664,6 +667,18 @@ export default function ShoppingTripsView({
             </div>
           </div>
         </div>
+      )}
+      {/* Edit Shopping Trip Modal */}
+      {modalTrip && (
+        <EditShoppingTripModal
+          isOpen={!!modalTrip}
+          trip={modalTrip}
+          onClose={() => setModalTrip(null)}
+          onSave={(id, updated) => {
+            if (onSave) onSave(id, updated);
+            setModalTrip(null);
+          }}
+        />
       )}
     </div>
   );

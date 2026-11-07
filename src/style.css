@@ -2156,6 +2156,97 @@ html.light .modal-content {
   box-shadow: 0 20px 45px rgba(0, 0, 0, 0.12);
 }
 
+/* ==================== EDIT SHOPPING TRIP MODAL ==================== */
+.edit-trip-modal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1200 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(2, 6, 23, 0.85) !important;
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+  padding: 12px !important;
+  box-sizing: border-box !important;
+}
+
+#edit-trip-modal,
+.edit-trip-modal-dialog {
+  width: min(92vw, 520px) !important;
+  max-width: 520px !important;
+  max-height: 90vh !important;
+  max-height: 90dvh !important;
+  height: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7) !important;
+  box-sizing: border-box !important;
+  margin: auto !important;
+}
+
+.edit-trip-header {
+  flex-shrink: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 14px 18px !important;
+  border-bottom: 1px solid var(--border-color, #1e293b) !important;
+  box-sizing: border-box !important;
+}
+
+.edit-trip-form-body {
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  padding: 16px 18px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  box-sizing: border-box !important;
+}
+
+.edit-trip-footer {
+  flex-shrink: 0 !important;
+  background: var(--bg-card, #0f172a) !important;
+  border-top: 1px solid var(--border-color, #1e293b) !important;
+  padding: 12px 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  box-sizing: border-box !important;
+}
+
+/* Fixed 80px x 80px Photo Thumbnail */
+.edit-trip-thumb-box {
+  width: 80px !important;
+  height: 80px !important;
+  min-width: 80px !important;
+  min-height: 80px !important;
+  max-width: 80px !important;
+  max-height: 80px !important;
+  flex-shrink: 0 !important;
+  border-radius: 10px !important;
+  overflow: hidden !important;
+  background: #020617 !important;
+  border: 1px solid #334155 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+}
+
+.edit-trip-thumb-img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  display: block !important;
+}
+
 /* ==================== GROCERY / TRIP PHOTO LIGHTBOX MODAL ==================== */
 .receipt-lightbox-overlay {
   position: fixed !important;

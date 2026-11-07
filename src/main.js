@@ -2425,9 +2425,7 @@ Cracked black pepper`;
         const previewContainer = document.querySelector('#edit-trip-photo-preview-container');
         if (previewContainer) {
           previewContainer.innerHTML = `
-            <div class="relative w-full rounded-lg overflow-hidden border border-teal-500 bg-black/40 flex items-center justify-center max-h-[180px] p-1">
-              <img id="edit-trip-photo-preview-img" src="${objUrl}" alt="Replacement photo preview" class="max-h-[170px] w-auto max-w-full object-contain rounded" />
-            </div>
+            <img id="edit-trip-photo-preview-img" src="${objUrl}" alt="Replacement photo preview" class="edit-trip-thumb-img" style="width: 100%; height: 100%; object-fit: contain; display: block;" />
           `;
         }
         const badge = document.querySelector('#edit-photo-status-badge');
@@ -2462,8 +2460,9 @@ Cracked black pepper`;
       const previewContainer = document.querySelector('#edit-trip-photo-preview-container');
       if (previewContainer) {
         previewContainer.innerHTML = `
-          <div id="edit-trip-photo-placeholder" class="w-full border-2 border-dashed border-rose-300 dark:border-rose-900/60 rounded-lg p-4 text-center text-xs text-rose-500">
-            Photo marked for removal (will be removed upon saving).
+          <div id="edit-trip-photo-placeholder" style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #f43f5e; font-size: 10px; text-align: center; padding: 4px; box-sizing: border-box;">
+            <span style="font-size: 1.25rem; line-height: 1; margin-bottom: 2px;">🗑️</span>
+            <span>Removed</span>
           </div>
         `;
       }

@@ -51,198 +51,211 @@ export function renderEditTripModal(state = {}) {
   const currentUnit = primaryItem?.unit || 'kg';
 
   return `
-    <div class="modal-overlay" id="edit-trip-overlay">
-      <div class="modal-content" id="edit-trip-modal" role="dialog" aria-modal="true" style="max-width: 620px;">
-        <div class="modal-header">
+    <div class="modal-overlay edit-trip-modal-overlay" id="edit-trip-overlay" style="position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center; background: rgba(2, 6, 23, 0.85); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); padding: 12px; box-sizing: border-box;">
+      <div class="modal-content edit-trip-modal-dialog" id="edit-trip-modal" role="dialog" aria-modal="true" style="width: min(92vw, 520px); max-width: 520px; max-height: 90vh; max-height: 90dvh; height: auto; display: flex; flex-direction: column; overflow: hidden; padding: 0; background: var(--bg-card, #0f172a); border: 1px solid var(--border-color, #334155); border-radius: 16px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7); box-sizing: border-box; margin: auto;">
+        
+        <!-- 1. Header: Fixed Height (shrink-0) -->
+        <div class="modal-header edit-trip-header" style="flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border-color, #1e293b); box-sizing: border-box;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 1.25rem;">✏️</span>
             <div>
-              <h2 class="modal-title">Edit Shopping Trip</h2>
-              <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0;">Update store, date, expenditure, or physical scale weight</p>
+              <h2 class="modal-title" style="margin: 0; font-size: 1rem; font-weight: 700;">Edit Shopping Trip</h2>
+              <p style="font-size: 0.75rem; color: var(--text-muted, #94a3b8); margin: 0;">Update store, date, expenditure, or physical scale weight</p>
             </div>
           </div>
-          <button class="btn-icon" id="close-edit-trip-btn" type="button" aria-label="Close modal">✕</button>
+          <button class="btn-icon" id="close-edit-trip-btn" type="button" aria-label="Close modal" style="color: #94a3b8; background: transparent; border: none; font-size: 1.1rem; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;">✕</button>
         </div>
 
-        <form id="edit-trip-form" data-trip-id="${trip.id}">
-          <div class="form-group">
-            <label class="form-label" for="edit-store-name">Store Name</label>
-            <input type="text" id="edit-store-name" name="storeName" class="form-input" value="${escapeHtml(trip.storeName)}" required />
-          </div>
-
-          <div class="form-row-grid">
-            <div class="form-group">
-              <label class="form-label" for="edit-trip-date">Date</label>
-              <input type="date" id="edit-trip-date" name="date" class="form-input" value="${trip.date}" required />
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="edit-trip-type">Trip Type</label>
-              <select id="edit-trip-type" name="tripType" class="form-input">
-                ${TRIP_TYPES.map(t => `<option value="${t}" ${(trip.tripType === t || trip.trip_type === t) ? 'selected' : ''}>${t}</option>`).join('')}
-              </select>
-            </div>
-          </div>
-
-          <!-- Whole-Grocery Scale Weight -->
-          <div class="scale-weight-field mb-3">
-            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1" for="edit-scale-weight">
-              ⚖️ Whole-Grocery Scale Weight (kg)
-            </label>
-            <div class="scale-weight-wrapper relative flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white focus-within:border-emerald-500">
-              <input type="number" step="0.01" min="0" id="edit-scale-weight" name="totalScaleWeightKg" class="scale-weight-input w-full bg-transparent text-slate-900 dark:text-white font-semibold outline-none border-none focus:ring-0 placeholder-slate-400 dark:placeholder-slate-500" value="${trip.totalScaleWeightKg || 0}" required />
-              <span class="scale-weight-unit ml-2 select-none text-xs font-bold uppercase text-slate-500 dark:text-slate-400">kg</span>
-            </div>
-            <p class="scale-weight-help mt-1 text-[11px] leading-tight text-slate-500 dark:text-slate-400">
-              Measured physical weight of food haul on your home scale before unpacking. Kept separate from receipt item weights for academic rigor.
-            </p>
-          </div>
-
-          <!-- Total Amount Paid -->
-          <div class="form-group">
-            <label class="form-label" for="edit-total-amount">Total Amount Paid (₱ PHP)</label>
-            <input type="number" step="0.01" min="0" id="edit-total-amount" name="totalAmountPaid" class="form-input" value="${trip.totalAmountPaid}" required />
-          </div>
-
-          <!-- Item Name / Extracted Item -->
-          <div class="form-group mb-3">
-            <label class="form-label" for="edit-item-name">Item Name / Extracted Item</label>
-            ${items.length > 1 ? `
-              <div class="edit-items-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; padding-right: 4px; margin-top: 4px;">
-                ${items.map((item, idx) => {
-    const rowName = item?.name || item?.raw_receipt_text || item?.rawReceiptText || item?.itemName || '';
-    const rowQty = (item?.quantity !== undefined && item?.quantity !== null && item?.quantity !== '') ? item.quantity : (item?.qty ?? 1);
-    const rowUnit = item?.unit || 'kg';
-    return `
-                    <div class="edit-item-row flex items-center gap-2 w-full" data-item-id="${item.id}" style="display: flex; align-items: center; gap: 8px; width: 100%;">
-                      <!-- 1. Item Name Input (Takes up most of the space) -->
-                      <input
-                        type="text"
-                        ${idx === 0 ? 'id="edit-item-name"' : ''}
-                        name="itemName"
-                        class="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-name"
-                        style="flex: 1 1 auto; min-width: 0; width: 100%;"
-                        placeholder="e.g. Bangus, Garlic, Cucumber"
-                        value="${escapeHtml(rowName)}"
-                        required
-                      />
-
-                      <!-- 2. Quantity Input (Fixed compact width) -->
-                      <input
-                        type="number"
-                        step="any"
-                        ${idx === 0 ? 'id="edit-item-qty"' : ''}
-                        name="itemQty"
-                        class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-qty"
-                        style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
-                        placeholder="Qty"
-                        value="${rowQty}"
-                      />
-
-                      <!-- 3. Unit Input / Selector (Fixed compact width) -->
-                      <input
-                        type="text"
-                        ${idx === 0 ? 'id="edit-item-unit"' : ''}
-                        name="itemUnit"
-                        class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-unit"
-                        style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
-                        placeholder="Unit (pc, kg)"
-                        value="${escapeHtml(rowUnit)}"
-                      />
+        <!-- Form wrapping scrollable body and pinned footer -->
+        <form id="edit-trip-form" data-trip-id="${trip.id}" style="display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; margin: 0;">
+          
+          <!-- 2. Form Body: Scrollable flex-1 min-h-0 overflow-y-auto -->
+          <div class="edit-trip-form-body" style="flex: 1 1 0%; min-height: 0; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box;">
+            
+            <!-- Receipt / Produce Photo Management: Fixed 80x80 thumbnail + action buttons beside it -->
+            <div class="form-group edit-trip-photo-section p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70">
+              <div class="flex items-center gap-3.5" style="display: flex; align-items: center; gap: 14px;">
+                <!-- 80px x 80px fixed thumbnail -->
+                <div id="edit-trip-photo-preview-container" class="edit-trip-thumb-box" style="width: 80px; height: 80px; min-width: 80px; min-height: 80px; max-width: 80px; max-height: 80px; flex-shrink: 0; border-radius: 10px; overflow: hidden; background: #020617; border: 1px solid #334155; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">
+                  ${trip.receiptImageUrl ? `
+                    <img id="edit-trip-photo-preview-img" src="${trip.receiptImageUrl}" alt="Current receipt photo" class="edit-trip-thumb-img" style="width: 100%; height: 100%; object-fit: contain; display: block;" />
+                  ` : `
+                    <div id="edit-trip-photo-placeholder" style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; font-size: 10px; text-align: center; padding: 4px; box-sizing: border-box;">
+                      <span style="font-size: 1.25rem; line-height: 1; margin-bottom: 2px;">📷</span>
+                      <span>No photo</span>
                     </div>
-                  `;
-  }).join('')}
+                  `}
+                </div>
+
+                <!-- Actions & Status Beside Thumbnail -->
+                <div class="flex-1 min-w-0 flex flex-col gap-1.5" style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <label class="form-label font-bold text-xs uppercase tracking-wider m-0 flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                      <span>📷</span> Receipt / Produce Photo
+                    </label>
+                    <span id="edit-photo-status-badge" class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                      ${trip.receiptImageUrl ? 'Photo Attached' : 'No Photo'}
+                    </span>
+                  </div>
+
+                  <!-- Hidden File Input for Mobile Camera & Desktop File Selection -->
+                  <input type="file" id="edit-trip-file-input" accept="image/*" capture="environment" style="display: none;" />
+                  <input type="hidden" id="edit-trip-receipt-url" name="receiptImageUrl" value="${trip.receiptImageUrl || ''}" />
+
+                  <div class="flex flex-wrap items-center gap-2 mt-1">
+                    <button type="button" class="btn-secondary text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer" id="trigger-change-photo-btn">
+                      <span>📷</span> <span id="change-photo-btn-text">${trip.receiptImageUrl ? 'Rescan / Change Photo' : 'Add Photo / Scan'}</span>
+                    </button>
+                    <button type="button" class="btn-secondary text-xs px-2.5 py-1.5 rounded-lg text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 border-rose-300 dark:border-rose-900/40 cursor-pointer ${trip.receiptImageUrl ? '' : 'hidden'}" id="remove-trip-photo-btn" style="${trip.receiptImageUrl ? '' : 'display: none;'}">
+                      <span>🗑️</span> Remove Photo
+                    </button>
+                    <button type="button" class="border border-teal-500/30 bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer ${trip.receiptImageUrl ? '' : 'hidden'}" id="rerun-ocr-edit-btn" style="${trip.receiptImageUrl ? '' : 'display: none;'}" title="Extract items from photo using OCR">
+                      <span>⚡</span> Rerun OCR
+                    </button>
+                  </div>
+                </div>
               </div>
-            ` : `
-              <div class="flex items-center gap-2 w-full" style="display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px;">
-                <!-- 1. Item Name Input (Takes up most of the space) -->
-                <input
-                  type="text"
-                  id="edit-item-name"
-                  name="itemName"
-                  class="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-name"
-                  style="flex: 1 1 auto; min-width: 0; width: 100%;"
-                  placeholder="e.g. Bangus, Garlic, Cucumber"
-                  value="${escapeHtml(currentItemName)}"
-                />
-
-                <!-- 2. Quantity Input (Fixed compact width) -->
-                <input
-                  type="number"
-                  step="any"
-                  id="edit-item-qty"
-                  name="itemQty"
-                  class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-qty"
-                  style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
-                  placeholder="Qty"
-                  value="${currentQuantity}"
-                />
-
-                <!-- 3. Unit Input / Selector (Fixed compact width) -->
-                <input
-                  type="text"
-                  id="edit-item-unit"
-                  name="itemUnit"
-                  class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-unit"
-                  style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
-                  placeholder="Unit (pc, kg)"
-                  value="${escapeHtml(currentUnit)}"
-                />
-              </div>
-            `}
-            <p class="mt-1 text-[11px] leading-tight text-slate-500 dark:text-slate-400">
-              Modifies itemized grocery purchase records linked to this trip.
-            </p>
-          </div>
-
-          <!-- Notes -->
-          <div class="form-group">
-            <label class="form-label" for="edit-notes">Notes / Food Highlights</label>
-            <input type="text" id="edit-notes" name="notes" class="form-input" value="${escapeHtml(trip.notes || '')}" />
-          </div>
-
-          <!-- Receipt / Produce Photo Management -->
-          <div class="form-group edit-trip-photo-section mb-4 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/70">
-            <div class="flex items-center justify-between mb-2">
-              <label class="form-label font-bold text-xs uppercase tracking-wider m-0 flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                <span>📷</span> Receipt / Produce Photo
-              </label>
-              <span id="edit-photo-status-badge" class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                ${trip.receiptImageUrl ? 'Photo Attached' : 'No Photo'}
-              </span>
             </div>
 
-            <!-- Hidden File Input for Mobile Camera & Desktop File Selection -->
-            <input type="file" id="edit-trip-file-input" accept="image/*" capture="environment" style="display: none;" />
-            <input type="hidden" id="edit-trip-receipt-url" name="receiptImageUrl" value="${trip.receiptImageUrl || ''}" />
+            <div class="form-group">
+              <label class="form-label" for="edit-store-name">Store Name</label>
+              <input type="text" id="edit-store-name" name="storeName" class="form-input" value="${escapeHtml(trip.storeName)}" required />
+            </div>
 
-            <!-- Photo Thumbnail / Preview Box -->
-            <div id="edit-trip-photo-preview-container" class="w-full">
-              ${trip.receiptImageUrl ? `
-                <div class="relative w-full rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 bg-black/40 flex items-center justify-center max-h-[180px] p-1">
-                  <img id="edit-trip-photo-preview-img" src="${trip.receiptImageUrl}" alt="Current receipt photo" class="max-h-[170px] w-auto max-w-full object-contain rounded" />
+            <div class="form-row-grid">
+              <div class="form-group">
+                <label class="form-label" for="edit-trip-date">Date</label>
+                <input type="date" id="edit-trip-date" name="date" class="form-input" value="${trip.date}" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="edit-trip-type">Trip Type</label>
+                <select id="edit-trip-type" name="tripType" class="form-input">
+                  ${TRIP_TYPES.map(t => `<option value="${t}" ${(trip.tripType === t || trip.trip_type === t) ? 'selected' : ''}>${t}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+
+            <!-- Whole-Grocery Scale Weight -->
+            <div class="scale-weight-field mb-1">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1" for="edit-scale-weight">
+                ⚖️ Whole-Grocery Scale Weight (kg)
+              </label>
+              <div class="scale-weight-wrapper relative flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white focus-within:border-emerald-500">
+                <input type="number" step="0.01" min="0" id="edit-scale-weight" name="totalScaleWeightKg" class="scale-weight-input w-full bg-transparent text-slate-900 dark:text-white font-semibold outline-none border-none focus:ring-0 placeholder-slate-400 dark:placeholder-slate-500" value="${trip.totalScaleWeightKg || 0}" required />
+                <span class="scale-weight-unit ml-2 select-none text-xs font-bold uppercase text-slate-500 dark:text-slate-400">kg</span>
+              </div>
+              <p class="scale-weight-help mt-1 text-[11px] leading-tight text-slate-500 dark:text-slate-400">
+                Measured physical weight of food haul on your home scale before unpacking. Kept separate from receipt item weights for academic rigor.
+              </p>
+            </div>
+
+            <!-- Total Amount Paid -->
+            <div class="form-group">
+              <label class="form-label" for="edit-total-amount">Total Amount Paid (₱ PHP)</label>
+              <input type="number" step="0.01" min="0" id="edit-total-amount" name="totalAmountPaid" class="form-input" value="${trip.totalAmountPaid}" required />
+            </div>
+
+            <!-- Item Name / Extracted Item -->
+            <div class="form-group mb-1">
+              <label class="form-label" for="edit-item-name">Item Name / Extracted Item</label>
+              ${items.length > 1 ? `
+                <div class="edit-items-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; padding-right: 4px; margin-top: 4px;">
+                  ${items.map((item, idx) => {
+      const rowName = item?.name || item?.raw_receipt_text || item?.rawReceiptText || item?.itemName || '';
+      const rowQty = (item?.quantity !== undefined && item?.quantity !== null && item?.quantity !== '') ? item.quantity : (item?.qty ?? 1);
+      const rowUnit = item?.unit || 'kg';
+      return `
+                      <div class="edit-item-row flex items-center gap-2 w-full" data-item-id="${item.id}" style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                        <!-- 1. Item Name Input (Takes up most of the space) -->
+                        <input
+                          type="text"
+                          ${idx === 0 ? 'id="edit-item-name"' : ''}
+                          name="itemName"
+                          class="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-name"
+                          style="flex: 1 1 auto; min-width: 0; width: 100%;"
+                          placeholder="e.g. Bangus, Garlic, Cucumber"
+                          value="${escapeHtml(rowName)}"
+                          required
+                        />
+
+                        <!-- 2. Quantity Input (Fixed compact width) -->
+                        <input
+                          type="number"
+                          step="any"
+                          ${idx === 0 ? 'id="edit-item-qty"' : ''}
+                          name="itemQty"
+                          class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-qty"
+                          style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
+                          placeholder="Qty"
+                          value="${rowQty}"
+                        />
+
+                        <!-- 3. Unit Input / Selector (Fixed compact width) -->
+                        <input
+                          type="text"
+                          ${idx === 0 ? 'id="edit-item-unit"' : ''}
+                          name="itemUnit"
+                          class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-unit"
+                          style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
+                          placeholder="Unit (pc, kg)"
+                          value="${escapeHtml(rowUnit)}"
+                        />
+                      </div>
+                    `;
+    }).join('')}
                 </div>
               ` : `
-                <div id="edit-trip-photo-placeholder" class="w-full border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-4 text-center text-xs text-slate-500 dark:text-slate-400">
-                  No receipt photo attached yet.
+                <div class="flex items-center gap-2 w-full" style="display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px;">
+                  <!-- 1. Item Name Input (Takes up most of the space) -->
+                  <input
+                    type="text"
+                    id="edit-item-name"
+                    name="itemName"
+                    class="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-name"
+                    style="flex: 1 1 auto; min-width: 0; width: 100%;"
+                    placeholder="e.g. Bangus, Garlic, Cucumber"
+                    value="${escapeHtml(currentItemName)}"
+                  />
+
+                  <!-- 2. Quantity Input (Fixed compact width) -->
+                  <input
+                    type="number"
+                    step="any"
+                    id="edit-item-qty"
+                    name="itemQty"
+                    class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-qty"
+                    style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
+                    placeholder="Qty"
+                    value="${currentQuantity}"
+                  />
+
+                  <!-- 3. Unit Input / Selector (Fixed compact width) -->
+                  <input
+                    type="text"
+                    id="edit-item-unit"
+                    name="itemUnit"
+                    class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-unit"
+                    style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
+                    placeholder="Unit (pc, kg)"
+                    value="${escapeHtml(currentUnit)}"
+                  />
                 </div>
               `}
+              <p class="mt-1 text-[11px] leading-tight text-slate-500 dark:text-slate-400">
+                Modifies itemized grocery purchase records linked to this trip.
+              </p>
             </div>
 
-            <!-- Photo Action Buttons -->
-            <div class="flex flex-wrap items-center gap-2 mt-3">
-              <button type="button" class="btn-secondary text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer" id="trigger-change-photo-btn">
-                <span>📷</span> <span id="change-photo-btn-text">${trip.receiptImageUrl ? 'Rescan / Change Photo' : 'Add Photo / Scan'}</span>
-              </button>
-              <button type="button" class="btn-secondary text-xs px-3 py-1.5 rounded-lg text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 border-rose-300 dark:border-rose-900/40 cursor-pointer ${trip.receiptImageUrl ? '' : 'hidden'}" id="remove-trip-photo-btn" style="${trip.receiptImageUrl ? '' : 'display: none;'}">
-                <span>🗑️</span> Remove Photo
-              </button>
-              <button type="button" class="border border-teal-500/30 bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer ${trip.receiptImageUrl ? '' : 'hidden'}" id="rerun-ocr-edit-btn" style="${trip.receiptImageUrl ? '' : 'display: none;'}" title="Extract items from photo using OCR">
-                <span>⚡</span> Rerun OCR
-              </button>
+            <!-- Notes -->
+            <div class="form-group">
+              <label class="form-label" for="edit-notes">Notes / Food Highlights</label>
+              <input type="text" id="edit-notes" name="notes" class="form-input" value="${escapeHtml(trip.notes || '')}" />
             </div>
+
           </div>
 
-          <div class="modal-footer-actions">
+          <!-- 3. Footer: Pinned Natural Height (shrink-0) -->
+          <div class="modal-footer-actions edit-trip-footer" style="flex-shrink: 0; background: var(--bg-card, #0f172a); border-top: 1px solid var(--border-color, #1e293b); padding: 12px 18px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; box-sizing: border-box;">
             <button type="button" class="btn-secondary" id="cancel-edit-trip-btn">Cancel</button>
             <button type="submit" class="btn-primary" id="save-edit-trip-btn">Save Changes</button>
           </div>
