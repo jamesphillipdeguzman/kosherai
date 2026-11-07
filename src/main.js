@@ -1736,94 +1736,87 @@ Cracked black pepper`;
   if (closeReceiptModalBtn) closeReceiptModalBtn.addEventListener('click', handleCloseReceiptModal);
   if (cancelReceiptModalBtn) cancelReceiptModalBtn.addEventListener('click', handleCloseReceiptModal);
 
-  // Trigger File Input / Camera
+  // Trigger File Input / Camera & Gallery
   const triggerReceiptFileBtn = document.querySelector('#trigger-receipt-file-btn');
+  const triggerReceiptCameraBtn = document.querySelector('#trigger-receipt-camera-btn');
+  const triggerReceiptGalleryBtn = document.querySelector('#trigger-receipt-gallery-btn');
   const reuploadReceiptBtn = document.querySelector('#reupload-receipt-btn');
+  const receiptCameraInput = document.querySelector('#receipt-camera-input');
+  const receiptGalleryInput = document.querySelector('#receipt-gallery-input');
   const receiptFileInput = document.querySelector('#receipt-file-input');
 
   const handleRetakeReceiptPhoto = () => {
     state.receiptScanning = false;
     state.receiptScanningEngine = null;
     state.ocrStatusBadge = null;
-    if (receiptFileInput) {
-      receiptFileInput.value = ''; // Reset cached file value so change event always fires
-      receiptFileInput.click();    // Programmatically trigger camera/file picker
-    }
+    state.receiptPreviewUrl = null;
+    if (receiptCameraInput) receiptCameraInput.value = '';
+    if (receiptGalleryInput) receiptGalleryInput.value = '';
+    if (receiptFileInput) receiptFileInput.value = '';
+    render();
   };
 
+  if (triggerReceiptCameraBtn && receiptCameraInput) {
+    triggerReceiptCameraBtn.addEventListener('click', () => {
+      receiptCameraInput.value = '';
+      receiptCameraInput.click();
+    });
+  }
+  if (triggerReceiptGalleryBtn && receiptGalleryInput) {
+    triggerReceiptGalleryBtn.addEventListener('click', () => {
+      receiptGalleryInput.value = '';
+      receiptGalleryInput.click();
+    });
+  }
   if (triggerReceiptFileBtn) {
-    triggerReceiptFileBtn.addEventListener('click', handleRetakeReceiptPhoto);
+    triggerReceiptFileBtn.addEventListener('click', () => {
+      if (receiptCameraInput) {
+        receiptCameraInput.value = '';
+        receiptCameraInput.click();
+      } else if (receiptFileInput) {
+        receiptFileInput.value = '';
+        receiptFileInput.click();
+      }
+    });
   }
   if (reuploadReceiptBtn) {
     reuploadReceiptBtn.addEventListener('click', handleRetakeReceiptPhoto);
   }
 
   // Handle Receipt File Selection & Photo Capture (Offline Quick Capture & Optional OCR)
-  if (receiptFileInput) {
-    receiptFileInput.addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      // Reset input value immediately after reading so consecutive retakes always re-trigger
-      e.target.value = '';
-      if (!file) return;
+  const handleReceiptFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    // Reset input value immediately after reading so consecutive retakes always re-trigger
+    e.target.value = '';
+    if (receiptCameraInput) receiptCameraInput.value = '';
+    if (receiptGalleryInput) receiptGalleryInput.value = '';
+    if (receiptFileInput) receiptFileInput.value = '';
+    if (!file) return;
 
-      try {
-        const dataUrl = await compressImageForOCR(file, 1600, 0.8);
-        state.receiptPreviewUrl = dataUrl;
+    if (file.type && !file.type.startsWith('image/')) {
+      alert('Please select an image file (e.g. JPG, PNG, WebP, HEIC).');
+      return;
+    }
 
-        const ocrEnabled = isOcrScanEnabled();
-        const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+    try {
+      const dataUrl = await compressImageForOCR(file, 1600, 0.8);
+      state.receiptPreviewUrl = dataUrl;
 
-        // If OCR is disabled or device is offline, skip OCR completely and enable instant photo capture
-        if (!ocrEnabled || !isOnline) {
-          state.receiptScanning = false;
-          if (ocrEnabled && !isOnline) {
-            state.ocrStatusBadge = 'Offline: Photo captured. Auto-OCR skipped.';
-            setTimeout(() => {
-              state.ocrStatusBadge = null;
-              render();
-            }, 5000);
-          }
-          state.scannedReceiptData = {
-            storeName: state.groceryVenueMode === 'wet_market' ? 'Wet Market / Palengke' : 'SM Supermarket',
-            purchaseDate: new Date().toISOString().split('T')[0],
-            tripType: state.groceryVenueMode === 'wet_market' ? 'wet_market' : 'Supermarket',
-            items: [],
-            totalAmountPaid: 0,
-            totalScaleWeightKg: 0
-          };
-          render();
-          return;
+      const ocrEnabled = isOcrScanEnabled();
+      const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+
+      // If OCR is disabled or device is offline, skip OCR completely and enable instant photo capture
+      if (!ocrEnabled || !isOnline) {
+        state.receiptScanning = false;
+        if (ocrEnabled && !isOnline) {
+          state.ocrStatusBadge = 'Offline: Photo captured. Auto-OCR skipped.';
+          setTimeout(() => {
+            state.ocrStatusBadge = null;
+            render();
+          }, 5000);
         }
-
-        // OCR is enabled and device is online: Proceed with AI receipt scan
-        state.receiptScanning = true;
-        state.receiptProgress = 0.15;
-        state.receiptStatusMsg = 'Uploading receipt image...';
-        render();
-
-        const result = await scanSupermarketReceipt(dataUrl, (p) => {
-          state.receiptProgress = p.progress;
-          state.receiptStatusMsg = p.message;
-          const statusTextEl = document.querySelector('#scan-status-text');
-          if (statusTextEl) statusTextEl.textContent = p.message;
-          const fill = document.querySelector('.progress-bar-fill');
-          if (fill) fill.style.width = Math.round(p.progress * 100) + '%';
-        }, state.settings?.geminiApiKey, state.activeDiet || 'lid');
-
-        state.receiptStatusMsg = 'Populating receipt items...';
-        state.receiptProgress = 0.95;
-        const statusTextEl = document.querySelector('#scan-status-text');
-        if (statusTextEl) statusTextEl.textContent = state.receiptStatusMsg;
-
-        state.scannedReceiptData = result;
-        state.receiptScanning = false;
-        render();
-      } catch (err) {
-        console.error('Receipt scan error:', err);
-        alert('Could not complete receipt scan. You can enter details manually.');
-        state.receiptScanning = false;
         state.scannedReceiptData = {
-          storeName: state.groceryVenueMode === 'wet_market' ? 'Wet Market / Palengke' : 'Supermarket',
+          storeName: state.groceryVenueMode === 'wet_market' ? 'Wet Market / Palengke' : 'SM Supermarket',
           purchaseDate: new Date().toISOString().split('T')[0],
           tripType: state.groceryVenueMode === 'wet_market' ? 'wet_market' : 'Supermarket',
           items: [],
@@ -1831,8 +1824,56 @@ Cracked black pepper`;
           totalScaleWeightKg: 0
         };
         render();
+        return;
       }
-    });
+
+      // OCR is enabled and device is online: Proceed with AI receipt scan
+      state.receiptScanning = true;
+      state.receiptProgress = 0.15;
+      state.receiptStatusMsg = 'Uploading receipt image...';
+      render();
+
+      const result = await scanSupermarketReceipt(dataUrl, (p) => {
+        state.receiptProgress = p.progress;
+        state.receiptStatusMsg = p.message;
+        const statusTextEl = document.querySelector('#scan-status-text');
+        if (statusTextEl) statusTextEl.textContent = p.message;
+        const fill = document.querySelector('.progress-bar-fill');
+        if (fill) fill.style.width = Math.round(p.progress * 100) + '%';
+      }, state.settings?.geminiApiKey, state.activeDiet || 'lid');
+
+      state.receiptStatusMsg = 'Populating receipt items...';
+      state.receiptProgress = 0.95;
+      const statusTextEl = document.querySelector('#scan-status-text');
+      if (statusTextEl) statusTextEl.textContent = state.receiptStatusMsg;
+
+      state.scannedReceiptData = result;
+      state.receiptScanning = false;
+      render();
+    } catch (err) {
+      console.error('Receipt scan error:', err);
+      alert('Could not complete receipt scan. You can enter details manually.');
+      state.receiptScanning = false;
+      state.scannedReceiptData = {
+        storeName: state.groceryVenueMode === 'wet_market' ? 'Wet Market / Palengke' : 'Supermarket',
+        purchaseDate: new Date().toISOString().split('T')[0],
+        tripType: state.groceryVenueMode === 'wet_market' ? 'wet_market' : 'Supermarket',
+        items: [],
+        totalAmountPaid: 0,
+        totalScaleWeightKg: 0
+      };
+      render();
+    }
+  };
+
+  if (receiptCameraInput) {
+    receiptCameraInput.addEventListener('change', handleReceiptFileChange);
+  }
+  if (receiptGalleryInput) {
+    receiptGalleryInput.addEventListener('change', handleReceiptFileChange);
+  }
+  if (receiptFileInput) {
+    receiptFileInput.addEventListener('change', handleReceiptFileChange);
   }
 
   // AI / Neural OCR Scanning In-Modal Toggle Listener

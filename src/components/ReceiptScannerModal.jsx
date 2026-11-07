@@ -46,8 +46,10 @@ export default function ReceiptScannerModal({
     return 'dark';
   });
 
-  // Persistent refs for file input and media streams
-  const fileInputRef = useRef(null);
+  // Persistent refs for camera, gallery file inputs, and media streams
+  const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
+  const fileInputRef = cameraInputRef; // Backward compatibility alias
   const mediaStreamRef = useRef(null);
 
   // Sync theme class to document element and persist in localStorage
@@ -207,7 +209,7 @@ export default function ReceiptScannerModal({
     if (initialImage) setPreviewUrl(initialImage);
   }, [initialImage]);
 
-  // Retake photo: cleans up any streams, resets preview, and triggers camera/file input
+  // Retake photo: cleans up any streams, resets preview, and clears input values
   const handleRetake = () => {
     // 3. Camera Stream Cleanup (if active)
     if (mediaStreamRef.current) {
@@ -222,20 +224,31 @@ export default function ReceiptScannerModal({
     if (typeof onRetake === 'function') {
       onRetake();
     }
-    // 1. Clear input value & programmatically click ref
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''; // Reset cached file value
-      fileInputRef.current.click();   // Programmatically trigger camera/file picker
+    // Clear input values so selecting the same photo triggers onChange
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
+    if (fileInputRef.current && fileInputRef.current !== cameraInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
-  // Handle Photo / File Selection
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (e.target) {
+  // Handle Photo / File Selection (shared across Camera and Gallery inputs)
+  const handleFileSelect = async (e) => {
+    const file = e?.target?.files?.[0];
+    // Reset input value immediately after reading so selecting the same photo again triggers onChange
+    if (e?.target) {
       e.target.value = '';
     }
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
     if (!file) return;
+
+    // Validate that the selected file is an accepted image type
+    if (file.type && !file.type.startsWith('image/')) {
+      console.warn('[ReceiptScannerModal] Non-image file selected:', file.type);
+      alert('Please select an image file (e.g. JPG, PNG, WebP, HEIC).');
+      return;
+    }
 
     try {
       let compressedFile = file;
@@ -259,7 +272,11 @@ export default function ReceiptScannerModal({
       // Offline Quick Capture: Only trigger OCR automatically if enabled AND online
       const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
       if (enableOcrScan && isOnline) {
-        handleRescanGemini();
+        try {
+          await handleRescanGemini();
+        } catch (ocrErr) {
+          console.warn('[ReceiptScannerModal] Auto OCR failed, but photo preview and saving remain active:', ocrErr);
+        }
       } else if (enableOcrScan && !isOnline) {
         setOcrStatusBadge('Offline: Photo captured. Auto-OCR skipped.');
         setTimeout(() => setOcrStatusBadge(null), 5000);
@@ -268,6 +285,9 @@ export default function ReceiptScannerModal({
       console.error('[ReceiptScannerModal] File capture error:', err);
     }
   };
+
+  // Alias for backward compatibility
+  const handleFileChange = handleFileSelect;
 
   // Trigger Direct PaddleOCR Processing Flow (bypasses /api/receipt-scan entirely)
   const handleManualPaddleScan = async () => {
@@ -723,14 +743,30 @@ export default function ReceiptScannerModal({
             <div className="flex flex-col md:grid md:grid-cols-12 gap-6">
               {/* Left Column / Upload Card: available in both modes */}
               <div className="w-full md:col-span-5 flex flex-col">
-                  {/* Persistently mounted file input - never unmounted, ref-triggered */}
+                  {/* Dedicated Camera Input with rear-facing mobile camera capture */}
                   <input
                     type="file"
-                    ref={fileInputRef}
+                    ref={cameraInputRef}
+                    id="receipt-camera-input"
+                    data-testid="receipt-camera-input"
                     accept="image/*"
                     capture="environment"
                     disabled={isScanning}
-                    onChange={handleFileChange}
+                    onChange={handleFileSelect}
+                    className="sr-only hidden"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
+
+                  {/* Dedicated Gallery / File Picker Input without capture attribute */}
+                  <input
+                    type="file"
+                    ref={galleryInputRef}
+                    id="receipt-gallery-input"
+                    data-testid="receipt-gallery-input"
+                    accept="image/*"
+                    disabled={isScanning}
+                    onChange={handleFileSelect}
                     className="sr-only hidden"
                     tabIndex={-1}
                     aria-hidden="true"
@@ -830,14 +866,50 @@ export default function ReceiptScannerModal({
                         >
                           Supports receipts, produce, and weighing-scale photos directly from your mobile camera
                         </p>
-                        <button
-                          type="button"
-                          onClick={handleRetake}
-                          disabled={isScanning}
-                          className="min-h-[44px] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm transition-all flex items-center justify-center bg-teal-600 hover:bg-teal-500 text-white cursor-pointer"
-                        >
-                          Choose File or Camera
-                        </button>
+                        {/* Two Distinct Actions: Take Photo (Camera) & Upload from Photos (Gallery) */}
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 w-full max-w-sm">
+                          {/* Take Photo Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (cameraInputRef.current) {
+                                cameraInputRef.current.value = '';
+                                cameraInputRef.current.click();
+                              }
+                            }}
+                            disabled={isScanning}
+                            id="take-photo-btn"
+                            data-testid="take-photo-btn"
+                            className="flex-1 min-h-[44px] px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-500 active:scale-95 text-white cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+                            aria-label="Take Photo"
+                          >
+                            <span className="text-base">📸</span>
+                            <span>Take Photo</span>
+                          </button>
+
+                          {/* Upload from Photos Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (galleryInputRef.current) {
+                                galleryInputRef.current.value = '';
+                                galleryInputRef.current.click();
+                              }
+                            }}
+                            disabled={isScanning}
+                            id="upload-photos-btn"
+                            data-testid="upload-photos-btn"
+                            className={`flex-1 min-h-[44px] px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2 border active:scale-95 cursor-pointer disabled:opacity-50 disabled:pointer-events-none ${
+                              theme === 'dark'
+                                ? 'bg-slate-800 hover:bg-slate-700 text-slate-100 border-slate-700'
+                                : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300 shadow-sm'
+                            }`}
+                            aria-label="Upload from Photos"
+                          >
+                            <span className="text-base">🖼️</span>
+                            <span>Upload from Photos</span>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

@@ -1084,7 +1084,9 @@ function renderReceiptScanModal(state) {
           
           <!-- Left Pane / Upload Card (Mobile: full width on top, Desktop: 5 cols) -->
           <div class="split-left-pane w-full md:col-span-5">
-            <!-- Persistent file input so camera/file picker can always be triggered -->
+            <!-- Dedicated Camera & Gallery Inputs -->
+            <input type="file" id="receipt-camera-input" accept="image/*" capture="environment" style="display: none;" />
+            <input type="file" id="receipt-gallery-input" accept="image/*" style="display: none;" />
             <input type="file" id="receipt-file-input" accept="image/*" capture="environment" style="display: none;" />
 
             ${state.receiptPreviewUrl ? `
@@ -1111,7 +1113,14 @@ function renderReceiptScanModal(state) {
                 <div class="drop-icon">📷</div>
                 <div style="font-weight: 700; margin-bottom: 4px; font-size: 1rem;">${isWetMarket ? 'Take Photo of Produce, Receipt or Scale' : 'Take Photo or Upload Receipt'}</div>
                 <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 16px;">Supports receipts, produce, or weighing-scale photos</div>
-                <button type="button" class="btn-primary" id="trigger-receipt-file-btn" style="min-height: 44px; padding: 0 20px;">Choose File or Camera</button>
+                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; width: 100%; max-width: 320px;">
+                  <button type="button" class="btn-primary" id="trigger-receipt-camera-btn" style="flex: 1; min-height: 44px; padding: 0 16px; min-width: 130px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <span>📸</span> <span>Take Photo</span>
+                  </button>
+                  <button type="button" class="btn-secondary" id="trigger-receipt-gallery-btn" style="flex: 1; min-height: 44px; padding: 0 16px; min-width: 140px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <span>🖼️</span> <span>Upload from Photos</span>
+                  </button>
+                </div>
               </div>
             `}
           </div>
