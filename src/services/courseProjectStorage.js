@@ -3,7 +3,7 @@ import { LID_DATABASE, STATUS } from '../data/lidDatabase.js';
 import { getAuthHeaders, getClientAuthToken } from './authHeaders.js';
 import { resolveFoodCategory } from './overBuyingDetector.js';
 import { uploadReceiptImageToCloudinary } from '../utils/cloudinary.js';
-import { syncPendingScans } from './storage.js';
+import { syncPendingScans, reconcileScanRecords, getLocalScanHistory } from './storage.js';
 import {
   saveTripToIndexedDB,
   getTripsFromIndexedDB,
@@ -95,7 +95,9 @@ export const TENANT_STORAGE_KEYS = [
   STORAGE_KEYS.FOOD_WASTE,
   STORAGE_KEYS.MEAL_PLANS,
   'kosherai_inventory',
-  'kosherai_scan_history'
+  'kosherai_scan_history',
+  'kosherai_settings',
+  'kosherai_household_members'
 ];
 
 /**
@@ -117,6 +119,7 @@ export function handleTenantAccountChange(newUserId) {
       });
       if (typeof window !== 'undefined' && window.indexedDB) {
         try { window.indexedDB.deleteDatabase('KosherAICourseDB'); } catch (_) {}
+        try { window.indexedDB.deleteDatabase('kosherai_offline_db'); } catch (_) {}
       }
       localStorage.setItem('kosherai_last_auth_user_id', newUserId);
       return true;
@@ -658,11 +661,27 @@ export function mergeRemoteCourseData(remoteTrips, remoteWaste) {
       }
 
       const { items: remoteItems = [], ...tripFields } = remote;
-      const items = (Array.isArray(remoteItems) ? remoteItems : []).map(item => ({
-        ...item,
-        tripId: remote.id,
-        synced: true
-      }));
+      const localItemsForTrip = localItems.filter(i => i.tripId === remote.id);
+      const localItemMap = new Map(localItemsForTrip.map(i => [i.id, i]));
+
+      const items = (Array.isArray(remoteItems) ? remoteItems : []).map(item => {
+        const loc = localItemMap.get(item.id);
+        if (loc && loc.synced === false) {
+          return loc;
+        }
+        return {
+          ...item,
+          tripId: remote.id,
+          synced: true
+        };
+      });
+
+      // Preserve any local item added to this trip that isn't in remote
+      for (const loc of localItemsForTrip) {
+        if (loc && loc.id && !items.some(it => it.id === loc.id)) {
+          items.push(loc);
+        }
+      }
 
       restoredTrips.push({
         ...tripFields,
@@ -825,6 +844,8 @@ export async function syncPendingInventory() {
   }
 }
 
+let inFlightSyncPromise = null;
+
 /**
  * Master Synchronization & Re-hydration Orchestrator.
  * Connects to Neon PostgreSQL and hydrates:
@@ -839,6 +860,16 @@ export async function syncPendingInventory() {
  * offline fallback preservation, and zero data-loss across logins.
  */
 export async function syncAndHydrateUserData() {
+  if (inFlightSyncPromise) {
+    return inFlightSyncPromise;
+  }
+  inFlightSyncPromise = _doSyncAndHydrateUserData().finally(() => {
+    inFlightSyncPromise = null;
+  });
+  return inFlightSyncPromise;
+}
+
+async function _doSyncAndHydrateUserData() {
   const empty = { tripsRestored: 0, itemsRestored: 0, wasteRestored: 0, scansRestored: 0, inventoryRestored: 0, mealPlansRestored: 0 };
 
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -969,18 +1000,20 @@ export async function syncAndHydrateUserData() {
     console.warn('[Hydrate] IndexedDB mirror warning:', idbErr);
   }
 
-  // 5. Merge Scans
+  // 5. Merge Scans (Non-destructive record-level merge preserving local modifications)
   let scansRestored = 0;
   if (scansOk) {
     try {
       const rawList = Array.isArray(scansPayload)
         ? scansPayload
         : (Array.isArray(scansPayload.scans) ? scansPayload.scans : (Array.isArray(scansPayload.data) ? scansPayload.data : []));
-      if (rawList.length > 0) {
-        localStorage.setItem('kosherai_scan_history', JSON.stringify(rawList));
-        scansRestored = rawList.length;
-      }
-    } catch (_) {}
+      const localScans = getLocalScanHistory();
+      const merged = reconcileScanRecords(rawList, localScans);
+      localStorage.setItem('kosherai_scan_history', JSON.stringify(merged));
+      scansRestored = rawList.length;
+    } catch (scanErr) {
+      console.warn('[Hydrate] Scan history merge error:', scanErr);
+    }
   }
 
   // 6. Merge Inventory
@@ -1057,7 +1090,7 @@ export async function syncAndHydrateUserData() {
           window.dispatchEvent(new CustomEvent('kosherai:household-changed', { detail: { household_members: num } }));
         }
       }
-      if (s.theme && typeof window !== 'undefined') {
+      if (s.theme && typeof window !== 'undefined' && typeof document !== 'undefined' && document.documentElement) {
         localStorage.setItem('kosherai_theme', s.theme);
         localStorage.setItem('theme', s.theme);
         if (s.theme === 'dark') {

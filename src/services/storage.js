@@ -155,7 +155,7 @@ export function getLocalScanHistory() {
 /**
  * Saves scan records to localStorage with automatic quota management
  */
-function saveLocalHistory(records) {
+export function saveLocalHistory(records) {
   try {
     localStorage.setItem(KEYS.SCAN_HISTORY, JSON.stringify(records));
   } catch (quotaErr) {
@@ -176,9 +176,60 @@ function saveLocalHistory(records) {
 }
 
 /**
+ * Safely reconciles remote Neon scan records with local scan history.
+ * - Never overwrites newer local modifications or unsynced records
+ * - Preserves user-corrected titles, locally enriched images, and flagged ingredients
+ * - Retains pending offline scans (synced: false)
+ * - Returns merged list sorted newest first
+ */
+export function reconcileScanRecords(remoteScans, localScans = []) {
+  if (!Array.isArray(remoteScans)) return Array.isArray(localScans) ? localScans : [];
+  const localList = Array.isArray(localScans) ? localScans : [];
+  const localMap = new Map(localList.map(s => [s?.id, s]));
+  const remoteIds = new Set();
+  const merged = [];
+
+  for (const rem of remoteScans) {
+    if (!rem || !rem.id) continue;
+    remoteIds.add(rem.id);
+    const loc = localMap.get(rem.id);
+    if (loc && loc.synced === false) {
+      // Local scan is still pending upload or has local modifications
+      merged.push(loc);
+    } else {
+      merged.push({
+        ...rem,
+        synced: true,
+        imageUrl: rem.imageUrl || loc?.imageUrl || null,
+        title: loc?.title && loc?.title !== 'Scanned Food Label' ? loc.title : (rem.title || 'Scanned Food Label'),
+        flaggedIngredients: Array.isArray(rem.flaggedIngredients) && rem.flaggedIngredients.length > 0
+          ? rem.flaggedIngredients
+          : (Array.isArray(loc?.flaggedIngredients) ? loc.flaggedIngredients : [])
+      });
+    }
+  }
+
+  // Preserve all local scans that are not yet in remote!
+  for (const loc of localList) {
+    if (loc && loc.id && !remoteIds.has(loc.id)) {
+      merged.push(loc);
+    }
+  }
+
+  // Sort newest first
+  merged.sort((a, b) => {
+    const timeA = new Date(a.createdAt || a.timestamp || 0).getTime();
+    const timeB = new Date(b.createdAt || b.timestamp || 0).getTime();
+    return timeB - timeA;
+  });
+
+  return merged;
+}
+
+/**
  * Reads scan history:
  * - Attempts to fetch latest records from GET /api/scans
- * - Caches remote scans back into localStorage so offline mode still displays recent records
+ * - Non-destructively reconciles with localStorage cache so offline and pending records are preserved
  * - If network fails, API returns an error, or device is offline, falls back to localStorage
  */
 export async function getScanHistory() {
@@ -186,29 +237,28 @@ export async function getScanHistory() {
 
   if (isOnline) {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId = controller ? setTimeout(() => controller.abort(), 4000) : null;
 
       const res = await fetch('/api/scans', {
         headers: getAuthHeaders({ 'Accept': 'application/json' }),
         credentials: 'include',
-        signal: controller.signal
+        signal: controller?.signal
       });
-      clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
 
       if (res && res.ok) {
         const payload = await res.json().catch(() => null);
-        if (payload) {
-          if (payload.offline) {
-            return getLocalScanHistory();
-          }
+        if (payload && !payload.offline) {
           const remoteScans = Array.isArray(payload) 
             ? payload 
-            : (Array.isArray(payload.data) ? payload.data : null);
+            : (Array.isArray(payload.data) ? payload.data : (Array.isArray(payload.scans) ? payload.scans : null));
 
-          if (remoteScans && remoteScans.length > 0) {
-            saveLocalHistory(remoteScans);
-            return remoteScans;
+          if (Array.isArray(remoteScans)) {
+            const localScans = getLocalScanHistory();
+            const merged = reconcileScanRecords(remoteScans, localScans);
+            saveLocalHistory(merged);
+            return merged;
           }
         }
       }

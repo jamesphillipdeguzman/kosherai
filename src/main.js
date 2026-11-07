@@ -595,9 +595,7 @@ function attachEventHandlers() {
           // Trigger refresh of user's trips and scans
           showToast?.(`✓ Signed in as ${sessionPayload.user.name}`);
           window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: sessionPayload }));
-          window.dispatchEvent(new CustomEvent('kosherai:sync-data', { detail: { userId: sessionPayload.user.id } }));
           pushThenRestoreFromNeon({ manual: true }).catch(() => {});
-          refreshScanHistory().catch(() => {});
         } catch (err) {
           state.authModalLoading = false;
           state.authModalError = err.message || 'Authentication failed. Please verify credentials.';
@@ -2952,9 +2950,14 @@ window.addEventListener('kosherai-food-waste-synced', () => {
 window.addEventListener('kosherai:auth-changed', () => {
   render();
 });
+window.addEventListener('kosherai-neon-restored', () => {
+  state.scanHistory = getLocalScanHistory();
+  state.household_members = getHouseholdMembers();
+  state.settings = getSettings();
+  render();
+});
 window.addEventListener('kosherai:sync-data', () => {
   pushThenRestoreFromNeon({ manual: true }).catch(() => {});
-  refreshScanHistory().catch(() => {});
 });
 window.addEventListener('kosherai:household-changed', (e) => {
   if (e.detail?.household_members) {
@@ -3103,6 +3106,9 @@ async function pushThenRestoreFromNeon({ manual = false } = {}) {
     console.warn('[Restore] Neon re-hydration failed:', err);
     if (manual) state.neonRestoreStatus = { ok: false, message: 'Restore failed. Local data kept.' };
   } finally {
+    state.scanHistory = getLocalScanHistory();
+    state.household_members = getHouseholdMembers();
+    state.settings = getSettings();
     state.neonRestoring = false;
     render();
   }
@@ -3141,13 +3147,20 @@ async function initializeAuthSession() {
       }
     }
   } catch (_) {}
+  state.scanHistory = getLocalScanHistory();
+  state.household_members = getHouseholdMembers();
+  state.settings = getSettings();
 }
 
-render();
-refreshScanHistory();
-initializeAuthSession().finally(() => {
-  pushThenRestoreFromNeon();
-});
-fetchAllRecipeInteractions().then(() => render()).catch(() => {});
-syncPendingRecipeInteractions().catch(() => {});
+(async function bootstrapApp() {
+  render();
+  try {
+    await initializeAuthSession();
+    await pushThenRestoreFromNeon();
+  } catch (err) {
+    console.warn('[Bootstrap] Session restoration error:', err);
+  }
+  fetchAllRecipeInteractions().then(() => render()).catch(() => {});
+  syncPendingRecipeInteractions().catch(() => {});
+})();
 
