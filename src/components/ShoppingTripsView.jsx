@@ -597,7 +597,8 @@ export default function ShoppingTripsView({
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* Grocery Item Details Modal */}
       {selectedGrocery && (
