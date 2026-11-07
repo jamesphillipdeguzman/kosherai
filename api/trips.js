@@ -87,6 +87,19 @@ export async function ensureTripsTables(sql) {
     await sql`ALTER TABLE food_waste_logs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`;
   } catch (_) {}
 
+  // Server-side tombstone table to prevent deleted records from being resurrected by stale devices
+  await sql`
+    CREATE TABLE IF NOT EXISTS deleted_records (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      record_type TEXT NOT NULL DEFAULT 'trip',
+      deleted_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `;
+  try {
+    await sql`CREATE INDEX IF NOT EXISTS idx_deleted_records_user ON deleted_records(user_id);`;
+  } catch (_) {}
+
   isTablesInitialized = true;
 }
 
@@ -341,10 +354,22 @@ export default async function handler(req, res) {
         items: itemsByTrip.get(row.id) || []
       }));
 
+      // Fetch recent deleted tombstones for this tenant user so clients can purge them locally
+      let deletedIds = [];
+      try {
+        const deletedRows = await sql`
+          SELECT id FROM deleted_records WHERE user_id = ${userId} ORDER BY deleted_at DESC LIMIT 1000;
+        `;
+        deletedIds = deletedRows.map(r => r.id);
+      } catch (delFetchErr) {
+        console.warn('[API /api/trips] Error fetching deleted_records tombstones:', delFetchErr.message);
+      }
+
       return sendJson(res, 200, {
         success: true,
         synced: true,
-        trips: formattedTrips
+        trips: formattedTrips,
+        deletedIds
       });
     }
 
@@ -472,6 +497,25 @@ export default async function handler(req, res) {
       const createdAt = tripData.createdAt || tripData.created_at || new Date().toISOString();
       const isDraft = Boolean(tripData.isDraft ?? tripData.is_draft ?? false);
 
+      // Check tombstone: reject resurrection of deleted trips from stale devices
+      try {
+        const tombstone = await sql`
+          SELECT id FROM deleted_records WHERE id = ${tripId} AND user_id = ${userId} LIMIT 1;
+        `;
+        if (tombstone && tombstone.length > 0) {
+          console.info(`[API /api/trips] Skipping re-insertion of deleted trip ${tripId} to prevent resurrection.`);
+          return sendJson(res, 200, {
+            success: true,
+            deleted: true,
+            skipped: true,
+            trip: { id: tripId, deleted: true },
+            message: `Trip ${tripId} was previously deleted. Re-insertion ignored to prevent resurrection.`
+          });
+        }
+      } catch (tombErr) {
+        console.warn('[API /api/trips] Tombstone check error:', tombErr.message);
+      }
+
       // 1. Insert into shopping_trips (Strict user_id scoped)
       await sql`
         INSERT INTO shopping_trips (
@@ -510,6 +554,12 @@ export default async function handler(req, res) {
         for (let idx = 0; idx < rawItems.length; idx++) {
           const item = rawItems[idx];
           const itemId = item.id || `item_${tripId}_${idx}_${Math.random().toString(36).slice(2, 6)}`;
+
+          // Check if this specific item was tombstoned
+          try {
+            const itemTomb = await sql`SELECT id FROM deleted_records WHERE id = ${itemId} AND user_id = ${userId} LIMIT 1;`;
+            if (itemTomb && itemTomb.length > 0) continue;
+          } catch (_) {}
           const itemName = item.name || item.itemName || item.description || 'Grocery Item';
           const itemRawText = item.rawReceiptText || item.name || '';
           const quantity = Number(item.quantity || item.qty || 1);
@@ -786,22 +836,61 @@ export default async function handler(req, res) {
 
     // ----------------------------------------------------
     // DELETE /api/trips: Deletes trip and cascades to purchases (Scoped to user_id)
+    // Supports deleting whole trip (default) or individual grocery item (type='grocery')
+    // Permanently records tombstones in deleted_records to prevent resurrection
     // ----------------------------------------------------
     if (method === 'DELETE') {
       const query = parseQueryParams(req);
       const body = await parseRequestBody(req);
       const targetId = query.id || body.id;
+      const recordType = query.type || body.type || 'trip';
 
       if (!targetId) {
-        return sendJson(res, 400, { error: 'MISSING_ID', message: 'Trip ID is required for deletion.' });
+        return sendJson(res, 400, { error: 'MISSING_ID', message: 'Target ID is required for deletion.' });
       }
 
+      if (recordType === 'grocery' || recordType === 'item') {
+        // 1. Tombstone the grocery item
+        await sql`
+          INSERT INTO deleted_records (id, user_id, record_type, deleted_at)
+          VALUES (${targetId}, ${userId}, 'grocery', NOW())
+          ON CONFLICT (id) DO UPDATE SET deleted_at = NOW();
+        `;
+        // 2. Delete grocery purchase
+        await sql`DELETE FROM grocery_purchases WHERE id = ${targetId} AND user_id = ${userId};`;
+
+        return sendJson(res, 200, {
+          success: true,
+          deletedId: targetId,
+          recordType: 'grocery',
+          message: `Grocery item ${targetId} deleted and tombstoned in Neon PostgreSQL.`
+        });
+      }
+
+      // Whole trip deletion:
+      // 1. Tombstone all linked grocery items
+      await sql`
+        INSERT INTO deleted_records (id, user_id, record_type, deleted_at)
+        SELECT id, ${userId}, 'grocery', NOW() FROM grocery_purchases WHERE trip_id = ${targetId} AND user_id = ${userId}
+        ON CONFLICT (id) DO UPDATE SET deleted_at = NOW();
+      `;
+
+      // 2. Tombstone the trip itself
+      await sql`
+        INSERT INTO deleted_records (id, user_id, record_type, deleted_at)
+        VALUES (${targetId}, ${userId}, 'trip', NOW())
+        ON CONFLICT (id) DO UPDATE SET deleted_at = NOW();
+      `;
+
+      // 3. Cascade delete from Neon tables
       await sql`DELETE FROM grocery_purchases WHERE trip_id = ${targetId} AND user_id = ${userId};`;
       await sql`DELETE FROM shopping_trips WHERE id = ${targetId} AND user_id = ${userId};`;
+
       return sendJson(res, 200, {
         success: true,
         deletedId: targetId,
-        message: `Shopping trip ${targetId} deleted from Neon PostgreSQL.`
+        recordType: 'trip',
+        message: `Shopping trip ${targetId} and linked items deleted and tombstoned in Neon PostgreSQL.`
       });
     }
 

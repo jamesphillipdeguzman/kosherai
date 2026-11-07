@@ -85,7 +85,8 @@ const STORAGE_KEYS = {
   GROCERY_ITEMS: 'kosherai_course_grocery_items',
   EXPENSES: 'kosherai_course_expenses',
   FOOD_WASTE: 'kosherai_course_food_waste',
-  MEAL_PLANS: 'kosherai_course_meal_plans'
+  MEAL_PLANS: 'kosherai_course_meal_plans',
+  DELETIONS: 'kosherai_pending_deletions'
 };
 
 export const TENANT_STORAGE_KEYS = [
@@ -94,6 +95,7 @@ export const TENANT_STORAGE_KEYS = [
   STORAGE_KEYS.EXPENSES,
   STORAGE_KEYS.FOOD_WASTE,
   STORAGE_KEYS.MEAL_PLANS,
+  STORAGE_KEYS.DELETIONS,
   'kosherai_inventory',
   'kosherai_scan_history',
   'kosherai_settings',
@@ -101,9 +103,119 @@ export const TENANT_STORAGE_KEYS = [
 ];
 
 /**
+ * Generates collision-resistant, cryptographically stable UUID-based identifiers
+ */
+export function generateRecordId(prefix = 'rec') {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Retrieves the currently signed-in tenant user ID
+ */
+export function getTenantUserId() {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const curUserStr = localStorage.getItem('kosherai_current_user');
+    if (curUserStr) {
+      const u = JSON.parse(curUserStr);
+      if (u?.id) return u.id;
+    }
+    const lastId = localStorage.getItem('kosherai_last_auth_user_id');
+    if (lastId) return lastId;
+  } catch (_) {}
+  return null;
+}
+
+/**
+ * Pending Deletion Queue for offline & reliable multi-device sync
+ */
+export function getPendingDeletions() {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DELETIONS);
+    return raw ? JSON.parse(raw) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+export function addPendingDeletion(id, type = 'trip') {
+  if (!id || typeof localStorage === 'undefined') return;
+  try {
+    const list = getPendingDeletions().filter(d => d.id !== id);
+    const userId = getTenantUserId();
+    list.push({
+      id,
+      type,
+      userId,
+      deletedAt: new Date().toISOString()
+    });
+    localStorage.setItem(STORAGE_KEYS.DELETIONS, JSON.stringify(list));
+  } catch (_) {}
+}
+
+export function removePendingDeletion(id) {
+  if (!id || typeof localStorage === 'undefined') return;
+  try {
+    const list = getPendingDeletions().filter(d => d.id !== id);
+    localStorage.setItem(STORAGE_KEYS.DELETIONS, JSON.stringify(list));
+  } catch (_) {}
+}
+
+export function clearPendingDeletions() {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.removeItem(STORAGE_KEYS.DELETIONS);
+  } catch (_) {}
+}
+
+/**
+ * Synchronizes pending deletions to Neon PostgreSQL
+ */
+export async function syncPendingDeletions() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return { syncedCount: 0, pendingCount: getPendingDeletions().length };
+  }
+  if (typeof fetch !== 'function') {
+    return { syncedCount: 0, pendingCount: getPendingDeletions().length };
+  }
+
+  const deletions = getPendingDeletions();
+  if (deletions.length === 0) return { syncedCount: 0, pendingCount: 0 };
+
+  let syncedCount = 0;
+  for (const del of deletions) {
+    try {
+      const type = del.type || 'trip';
+      const res = await fetch(`/api/trips?id=${encodeURIComponent(del.id)}&type=${encodeURIComponent(type)}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+        credentials: 'include'
+      });
+      if (res && (res.ok || res.status === 404)) {
+        removePendingDeletion(del.id);
+        syncedCount++;
+      }
+    } catch (err) {
+      console.warn(`[Sync] Failed to sync pending deletion for ${del.id}:`, err?.message);
+    }
+  }
+
+  const remaining = getPendingDeletions().length;
+  if (syncedCount > 0) {
+    console.info(`[Sync] Synced ${syncedCount} pending deletions to Neon.`);
+  }
+  return { syncedCount, pendingCount: remaining };
+}
+
+/**
  * Handles account switching between different tenant users on the same browser.
  * Preserves local cache if signing back into the same account.
- * Purges the previous user's cached tenant records ONLY if a genuinely different user logs in.
+ * Purges the previous user's cached tenant records ONLY if a genuinely different user logs in
+ * or if initial login on a new device with unauthenticated guest data.
  *
  * @param {string} newUserId
  * @returns {boolean} true if account switched and cache was purged; false if same user or initial login
@@ -124,6 +236,7 @@ export function handleTenantAccountChange(newUserId) {
       localStorage.setItem('kosherai_last_auth_user_id', newUserId);
       return true;
     }
+
     localStorage.setItem('kosherai_last_auth_user_id', newUserId);
   } catch (_) {}
   return false;
@@ -306,9 +419,12 @@ export async function saveShoppingTrip(tripData, items = []) {
     const config = getCourseConfig();
     const date = tripData.date || new Date().toISOString().split('T')[0];
     const projectWeek = tripData.projectWeek || getProjectWeekForDate(date, config.startDate);
-    const tripId = tripData.id || `trip_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const tripId = tripData.id || generateRecordId('trip');
     const totalAmount = Number(tripData.totalAmountPaid || 0);
     const scaleWeightKg = Number(tripData.totalScaleWeightKg || 0);
+
+    // If saving/updating, ensure not marked as pending deletion
+    removePendingDeletion(tripId);
 
     const candidateItems = (
       (Array.isArray(items) && items.length > 0 ? items : null) ||
@@ -322,8 +438,10 @@ export async function saveShoppingTrip(tripData, items = []) {
 
     const cleanedItems = candidateItems.map((item, idx) => {
       const lidEval = evaluateItemLidStatus(item.name || item.itemName);
+      const itemId = item.id || generateRecordId(`item_${tripId}`);
+      removePendingDeletion(itemId);
       return {
-        id: item.id || `item_${tripId}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+        id: itemId,
         tripId,
         purchaseDate: date,
         projectWeek,
@@ -481,11 +599,16 @@ export async function syncPendingTrips() {
       return false;
     });
 
-    // Merge pending trips by ID
+    // Merge pending trips by ID, strictly excluding any tombstoned/deleted trips
+    const pendingDeletions = getPendingDeletions();
+    const deletedIds = new Set(pendingDeletions.map(d => d.id));
+
     const pendingMap = new Map();
-    unsyncedFromDb.forEach(t => pendingMap.set(t.id, t));
+    unsyncedFromDb.forEach(t => {
+      if (!deletedIds.has(t.id)) pendingMap.set(t.id, t);
+    });
     unsyncedFromLocal.forEach(t => {
-      if (!pendingMap.has(t.id)) pendingMap.set(t.id, t);
+      if (!deletedIds.has(t.id) && !pendingMap.has(t.id)) pendingMap.set(t.id, t);
     });
 
     const pendingTrips = Array.from(pendingMap.values());
@@ -493,6 +616,8 @@ export async function syncPendingTrips() {
 
     let syncedCount = 0;
     for (const trip of pendingTrips) {
+      if (deletedIds.has(trip.id)) continue;
+
       const idbItems = await getGroceryItemsFromIndexedDB(trip.id);
       const localMatchedItems = allLocalGroceryItems.filter(i => i.tripId === trip.id);
 
@@ -511,11 +636,13 @@ export async function syncPendingTrips() {
         }
       }
 
-      const rawItems = candidateItems.map((item, idx) => ({
-        id: item.id || `item_${trip.id}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
-        tripId: trip.id,
-        purchaseDate: trip.date,
-        projectWeek: Number(trip.projectWeek || 1),
+      const rawItems = candidateItems
+        .filter(item => !deletedIds.has(item.id))
+        .map((item, idx) => ({
+          id: item.id || generateRecordId(`item_${trip.id}`),
+          tripId: trip.id,
+          purchaseDate: trip.date,
+          projectWeek: Number(trip.projectWeek || 1),
         name: item.name || item.itemName || item.description || 'Grocery Item',
         rawReceiptText: item.rawReceiptText || item.name || '',
         quantity: Number(item.quantity || item.qty || 1),
@@ -558,6 +685,19 @@ export async function syncPendingTrips() {
 
         if (res && res.ok) {
           const resData = await res.json().catch(() => null);
+          if (resData && resData.deleted) {
+            addPendingDeletion(trip.id, 'trip');
+            try { await deleteTripFromIndexedDB(trip.id); } catch (_) {}
+            const localTrips = getShoppingTrips().filter(t => t.id !== trip.id);
+            localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(localTrips));
+            const localItems = getGroceryItems().filter(i => i.tripId !== trip.id);
+            localStorage.setItem(STORAGE_KEYS.GROCERY_ITEMS, JSON.stringify(localItems));
+            const localExpenses = getExpenses().filter(e => e.tripId !== trip.id && e.id !== `exp_trip_${trip.id}`);
+            localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(localExpenses));
+            syncedCount++;
+            continue;
+          }
+
           if (resData && (resData.synced === true || resData.success === true) && !resData.offline) {
             await markTripAsSyncedInIndexedDB(trip.id);
 
@@ -633,10 +773,16 @@ function buildTripExpenseRecord(trip, itemsCount) {
  * @param {Array|null} remoteWaste - Logs from GET /api/food-waste, or null to skip
  * @returns {{ tripsRestored: number, itemsRestored: number, wasteRestored: number }}
  */
-export function mergeRemoteCourseData(remoteTrips, remoteWaste) {
+export function mergeRemoteCourseData(remoteTrips, remoteWaste, remoteDeletedIds = []) {
   let tripsRestored = 0;
   let itemsRestored = 0;
   let wasteRestored = 0;
+
+  const pendingDeletions = getPendingDeletions();
+  const tombstonedIds = new Set([
+    ...pendingDeletions.map(d => d.id),
+    ...(Array.isArray(remoteDeletedIds) ? remoteDeletedIds : [])
+  ]);
 
   if (Array.isArray(remoteTrips)) {
     const localTrips = getShoppingTrips();
@@ -652,6 +798,7 @@ export function mergeRemoteCourseData(remoteTrips, remoteWaste) {
 
     for (const remote of remoteTrips) {
       if (!remote || !remote.id) continue;
+      if (tombstonedIds.has(remote.id)) continue; // Tombstoned trip! Never resurrect!
       const local = localTripMap.get(remote.id);
       if (local && local.synced === false) continue; // Pending local edit wins
 
@@ -674,24 +821,26 @@ export function mergeRemoteCourseData(remoteTrips, remoteWaste) {
       }
 
       const { items: remoteItems = [], ...tripFields } = remote;
-      const localItemsForTrip = localItems.filter(i => i.tripId === remote.id);
+      const localItemsForTrip = localItems.filter(i => i.tripId === remote.id && !tombstonedIds.has(i.id));
       const localItemMap = new Map(localItemsForTrip.map(i => [i.id, i]));
 
-      const items = (Array.isArray(remoteItems) ? remoteItems : []).map(item => {
-        const loc = localItemMap.get(item.id);
-        if (loc && loc.synced === false) {
-          return loc;
-        }
-        return {
-          ...item,
-          tripId: remote.id,
-          synced: true
-        };
-      });
+      const items = (Array.isArray(remoteItems) ? remoteItems : [])
+        .filter(item => item && item.id && !tombstonedIds.has(item.id))
+        .map(item => {
+          const loc = localItemMap.get(item.id);
+          if (loc && loc.synced === false) {
+            return loc;
+          }
+          return {
+            ...item,
+            tripId: remote.id,
+            synced: true
+          };
+        });
 
-      // Preserve any local item added to this trip that isn't in remote
+      // Preserve any local item added to this trip that isn't in remote (and not tombstoned)
       for (const loc of localItemsForTrip) {
-        if (loc && loc.id && !items.some(it => it.id === loc.id)) {
+        if (loc && loc.id && !tombstonedIds.has(loc.id) && !items.some(it => it.id === loc.id)) {
           items.push(loc);
         }
       }
@@ -706,16 +855,18 @@ export function mergeRemoteCourseData(remoteTrips, remoteWaste) {
       restoredTripIds.add(remote.id);
     }
 
-    const keptTrips = localTrips.filter(t => !restoredTripIds.has(t.id));
+    const keptTrips = localTrips.filter(t => !restoredTripIds.has(t.id) && !tombstonedIds.has(t.id));
     const mergedTrips = [...restoredTrips, ...keptTrips].sort((a, b) =>
       String(b.date || '').localeCompare(String(a.date || '')) ||
       String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
     );
 
-    const keptItems = localItems.filter(i => !restoredTripIds.has(i.tripId));
+    const keptItems = localItems.filter(i => !restoredTripIds.has(i.tripId) && !tombstonedIds.has(i.id) && !tombstonedIds.has(i.tripId));
     const mergedItems = [...keptItems, ...restoredItems];
 
     const keptExpenses = localExpenses.filter(e => {
+      if (e.tripId && tombstonedIds.has(e.tripId)) return false;
+      if (tombstonedIds.has(e.id)) return false;
       if (!e.isTripExpense || !e.tripId) {
         return !restoredExpenseIds.has(e.id);
       }
@@ -922,7 +1073,10 @@ async function _doSyncAndHydrateUserData() {
     }
   } catch (_) {}
 
-  // 2. Upload pending offline records first (so local unsynced edits are never overwritten)
+  // 1b. Process pending offline deletions FIRST so deleted records are never re-uploaded or restored
+  await syncPendingDeletions();
+
+  // 2. Upload pending offline records (so local unsynced edits are never overwritten)
   const [tripsSyncResult, wasteSyncResult, scansSyncResult, expensesSyncResult, invSyncResult, mealSyncResult] = await Promise.allSettled([
     syncPendingTrips(),
     syncPendingFoodWaste(),
@@ -990,7 +1144,8 @@ async function _doSyncAndHydrateUserData() {
   // 4. Merge Trips & Food Waste
   const courseResult = mergeRemoteCourseData(
     tripsOk ? tripsPayload.trips : null,
-    wasteOk ? wastePayload.foodWaste : null
+    wasteOk ? wastePayload.foodWaste : null,
+    tripsOk ? tripsPayload.deletedIds : null
   );
 
   // Mirror restored records into IndexedDB
@@ -1161,8 +1316,10 @@ export async function restoreFromNeon() {
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
     console.info('[Network] Back online: initiating automatic background sync with Neon...');
-    syncPendingTrips().catch(() => { });
-    syncPendingFoodWaste().catch(() => { });
+    syncPendingDeletions().then(() => {
+      syncPendingTrips().catch(() => { });
+      syncPendingFoodWaste().catch(() => { });
+    }).catch(() => { });
   });
 }
 
@@ -1170,8 +1327,11 @@ if (typeof window !== 'undefined') {
  * Deletes a shopping trip and cleans up linked grocery items, expense record, and IndexedDB/Neon
  */
 export async function deleteShoppingTrip(tripId) {
+  if (!tripId) return false;
   try {
+    // 1. Immediately remove from localStorage
     const trips = getShoppingTrips().filter(t => t.id !== tripId);
+    const deletedItems = getGroceryItems().filter(i => i.tripId === tripId);
     const items = getGroceryItems().filter(i => i.tripId !== tripId);
     const expenses = getExpenses().filter(e => e.tripId !== tripId && e.id !== `exp_trip_${tripId}`);
 
@@ -1179,26 +1339,103 @@ export async function deleteShoppingTrip(tripId) {
     localStorage.setItem(STORAGE_KEYS.GROCERY_ITEMS, JSON.stringify(items));
     localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(expenses));
 
-    // Delete from IndexedDB
+    // 2. Add to persistent pending deletions queue (for both trip and its items)
+    addPendingDeletion(tripId, 'trip');
+    deletedItems.forEach(i => {
+      if (i.id) addPendingDeletion(i.id, 'grocery');
+    });
+
+    // 3. Delete from IndexedDB
     try {
       await deleteTripFromIndexedDB(tripId);
     } catch (idbErr) {
       console.warn('[Storage] IndexedDB delete error:', idbErr);
     }
 
-    // Remote DELETE if online
+    // 4. Dispatch events to immediately refresh UI across views
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('kosherai-trips-updated', { detail: { deletedId: tripId } }));
+      window.dispatchEvent(new CustomEvent('kosherai-groceries-updated', { detail: { deletedTripId: tripId } }));
+      window.dispatchEvent(new CustomEvent('kosherai_storage_updated', { detail: { key: STORAGE_KEYS.TRIPS } }));
+    }
+
+    // 5. Remote DELETE with confirmation and offline queuing
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     if (isOnline && typeof fetch === 'function') {
-      fetch(`/api/trips?id=${encodeURIComponent(tripId)}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-        credentials: 'include'
-      }).catch(() => { });
+      try {
+        const res = await fetch(`/api/trips?id=${encodeURIComponent(tripId)}&type=trip`, {
+          method: 'DELETE',
+          headers: getAuthHeaders(),
+          credentials: 'include'
+        });
+        if (res && (res.ok || res.status === 404)) {
+          removePendingDeletion(tripId);
+          deletedItems.forEach(i => {
+            if (i.id) removePendingDeletion(i.id);
+          });
+        }
+      } catch (delErr) {
+        console.warn('[Storage] Remote delete trip error, queued for sync:', delErr?.message);
+      }
     }
 
     return true;
   } catch (e) {
     console.error('Failed to delete shopping trip:', e);
+    return false;
+  }
+}
+
+/**
+ * Deletes an individual grocery item and adjusts parent trip item count
+ */
+export async function deleteGroceryItem(itemId) {
+  if (!itemId) return false;
+  try {
+    const allItems = getGroceryItems();
+    const targetItem = allItems.find(i => i.id === itemId);
+    const remainingItems = allItems.filter(i => i.id !== itemId);
+    localStorage.setItem(STORAGE_KEYS.GROCERY_ITEMS, JSON.stringify(remainingItems));
+
+    if (targetItem && targetItem.tripId) {
+      const trips = getShoppingTrips().map(t => {
+        if (t.id === targetItem.tripId) {
+          const newCount = Math.max(0, (t.itemsCount || 1) - 1);
+          return { ...t, itemsCount: newCount };
+        }
+        return t;
+      });
+      localStorage.setItem(STORAGE_KEYS.TRIPS, JSON.stringify(trips));
+    }
+
+    // Add to persistent pending deletions
+    addPendingDeletion(itemId, 'grocery');
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('kosherai-groceries-updated', { detail: { deletedItemId: itemId } }));
+      window.dispatchEvent(new CustomEvent('kosherai-trips-updated', { detail: { itemId } }));
+      window.dispatchEvent(new CustomEvent('kosherai_storage_updated', { detail: { key: STORAGE_KEYS.GROCERY_ITEMS } }));
+    }
+
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    if (isOnline && typeof fetch === 'function') {
+      try {
+        const res = await fetch(`/api/trips?id=${encodeURIComponent(itemId)}&type=grocery`, {
+          method: 'DELETE',
+          headers: getAuthHeaders(),
+          credentials: 'include'
+        });
+        if (res && (res.ok || res.status === 404)) {
+          removePendingDeletion(itemId);
+        }
+      } catch (delErr) {
+        console.warn('[Storage] Remote delete grocery item error, queued for sync:', delErr?.message);
+      }
+    }
+
+    return true;
+  } catch (e) {
+    console.error('Failed to delete grocery item:', e);
     return false;
   }
 }
@@ -1302,8 +1539,20 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
           : null));
     const cleanUnit = (updatedFields.unit || updatedFields.itemUnit || 'pc').trim();
 
-    if (Array.isArray(updatedFields.items) && updatedFields.items.length > 0) {
+    if (Array.isArray(updatedFields.items)) {
       const itemUpdatesMap = new Map(updatedFields.items.map(i => [i.id, i]));
+      const remainingItemIds = new Set(updatedFields.items.map(i => i.id).filter(Boolean));
+
+      // Tombstone items that were deleted by the user in the edit modal
+      for (let i = allGroceryItems.length - 1; i >= 0; i--) {
+        const item = allGroceryItems[i];
+        if ((item.tripId === tripId || item.trip_id === tripId) && !remainingItemIds.has(item.id)) {
+          addPendingDeletion(item.id, 'grocery');
+          allGroceryItems.splice(i, 1);
+          groceryItemsUpdated = true;
+        }
+      }
+
       const existingTripItemIds = new Set();
       allGroceryItems.forEach(item => {
         if (item.tripId === tripId || item.trip_id === tripId) {
@@ -1330,8 +1579,10 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
       updatedFields.items.forEach((newItem, idx) => {
         if (!existingTripItemIds.has(newItem.id)) {
           const lidEval = evaluateItemLidStatus(newItem.name || newItem.itemName);
+          const newItemId = newItem.id || generateRecordId(`item_${tripId}`);
+          removePendingDeletion(newItemId);
           allGroceryItems.push({
-            id: newItem.id || `item_${tripId}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+            id: newItemId,
             tripId,
             purchaseDate: date,
             projectWeek,
@@ -1370,7 +1621,8 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
 
       if (!foundMatching && (cleanName || rawItemQty !== null)) {
         // If trip had no line items yet, create one matching the updated item details
-        const newItemId = `item_${tripId}_0_${Math.random().toString(36).slice(2, 6)}`;
+        const newItemId = generateRecordId(`item_${tripId}`);
+        removePendingDeletion(newItemId);
         allGroceryItems.push({
           id: newItemId,
           tripId,
@@ -1539,7 +1791,8 @@ export function saveStandaloneExpense(expenseData) {
     const config = getCourseConfig();
     const date = expenseData.date || new Date().toISOString().split('T')[0];
     const projectWeek = expenseData.projectWeek || getProjectWeekForDate(date, config.startDate);
-    const id = expenseData.id || `exp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const id = expenseData.id || generateRecordId('exp');
+    removePendingDeletion(id);
 
     const record = {
       id,
@@ -1631,6 +1884,14 @@ export async function syncPendingExpenses() {
 
         if (res && res.ok) {
           const resData = await res.json().catch(() => null);
+          if (resData && resData.deleted) {
+            addPendingDeletion(exp.id, 'expense');
+            const localExpenses = getExpenses().filter(e => e.id !== exp.id);
+            localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(localExpenses));
+            syncedCount++;
+            continue;
+          }
+
           if (resData && (resData.synced === true || resData.success === true) && !resData.offline) {
             syncedIds.add(exp.id);
             syncedCount++;
@@ -1688,7 +1949,7 @@ export function saveFoodWasteRecord(wasteData) {
     const config = getCourseConfig();
     const date = wasteData.date || new Date().toISOString().split('T')[0];
     const projectWeek = wasteData.projectWeek || getProjectWeekForDate(date, config.startDate);
-    const id = wasteData.id || `waste_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const id = wasteData.id || generateRecordId('waste');
 
     const record = {
       id,

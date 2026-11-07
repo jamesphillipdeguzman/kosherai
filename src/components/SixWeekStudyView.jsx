@@ -6,7 +6,8 @@ import {
   getMealPlans,
   getProjectConfig,
   getProjectWeekSchedule,
-  getProjectComparison
+  getProjectComparison,
+  deleteShoppingTrip
 } from '../services/courseProjectStorage.js';
 import { normalizeWeek } from '../utils/weekNormalization.js';
 import ShoppingTripsView from './ShoppingTripsView.jsx';
@@ -64,6 +65,13 @@ export default function SixWeekStudyView({
     const norm = normalizeWeek(week);
     setSelectedWeek(norm);
     if (propOnSelectWeek) propOnSelectWeek(norm);
+  };
+
+  const handleDeleteTrip = async (tripId) => {
+    if (typeof window !== 'undefined' && window.confirm('Delete this shopping trip and its linked grocery items & expense record?')) {
+      await deleteShoppingTrip(tripId);
+      refreshData();
+    }
   };
 
   const normWeek = normalizeWeek(selectedWeek);
@@ -182,6 +190,7 @@ export default function SixWeekStudyView({
             trips={trips}
             selectedWeek={normWeek}
             onSelectWeek={handleWeekSelect}
+            onDelete={handleDeleteTrip}
           />
         )}
         {activeSubTab === 'groceries' && (

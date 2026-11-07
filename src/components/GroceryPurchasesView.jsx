@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getGroceryItems, getShoppingTrips, getProjectConfig, LID_DATABASE } from '../services/courseProjectStorage.js';
+import { getGroceryItems, getShoppingTrips, getProjectConfig, LID_DATABASE, deleteGroceryItem } from '../services/courseProjectStorage.js';
 import { formatNumber, escapeHtml } from './ShoppingTripsView.js';
 import { normalizeWeek, resolveItemWeek, getGroceryItemName, matchesGroceryQuery } from '../utils/weekNormalization.js';
 
@@ -24,6 +24,7 @@ export default function GroceryPurchasesView({
   const tripsMap = new Map(allTrips.map(t => [t.id, t]));
 
   const [searchQuery, setSearchQuery] = useState(propSearchQuery || '');
+  const [selectedItem, setSelectedItem] = useState(null);
 
   useEffect(() => {
     if (propSearchQuery !== undefined) {
@@ -182,7 +183,7 @@ export default function GroceryPurchasesView({
                     className="grocery-row grocery-card cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                     data-item-id={itemId}
                     data-grocery-name={displayName}
-                    onClick={() => onSelectGrocery && onSelectGrocery(i)}
+                    onClick={() => onSelectGrocery ? onSelectGrocery(i) : setSelectedItem(i)}
                     role="button"
                     tabIndex={0}
                     title="Click to view food details and guidance"
@@ -232,9 +233,105 @@ export default function GroceryPurchasesView({
           </table>
         </div>
       )}
-    </div>
-  );
-}
+
+      {/* Item Details Modal */}
+      {selectedItem && (
+        <div
+          className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSelectedItem(null)}
+        >
+          <div
+            className="modal-content max-w-lg w-full bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <span className="text-xs uppercase font-bold text-slate-400 tracking-wider">Grocery Item Details</span>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white m-0">
+                  {getGroceryItemName(selectedItem)}
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                onClick={() => setSelectedItem(null)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                  Low-Iodine Diet Evaluation
+                </div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white">
+                  {(selectedItem.lidStatus || 'SAFE').toUpperCase()}
+                  {selectedItem.lidReason && <span className="font-normal text-xs text-slate-500 ml-2">— {selectedItem.lidReason}</span>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-lg">
+                  <span className="text-slate-400 block mb-0.5">Quantity</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">
+                    {selectedItem.quantity || 1} {selectedItem.unit || 'pcs'}
+                  </span>
+                </div>
+                <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-lg">
+                  <span className="text-slate-400 block mb-0.5">Unit Price</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">
+                    ₱{formatNumber(selectedItem.unitPrice)}
+                  </span>
+                </div>
+                <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-lg">
+                  <span className="text-slate-400 block mb-0.5">Line Total</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">
+                    ₱{formatNumber(selectedItem.totalPrice)}
+                  </span>
+                </div>
+                <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-lg">
+                  <span className="text-slate-400 block mb-0.5">Net Weight</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">
+                    {selectedItem.weightGrams ? `${selectedItem.weightGrams} g` : '—'}
+                  </span>
+                </div>
+              </div>
+
+              {selectedItem.rawReceiptText && (
+                <div className="text-xs font-mono text-slate-400 bg-slate-100 dark:bg-slate-800/80 p-2 rounded-lg">
+                  Receipt text: {selectedItem.rawReceiptText}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100/80 border border-rose-200/80 cursor-pointer dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60 transition-colors"
+                onClick={async () => {
+                  if (typeof window !== 'undefined' && window.confirm(`Delete item "${getGroceryItemName(selectedItem)}"?`)) {
+                    await deleteGroceryItem(selectedItem.id);
+                    setSelectedItem(null);
+                  }
+                }}
+              >
+                Delete Item
+              </button>
+              <button
+                type="button"
+                className="btn-secondary px-4 py-2 text-xs font-semibold rounded-lg cursor-pointer"
+                onClick={() => setSelectedItem(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

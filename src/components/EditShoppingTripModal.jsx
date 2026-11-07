@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getGroceryItems, updateShoppingTrip } from '../services/courseProjectStorage.js';
+import { getGroceryItems, updateShoppingTrip, generateRecordId } from '../services/courseProjectStorage.js';
 import { TRIP_TYPES, formatNumber, escapeHtml } from './ShoppingTripsView.js';
 import { compressImage } from '../services/aiVerification.js';
 import { uploadReceiptImageToCloudinary } from '../utils/cloudinary.js';
@@ -121,7 +121,7 @@ export default function EditShoppingTripModal({
     setItems(prev => [
       ...prev,
       {
-        id: `item_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        id: generateRecordId('item'),
         name: '',
         quantity: 1,
         unit: 'kg'

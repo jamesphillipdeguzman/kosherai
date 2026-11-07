@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getGroceryItems, updateShoppingTrip } from '../services/courseProjectStorage.js';
+import { getGroceryItems, updateShoppingTrip, deleteShoppingTrip, deleteGroceryItem } from '../services/courseProjectStorage.js';
 import EditShoppingTripModal from './EditShoppingTripModal.jsx';
 import { normalizeWeek, getGroceryItemName, matchesGroceryQuery, getTripGroceryItems } from '../utils/weekNormalization.js';
 import {
@@ -51,6 +51,12 @@ export default function ShoppingTripsView({
   const [itemName, setItemName] = useState('');
   const [itemQuantity, setItemQuantity] = useState(1);
   const [itemUnit, setItemUnit] = useState('kg');
+
+  const handleDeleteTrip = onDelete || (async (tripId) => {
+    if (typeof window !== 'undefined' && window.confirm('Delete this shopping trip and its linked grocery items & expense record?')) {
+      await deleteShoppingTrip(tripId);
+    }
+  });
 
   useEffect(() => {
     if (propSearchQuery !== undefined) {
@@ -526,9 +532,6 @@ export default function ShoppingTripsView({
                   </div>
                 </div>
               ) : null}
-                  </div>
-                </div>
-              )}
 
               <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-slate-100/80 dark:border-slate-800/80">
                 {/* Modern Edit Button */}
@@ -566,9 +569,9 @@ export default function ShoppingTripsView({
                   type="button"
                   className="delete-trip-btn inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full text-rose-700 bg-rose-50 hover:bg-rose-100/80 border border-rose-200/80 shadow-xs transition-all active:scale-95 cursor-pointer dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60"
                   data-delete-trip={trip.id}
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
-                    if (onDelete) onDelete(trip.id);
+                    await handleDeleteTrip(trip.id);
                   }}
                   style={{
                     all: 'unset',
@@ -650,7 +653,19 @@ export default function ShoppingTripsView({
                 </p>
               ) : null}
             </div>
-            <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100/80 border border-rose-200/80 cursor-pointer dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60 transition-colors"
+                onClick={async () => {
+                  if (typeof window !== 'undefined' && window.confirm(`Delete item "${selectedGrocery.name}"?`)) {
+                    await deleteGroceryItem(selectedGrocery.id);
+                    setSelectedGrocery(null);
+                  }
+                }}
+              >
+                Delete Item
+              </button>
               <button
                 type="button"
                 className="btn-secondary px-4 py-2 text-xs font-semibold rounded-lg cursor-pointer"
