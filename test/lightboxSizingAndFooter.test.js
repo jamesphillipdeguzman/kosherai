@@ -118,3 +118,4 @@ console.log('  ✅ Empty scale weight and notes handled gracefully without broke
 console.log('\n=============================================================');
 console.log('🎉 ALL LIGHTBOX SIZING & FOOTER READABILITY TESTS PASSED!');
 console.log('=============================================================\n');
+
