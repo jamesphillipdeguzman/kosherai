@@ -3,6 +3,7 @@ import { runPaddleOCR, parseReceiptAmount, parseStructuredReceiptText } from './
 
 /**
  * Client-side canvas downscaling for OCR before dispatching to Cloudinary or API.
+ * Resizes image to a max dimension of ~1024px and JPEG quality ~0.78.
  * Prevents HTTP 413 Payload Too Large on serverless routes and avoids base64 encoder crashes.
  *
  * @param {File|Blob|string} file
@@ -10,7 +11,7 @@ import { runPaddleOCR, parseReceiptAmount, parseStructuredReceiptText } from './
  * @param {number} quality
  * @returns {Promise<string>} dataUrl
  */
-export const compressImageForOCR = (file, maxWidth = 1600, quality = 0.8) => {
+export const compressImageForOCR = (file, maxWidth = 1024, quality = 0.78) => {
   return new Promise((resolve, reject) => {
     if (typeof file === 'string' && file.startsWith('data:')) {
       const img = new Image();
@@ -19,10 +20,16 @@ export const compressImageForOCR = (file, maxWidth = 1600, quality = 0.8) => {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
+        const maxDim = maxWidth || 1024;
 
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
+        if (width > maxDim || height > maxDim) {
+          if (width >= height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
         }
 
         canvas.width = width;
@@ -45,10 +52,16 @@ export const compressImageForOCR = (file, maxWidth = 1600, quality = 0.8) => {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
+        const maxDim = maxWidth || 1024;
 
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
+        if (width > maxDim || height > maxDim) {
+          if (width >= height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
         }
 
         canvas.width = width;

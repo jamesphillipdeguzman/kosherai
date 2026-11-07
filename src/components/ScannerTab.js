@@ -11,7 +11,34 @@ import {
   cleanPinoyGroceryTerm
 } from '../services/aiVerification.js';
 import { analyzeIngredients } from '../services/ruleEngine.js';
-import { getSettings, getScanHistory, saveScanResult, clearScanHistory } from '../services/storage.js';
+import { getSettings, getScanHistory, saveScanResult, clearScanHistory, isScannerEnabled, setScannerEnabled } from '../services/storage.js';
+
+/**
+ * Stops active camera streams and terminates workers to release resources.
+ */
+export function releaseScannerResources(state) {
+  if (state?.mediaStream) {
+    try {
+      state.mediaStream.getTracks().forEach(track => track.stop());
+    } catch (_) {}
+    state.mediaStream = null;
+  }
+  if (state) {
+    state.ocrStatus = null;
+    state.ocrProgress = 0;
+    state.aiLoading = false;
+  }
+  if (typeof document !== 'undefined') {
+    document.querySelectorAll('video').forEach(video => {
+      if (video.srcObject && typeof video.srcObject.getTracks === 'function') {
+        try {
+          video.srcObject.getTracks().forEach(track => track.stop());
+        } catch (_) {}
+        video.srcObject = null;
+      }
+    });
+  }
+}
 
 /**
  * Fetches and synchronizes scan history from Neon PostgreSQL
@@ -94,8 +121,8 @@ export async function executeScanWorkflow(file, context = {}) {
     state.ocrProgress = 0.15;
     render();
 
-    // Step 1: Client-Side Image Pre-Processing & Compression
-    const dataUrl = await compressImageForOCR(file, 1600, 0.8);
+    // Step 1: Client-Side Image Pre-Processing & Compression (Max ~1024px, ~0.78 quality)
+    const dataUrl = await compressImageForOCR(file, 1024, 0.78);
     state.imagePreviewUrl = dataUrl;
     state.cloudinaryUrl = null;
 
@@ -213,85 +240,181 @@ export async function executeScanWorkflow(file, context = {}) {
       return;
     }
 
-    // Food Packaging Label Scan Mode
-    state.ocrStatus = { message: 'Running PaddleOCR engine on label...' };
-    state.ocrProgress = 0.45;
+    // Food Packaging Label Scan Mode (Lightweight Pipeline)
+    state.ocrStatus = { message: 'Auditing food packaging label...' };
+    state.ocrProgress = 0.35;
     render();
 
     let extractedText = '';
-    try {
-      extractedText = await runClientOCR(dataUrl, (prog) => {
-        state.ocrStatus = prog;
-        state.ocrProgress = prog.progress;
-        const fill = document.querySelector('.progress-bar-fill');
-        if (fill) fill.style.width = Math.round(prog.progress * 100) + '%';
-      });
-    } catch (ocrErr) {
-      console.warn('Client OCR notice (will fall back or use multimodal image):', ocrErr);
-      extractedText = '';
-    }
-
-    state.scanText = extractedText;
-    state.aiLoading = true;
-    render();
-
     let scanAnalysis = null;
     let aiResult = null;
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
-    if (apiKey && apiKey.trim()) {
-      try {
-        state.ocrStatus = { message: 'Clinical reasoning with Gemini AI...' };
-        state.ocrProgress = 0.85;
-        render();
+    // 1. Online Fast Path (Gemini Multimodal Vision — 0MB on-device model overhead)
+    if (isOnline) {
+      if (apiKey && apiKey.trim()) {
+        try {
+          state.ocrStatus = { message: 'Clinical reasoning with Gemini AI...' };
+          state.ocrProgress = 0.70;
+          render();
 
-        const hasSubstantialText = extractedText && extractedText.trim().length > 10;
-        const payload = hasSubstantialText
-          ? extractedText
-          : {
-              text: extractedText || 'Analyze the food packaging label ingredients for dietary compliance.',
-              imageBase64: dataUrl,
-              mimeType: 'image/jpeg'
-            };
+          aiResult = await verifyWithGeminiAI({
+            text: 'Extract and analyze all ingredients on this food packaging label for dietary compliance.',
+            imageBase64: dataUrl,
+            mimeType: 'image/jpeg'
+          }, apiKey, activeDiet, activeTarget);
 
-        aiResult = await verifyWithGeminiAI(payload, apiKey, state.activeDiet || 'lid', activeTarget);
-        state.aiAnalysis = aiResult;
+          state.aiAnalysis = aiResult;
+          extractedText = aiResult.rawText || '';
 
-        const probTokens = aiResult.problemIngredients || [];
-        scanAnalysis = {
-          isSafe: aiResult.status === 'SAFE',
-          status: aiResult.status,
-          overallBadge: aiResult.status === 'SAFE' ? 'SAFE TO EAT' : aiResult.status === 'AVOID' ? 'STRICTLY AVOID' : 'CHECK LABEL CAREFULLY',
-          reasons: Array.isArray(aiResult.reasons) ? aiResult.reasons : [aiResult.reason],
-          reason: aiResult.reason,
-          problemIngredients: probTokens,
-          detectedForbidden: aiResult.status === 'AVOID' ? probTokens.map(p => ({
-            name: p,
-            matchedWord: p,
-            reason: aiResult.reason
-          })) : [],
-          detectedCaution: aiResult.status === 'CAUTION' ? probTokens.map(p => ({
-            name: p,
-            matchedWord: p,
-            reason: aiResult.reason
-          })) : [],
-          parsedTokens: (extractedText ? extractedText.split(/[,;\n•]+/).map(t => t.trim()).filter(Boolean) : probTokens).map(tok => ({
-            text: tok,
-            status: probTokens.some(p => tok.toLowerCase().includes(p.toLowerCase())) ? aiResult.status : 'SAFE',
-            matchedReason: aiResult.reason
-          })),
-          source: 'GEMINI_AI',
-          cloudinaryUrl: state.cloudinaryUrl
-        };
-      } catch (geminiErr) {
-        console.warn('Gemini AI failed, gracefully falling back to offline rule engine:', geminiErr);
-        scanAnalysis = analyzeIngredients(extractedText);
-        scanAnalysis.source = 'OFFLINE_RULE_ENGINE';
-        state.aiAnalysis = null;
+          const probTokens = aiResult.problemIngredients || [];
+          scanAnalysis = {
+            isSafe: aiResult.status === 'SAFE',
+            status: aiResult.status || 'UNKNOWN',
+            overallBadge: aiResult.status === 'SAFE' ? 'SAFE TO EAT' : aiResult.status === 'AVOID' ? 'STRICTLY AVOID' : aiResult.status === 'CAUTION' ? 'CHECK LABEL CAREFULLY' : 'UNVERIFIED LABEL',
+            reasons: Array.isArray(aiResult.reasons) ? aiResult.reasons : [aiResult.reason || 'Audited with Gemini AI'],
+            reason: aiResult.reason || '',
+            problemIngredients: probTokens,
+            detectedForbidden: aiResult.status === 'AVOID' ? probTokens.map(p => ({
+              name: p,
+              matchedWord: p,
+              reason: aiResult.reason
+            })) : [],
+            detectedCaution: aiResult.status === 'CAUTION' ? probTokens.map(p => ({
+              name: p,
+              matchedWord: p,
+              reason: aiResult.reason
+            })) : [],
+            parsedTokens: (aiResult.ingredients || probTokens).map(tok => {
+              const name = typeof tok === 'string' ? tok : tok.name;
+              const tokStatus = typeof tok === 'object' && tok.status ? tok.status : (probTokens.some(p => name.toLowerCase().includes(p.toLowerCase())) ? aiResult.status : 'SAFE');
+              return {
+                text: name,
+                status: tokStatus,
+                matchedReason: aiResult.reason
+              };
+            }),
+            source: 'GEMINI_AI',
+            cloudinaryUrl: state.cloudinaryUrl
+          };
+        } catch (geminiErr) {
+          console.warn('Gemini AI online notice (will fall back to endpoint / local):', geminiErr);
+          aiResult = null;
+        }
       }
-    } else {
-      scanAnalysis = analyzeIngredients(extractedText);
-      scanAnalysis.source = 'OFFLINE_RULE_ENGINE';
-      state.aiAnalysis = null;
+
+      // Try serverless endpoint /api/receipt-scan if client key was not provided or threw
+      if (!scanAnalysis) {
+        try {
+          state.ocrStatus = { message: 'Auditing label with Cloud Vision...' };
+          state.ocrProgress = 0.55;
+          render();
+
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+          const apiRes = await fetch('/api/receipt-scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              imageBase64: dataUrl,
+              mimeType: 'image/jpeg',
+              activeDiet: activeDiet || 'lid',
+              scanTarget: 'food_label'
+            }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          if (apiRes.ok) {
+            const labelData = await apiRes.json();
+            if (labelData && labelData.status) {
+              const probTokens = labelData.problemIngredients || [];
+              extractedText = labelData.rawText || '';
+              scanAnalysis = {
+                isSafe: labelData.status === 'SAFE',
+                status: labelData.status,
+                overallBadge: labelData.status === 'SAFE' ? 'SAFE TO EAT' : labelData.status === 'AVOID' ? 'STRICTLY AVOID' : labelData.status === 'CAUTION' ? 'CHECK LABEL CAREFULLY' : 'UNVERIFIED LABEL',
+                reasons: Array.isArray(labelData.reasons) ? labelData.reasons : [labelData.reason || 'Audited via Cloud Vision'],
+                reason: labelData.reason || '',
+                problemIngredients: probTokens,
+                detectedForbidden: labelData.status === 'AVOID' ? probTokens.map(p => ({
+                  name: p,
+                  matchedWord: p,
+                  reason: labelData.reason
+                })) : [],
+                detectedCaution: labelData.status === 'CAUTION' ? probTokens.map(p => ({
+                  name: p,
+                  matchedWord: p,
+                  reason: labelData.reason
+                })) : [],
+                parsedTokens: (labelData.ingredients || probTokens).map(tok => {
+                  const name = typeof tok === 'string' ? tok : tok.name;
+                  const tokStatus = typeof tok === 'object' && tok.status ? tok.status : (probTokens.some(p => name.toLowerCase().includes(p.toLowerCase())) ? labelData.status : 'SAFE');
+                  return {
+                    text: name,
+                    status: tokStatus,
+                    matchedReason: labelData.reason
+                  };
+                }),
+                source: 'GEMINI_VISION',
+                cloudinaryUrl: state.cloudinaryUrl
+              };
+            }
+          }
+        } catch (serverErr) {
+          console.warn('Cloud Vision endpoint notice (falling back to on-device OCR):', serverErr);
+        }
+      }
+    }
+
+    // 2. Offline / Fallback Path (On-Demand Local OCR)
+    if (!scanAnalysis) {
+      state.ocrStatus = { message: 'Extracting text from label...' };
+      state.ocrProgress = 0.65;
+      render();
+
+      try {
+        extractedText = await runClientOCR(dataUrl, (prog) => {
+          state.ocrStatus = prog;
+          state.ocrProgress = prog.progress;
+          const fill = document.querySelector('.progress-bar-fill');
+          if (fill) fill.style.width = Math.round(prog.progress * 100) + '%';
+        });
+      } catch (ocrErr) {
+        console.warn('Client OCR error:', ocrErr);
+        extractedText = '';
+      }
+
+      state.scanText = extractedText;
+
+      if (extractedText && extractedText.trim().length >= 15) {
+        scanAnalysis = analyzeIngredients(extractedText, activeDiet);
+        scanAnalysis.source = 'OFFLINE_RULE_ENGINE';
+
+        // Strict Safety Check: If no violations found but text has no recognized tokens, do not mark SAFE
+        if (scanAnalysis.status === 'SAFE' && (!scanAnalysis.parsedTokens || scanAnalysis.parsedTokens.length === 0)) {
+          scanAnalysis.status = 'UNKNOWN';
+          scanAnalysis.isSafe = false;
+          scanAnalysis.overallBadge = 'UNVERIFIED LABEL';
+          scanAnalysis.reasons = ['Ingredient text is incomplete or uncertain. For patient safety under the dietary protocol, unverified items should be treated with caution.'];
+        }
+      } else {
+        // Never classify unreadable or failed OCR as SAFE!
+        scanAnalysis = {
+          isSafe: false,
+          status: 'UNKNOWN',
+          overallBadge: 'LABEL UNREADABLE',
+          reasons: ['Could not clearly read or extract ingredients from this image. For patient safety under the Low-Iodine Diet protocol, unverified items cannot be classified as SAFE. Please ensure the label is flat, well-lit, and in focus, or enter ingredients manually.'],
+          reason: 'Could not extract or verify ingredient text from the image.',
+          problemIngredients: [],
+          detectedForbidden: [],
+          detectedCaution: [],
+          parsedTokens: [],
+          source: 'OFFLINE_UNREADABLE'
+        };
+      }
     }
 
     state.scanAnalysis = scanAnalysis;
@@ -420,6 +543,8 @@ export function renderScannerTab(state) {
     selectedScanItem = null
   } = state;
 
+  const scannerEnabled = state.scannerEnabled !== undefined ? Boolean(state.scannerEnabled) : isScannerEnabled();
+
   // Single source of truth for scanner active tab
   const resolvedScanTarget = state.scanTarget || state.scannerTab || state.scannerMode || 'food_label';
   const scannerMode = state.scannerMode || state.scannerTab;
@@ -430,14 +555,14 @@ export function renderScannerTab(state) {
 
   let heroTitle = 'Food & Ingredient Safety Scanner';
   let heroSubtitle = 'Photograph nutrition labels, packaged goods, or whole produce to audit LID compliance.';
-  let primaryBtnText = 'Take Photo of Food / Label';
-  let secondaryBtnText = 'Upload Food / Label Photo';
+  let primaryBtnText = 'Scan Food';
+  let secondaryBtnText = 'Upload Food';
 
   if (isReceipt) {
     heroTitle = 'Supermarket Receipt Scanner';
     heroSubtitle = 'Scan supermarket receipts (SM, Puregold, Robinsons) to audit items and find Pinoy Smart Swaps.';
-    primaryBtnText = 'Take Photo of Receipt';
-    secondaryBtnText = 'Upload Receipt Photo';
+    primaryBtnText = 'Scan Receipt';
+    secondaryBtnText = 'Upload Receipt';
   } else if (isPaste) {
     heroTitle = 'Manual Text & Item Auditor';
     heroSubtitle = 'Paste ingredients or receipt text to audit dietary compliance.';
@@ -445,68 +570,102 @@ export function renderScannerTab(state) {
 
   return `
     <div class="scanner-container">
-      <!-- Scanner Hero & Controls -->
-      <div class="rounded-2xl p-6 bg-slate-900 text-white shadow-lg border border-slate-800">
-        <div class="scanner-hero-icon">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-            <circle cx="12" cy="13" r="4"></circle>
-          </svg>
-        </div>
-
-        <h2 class="text-xl font-bold text-white mb-2">
-          ${heroTitle}
-        </h2>
-        <p class="text-xs text-slate-300 mb-6">
-          ${heroSubtitle}
-        </p>
-
-        <!-- Mode Toggles: Food Label vs Grocery Receipt vs Paste Text -->
-        <div style="display: flex; justify-content: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
-          <button id="toggle-label-mode" class="filter-btn ${activeScannerTab === 'food_label' ? 'active' : ''}">
-            🏷️ Food Label
-          </button>
-          <button id="toggle-receipt-mode" class="filter-btn ${activeScannerTab === 'receipt' ? 'active' : ''}">
-            🧾 Grocery Receipt
-          </button>
-          <button id="toggle-text-mode" class="filter-btn ${activeScannerTab === 'paste' ? 'active' : ''}">
-            ✏️ Paste Text
-          </button>
-        </div>
-
-        ${!isPaste ? `
-          <!-- Camera Actions -->
-          <div class="scanner-actions">
-            <label class="btn-primary" style="cursor: pointer;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-              <span>${primaryBtnText}</span>
-              <input type="file" id="camera-file-input" accept="image/*" capture="environment" style="display: none;" />
-            </label>
-
-            <label class="btn-secondary" style="cursor: pointer;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-              <span>${secondaryBtnText}</span>
-              <input type="file" id="gallery-file-input" accept="image/*" style="display: none;" />
-            </label>
+      ${!scannerEnabled ? `
+        <!-- Scanner Standby Card (Disabled by Default for Performance) -->
+        <div class="scanner-standby-card rounded-2xl p-6 bg-slate-900 text-white shadow-lg border border-slate-800 text-center">
+          <div class="w-14 h-14 rounded-2xl bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto mb-4 shadow-inner">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+              <circle cx="12" cy="13" r="4"></circle>
+            </svg>
           </div>
-        ` : `
-          <!-- Manual Text Input Mode -->
-          <div style="text-align: left; max-width: 650px; margin: 0 auto;">
-            <textarea 
-              id="scanner-manual-textarea" 
-              class="ingredients-textarea" 
-              placeholder="Paste ingredients or receipt text here..."
-            >${escapeHtml(scanText || '')}</textarea>
-            
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-              <button id="scanner-clear-text-btn" class="btn-secondary" style="padding: 8px 16px;">Clear</button>
-              <button id="scanner-analyze-btn" class="btn-primary" style="padding: 8px 20px;">
-                Audit Pasted Items
+
+          <h2 class="text-xl font-bold text-white mb-2">
+            Food Scanner (Paused)
+          </h2>
+          <p class="text-xs text-slate-300 max-w-md mx-auto mb-6 leading-relaxed">
+            Scanner is disabled by default to optimize mobile performance and battery life.
+          </p>
+
+          <button 
+            id="enable-scanner-btn" 
+            type="button" 
+            class="inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/40 transition-all active:scale-95 cursor-pointer"
+          >
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            <span>Enable Scanner</span>
+          </button>
+        </div>
+      ` : `
+        <!-- Scanner Hero & Controls (Active) -->
+        <div class="rounded-2xl p-6 bg-slate-900 text-white shadow-lg border border-slate-800">
+          <div class="scanner-hero-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+              <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+          </div>
+
+          <h2 class="text-xl font-bold text-white mb-2">
+            ${heroTitle}
+          </h2>
+          <p class="text-xs text-slate-300 mb-6">
+            ${heroSubtitle}
+          </p>
+
+          <!-- Mode Toggles: Food Label vs Grocery Receipt vs Paste Text -->
+          <div style="display: flex; justify-content: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+            <button id="toggle-label-mode" class="filter-btn ${activeScannerTab === 'food_label' ? 'active' : ''}">
+              🏷️ Food Label
+            </button>
+            <button id="toggle-receipt-mode" class="filter-btn ${activeScannerTab === 'receipt' ? 'active' : ''}">
+              🧾 Grocery Receipt
+            </button>
+            <button id="toggle-text-mode" class="filter-btn ${activeScannerTab === 'paste' ? 'active' : ''}">
+              ✏️ Paste Text
+            </button>
+          </div>
+
+          ${!isPaste ? `
+            <!-- Camera & Upload Actions -->
+            <div class="scanner-actions" style="display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;">
+              <label class="btn-primary" style="cursor: pointer;" title="Direct camera capture">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                <span>${primaryBtnText}</span>
+                <input type="file" id="camera-file-input" accept="image/*" capture="environment" style="display: none;" />
+              </label>
+
+              <label class="btn-secondary" style="cursor: pointer;" title="Select an existing image from device">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                <span>${secondaryBtnText}</span>
+                <input type="file" id="gallery-file-input" accept="image/*" style="display: none;" />
+              </label>
+
+              <button type="button" id="disable-scanner-btn" class="btn-secondary" style="cursor: pointer; opacity: 0.9;" title="Disable scanner and return to standby mode">
+                <span>⏸️ Disable Scanner</span>
               </button>
             </div>
-          </div>
-        `}
-      </div>
+          ` : `
+            <!-- Manual Text Input Mode -->
+            <div style="text-align: left; max-width: 650px; margin: 0 auto;">
+              <textarea 
+                id="scanner-manual-textarea" 
+                class="ingredients-textarea" 
+                placeholder="Paste ingredients or receipt text here..."
+              >${escapeHtml(scanText || '')}</textarea>
+              
+              <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button id="scanner-clear-text-btn" class="btn-secondary" style="padding: 8px 16px;">Clear</button>
+                <button id="scanner-analyze-btn" class="btn-primary" style="padding: 8px 20px;">
+                  Audit Pasted Items
+                </button>
+              </div>
+            </div>
+          `}
+        </div>
+      `}
 
       <!-- Actionable Error Banner -->
       ${scanError ? `

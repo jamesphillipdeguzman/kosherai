@@ -244,7 +244,30 @@ export default async function handler(req, res) {
 
     const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
 
-    const prompt = `Extract all purchased food line items and receipt details from this Philippine supermarket receipt image.
+    const isFoodLabel = body.scanTarget === 'food_label' || body.scanType === 'food_label';
+
+    let prompt = '';
+    if (isFoodLabel) {
+      prompt = `Extract all ingredient items and nutrition label details from this food packaging image.
+Evaluate the product and every identified ingredient under the "${currentDietName}" (${currentDiet}) dietary compliance protocol.
+If the label is blurry, unreadable, or contains no ingredient text, set "status": "UNKNOWN", "isSafe": false, and explain why. NEVER mark an unreadable or unverified label as "SAFE".
+Return strictly JSON:
+{
+  "productName": "Product Name or Scanned Food Label",
+  "status": "SAFE" | "AVOID" | "CAUTION" | "UNKNOWN",
+  "reason": "Brief clinical explanation based on the active dietary protocol",
+  "problemIngredients": ["ingredient1", "ingredient2"],
+  "rawText": "Extracted ingredient list text",
+  "ingredients": [
+    {
+      "name": "Ingredient name",
+      "status": "SAFE" | "AVOID" | "CAUTION",
+      "reason": "Reason"
+    }
+  ]
+}`;
+    } else {
+      prompt = `Extract all purchased food line items and receipt details from this Philippine supermarket receipt image.
 Evaluate each item under the "${currentDietName}" (${currentDiet}) dietary compliance protocol.
 Return strictly JSON:
 {
@@ -264,6 +287,7 @@ Return strictly JSON:
     }
   ]
 }`;
+    }
 
     // Cascade: Try gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-flash
     const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
@@ -344,6 +368,14 @@ Return strictly JSON:
         error: 'INVALID_JSON_RESPONSE',
         message: 'Could not parse receipt contents. Please ensure the receipt is well-lit and legible.',
         raw: rawResponse
+      });
+    }
+
+    if (isFoodLabel) {
+      return sendJson(res, 200, {
+        success: true,
+        source: 'GEMINI_VISION',
+        ...parsedData
       });
     }
 

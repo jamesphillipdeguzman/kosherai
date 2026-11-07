@@ -5,7 +5,7 @@ import './style.css';
 import { renderHeader } from './components/Header.js';
 import { renderBottomNav } from './components/BottomNav.js';
 import { renderCheckerTab } from './components/CheckerTab.js';
-import { renderScannerTab, executeScanWorkflow, SAMPLE_LABELS } from './components/ScannerTab.js';
+import { renderScannerTab, executeScanWorkflow, SAMPLE_LABELS, releaseScannerResources } from './components/ScannerTab.js';
 import { renderCheatSheetTab } from './components/CheatSheetTab.js';
 import { renderSubstitutesTab } from './components/SubstitutesTab.js';
 import { renderCookModeTab, lidRecipes, DIET_RECIPES } from './components/CookModeTab.js';
@@ -39,7 +39,9 @@ import {
   clearScanHistory,
   getLocalScanHistory,
   getChecklistState,
-  saveChecklistState
+  saveChecklistState,
+  isScannerEnabled,
+  setScannerEnabled
 } from './services/storage.js';
 
 import {
@@ -134,6 +136,7 @@ const state = {
   selectedItem: null,
 
   // Scanner Tab (Consolidated single source of truth: 'food_label' | 'receipt' | 'paste')
+  scannerEnabled: isScannerEnabled(),
   scannerTab: 'food_label',
   inputMode: 'camera', // 'camera' | 'text'
   scanTarget: 'label', // 'label' | 'receipt'
@@ -276,7 +279,7 @@ function render() {
     ${renderBottomNav(currentNavTab, state.appMode)}
 
     ${state.selectedItem ? renderItemDetailModal(state.selectedItem, state.activeDiet) : ''}
-    ${state.settingsOpen ? renderSettingsModal(state.settings, state.theme, state.showProjectTab, state.activeDiet) : ''}
+    ${state.settingsOpen ? renderSettingsModal(state.settings, state.theme, state.showProjectTab, state.activeDiet, state.scannerEnabled) : ''}
     ${state.authModalOpen ? renderAuthModalHtml({ isOpen: true, mode: state.authModalMode, errorMsg: state.authModalError, isLoading: state.authModalLoading, values: state.authModalValues || {} }) : ''}
   `;
 
@@ -735,6 +738,18 @@ function attachEventHandlers() {
     });
   }
 
+  // Settings Scanner Toggle
+  const settingsScannerToggle = document.querySelector('#settings-scanner-toggle');
+  if (settingsScannerToggle) {
+    settingsScannerToggle.addEventListener('change', (e) => {
+      const enabled = Boolean(e.target.checked);
+      if (!enabled) releaseScannerResources(state);
+      setScannerEnabled(enabled);
+      state.scannerEnabled = enabled;
+      render();
+    });
+  }
+
   // Reset Data button in settings
   const clearAllBtn = document.querySelector('#clear-all-data-btn');
   if (clearAllBtn) {
@@ -888,6 +903,26 @@ function attachEventHandlers() {
   if (dismissScanErrorBtn) {
     dismissScanErrorBtn.addEventListener('click', () => {
       state.scanError = null;
+      render();
+    });
+  }
+
+  // Enable / Disable Scanner Controls
+  const enableScannerBtn = document.querySelector('#enable-scanner-btn');
+  if (enableScannerBtn) {
+    enableScannerBtn.addEventListener('click', () => {
+      setScannerEnabled(true);
+      state.scannerEnabled = true;
+      render();
+    });
+  }
+
+  const disableScannerBtn = document.querySelector('#disable-scanner-btn');
+  if (disableScannerBtn) {
+    disableScannerBtn.addEventListener('click', () => {
+      releaseScannerResources(state);
+      setScannerEnabled(false);
+      state.scannerEnabled = false;
       render();
     });
   }
@@ -2880,8 +2915,24 @@ window.addEventListener('offline', () => {
   render();
 });
 
-window.addEventListener('kosherai_storage_updated', () => {
+window.addEventListener('kosherai_storage_updated', (e) => {
+  if (e?.detail?.key === 'kosherai_scanner_enabled') {
+    const enabled = Boolean(e.detail.value);
+    if (state.scannerEnabled !== enabled) {
+      state.scannerEnabled = enabled;
+      if (!enabled) releaseScannerResources(state);
+    }
+  }
   render();
+});
+
+window.addEventListener('kosherai:scanner-preference-changed', (e) => {
+  const enabled = Boolean(e?.detail?.enabled);
+  if (state.scannerEnabled !== enabled) {
+    state.scannerEnabled = enabled;
+    if (!enabled) releaseScannerResources(state);
+    render();
+  }
 });
 window.addEventListener('kosherai-trips-synced', () => {
   render();

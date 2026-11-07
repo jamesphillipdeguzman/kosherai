@@ -5,8 +5,43 @@ const KEYS = {
   SETTINGS: 'kosherai_settings',
   SCAN_HISTORY: 'kosherai_scan_history',
   RECENT_SEARCHES: 'kosherai_recent_searches',
-  CHECKLIST: 'kosherai_checklist'
+  CHECKLIST: 'kosherai_checklist',
+  SCANNER_ENABLED: 'kosherai_scanner_enabled'
 };
+
+/**
+ * Checks whether the food scanner is enabled.
+ * Defaults to false if never configured in localStorage.
+ */
+export function isScannerEnabled() {
+  if (typeof window === 'undefined') return false;
+  try {
+    const val = localStorage.getItem('kosherai_scanner_enabled');
+    if (val === null) return false;
+    return val === 'true';
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Persists the user's scanner preference and dispatches synchronization events.
+ */
+export function setScannerEnabled(enabled) {
+  const bool = Boolean(enabled);
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('kosherai_scanner_enabled', String(bool));
+      window.dispatchEvent(new CustomEvent('kosherai_storage_updated', {
+        detail: { key: 'kosherai_scanner_enabled', value: bool }
+      }));
+      window.dispatchEvent(new CustomEvent('kosherai:scanner-preference-changed', {
+        detail: { enabled: bool }
+      }));
+    } catch (_) {}
+  }
+  return bool;
+}
 
 const DEFAULT_SETTINGS = {
   geminiApiKey: import.meta.env?.VITE_GEMINI_API_KEY || '',
@@ -75,7 +110,8 @@ export function getSettings() {
     cloudinaryPreset: parsed.cloudinaryPreset?.trim() || import.meta.env?.VITE_CLOUDINARY_UPLOAD_PRESET || '',
     prepDate: parsed.prepDate || '',
     targetMaxIodine: parsed.targetMaxIodine ?? 50,
-    household_members: getHouseholdMembers()
+    household_members: getHouseholdMembers(),
+    scannerEnabled: isScannerEnabled()
   };
 }
 

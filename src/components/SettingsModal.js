@@ -1,8 +1,10 @@
 // Settings Modal Component (Multi-Diet Selector, Theme Switcher, Project Visibility, API Keys, Cloudinary, Local Cache & Disclaimer)
 import { DIET_PROFILES } from '../data/dietProfiles.js';
+import { isScannerEnabled } from '../services/storage.js';
 
-export function renderSettingsModal(settings = {}, currentTheme = 'dark', showProjectTab = true, activeDiet = 'lid') {
+export function renderSettingsModal(settings = {}, currentTheme = 'dark', showProjectTab = true, activeDiet = 'lid', scannerEnabled = null) {
   const isDark = currentTheme === 'dark';
+  const isScannerActive = scannerEnabled !== null ? Boolean(scannerEnabled) : (settings.scannerEnabled !== undefined ? Boolean(settings.scannerEnabled) : isScannerEnabled());
 
   return `
     <div class="modal-overlay" id="settings-modal-overlay">
@@ -142,7 +144,29 @@ export function renderSettingsModal(settings = {}, currentTheme = 'dark', showPr
             </div>
           </div>
 
-          <!-- 4. Gemini AI Key -->
+          <!-- 4. Hardware & Performance: Camera & Food Scanner Toggle -->
+          <div class="form-group settings-toggle-group" style="padding-top: 8px; border-top: 1px solid var(--border-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 14px;">
+              <div style="flex: 1;">
+                <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 mb-0.5">
+                  <span class="text-base leading-none">📷</span>
+                  <label for="settings-scanner-toggle" style="cursor: pointer; margin: 0; font-weight: 600;">Enable Camera & Food Scanner</label>
+                  <span class="settings-sub-badge" id="settings-scanner-badge" style="color: ${isScannerActive ? 'var(--safe-green)' : 'var(--text-muted)'};">
+                    ${isScannerActive ? 'Enabled' : 'Disabled (Default)'}
+                  </span>
+                </div>
+                <div class="form-help" style="margin-top: 2px; font-size: 0.74rem;">
+                  Enable image capture and food label scanning. Disabled by default to conserve device memory and battery.
+                </div>
+              </div>
+              <label class="toggle-switch-wrapper" title="Toggle Food Scanner">
+                <input type="checkbox" id="settings-scanner-toggle" ${isScannerActive ? 'checked' : ''} />
+                <span class="toggle-switch-track"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 5. Gemini AI Key -->
           <div class="form-group" style="padding-top: 8px; border-top: 1px solid var(--border-color);">
             <label class="form-label" for="gemini-key-input">
               <span>Google Gemini API Key</span>
