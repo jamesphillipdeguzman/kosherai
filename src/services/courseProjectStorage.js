@@ -219,6 +219,8 @@ export function getCourseConfig() {
   };
 }
 
+export const getProjectConfig = getCourseConfig;
+
 export function saveCourseConfig(newConfig) {
   try {
     const current = getCourseConfig();

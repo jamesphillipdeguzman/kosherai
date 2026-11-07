@@ -1,4 +1,5 @@
-import { getShoppingTrips, getGroceryItems } from '../services/courseProjectStorage.js';
+import { getShoppingTrips, getGroceryItems, getProjectConfig, getProjectWeekForDate } from '../services/courseProjectStorage.js';
+import { normalizeWeek } from '../utils/weekNormalization.js';
 
 export function escapeHtml(str) {
   if (!str) return '';
@@ -381,7 +382,7 @@ export function renderTripCard(trip, isEditing = false) {
           <div>
             <div class="trip-store-name">${escapeHtml(trip.storeName)}</div>
             <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 2px;">
-              <span class="trip-date-pill">Week ${trip.projectWeek} • ${trip.date}</span>
+              <span class="trip-date-pill">Week ${trip.projectWeek} (W0${trip.projectWeek}) • ${trip.date}</span>
               ${trip.synced === false ? `
                 <span class="trip-sync-badge offline" title="Saved locally in IndexedDB; will auto-sync to Neon when online">
                   ☁️⏳ OFFLINE
@@ -472,10 +473,15 @@ export function renderTripCard(trip, isEditing = false) {
  */
 export function renderShoppingTripsView(state = {}) {
   const allTrips = (state.trips && state.trips.length > 0) ? state.trips : getShoppingTrips();
-  const activeWeekFilter = state.tripsWeekFilter || (state.selectedWeekView ? String(state.selectedWeekView) : 'all');
-  const trips = (activeWeekFilter && activeWeekFilter !== 'all')
-    ? allTrips.filter(t => Number(t.projectWeek) === Number(activeWeekFilter))
-    : allTrips;
+  const selectedWeek = normalizeWeek(state.selectedWeekView || state.selectedWeek || state.tripsWeekFilter || 'all');
+  const config = typeof getProjectConfig === 'function' ? getProjectConfig() : { startDate: '2026-10-31' };
+
+  const trips = selectedWeek === 'all'
+    ? allTrips
+    : allTrips.filter(t => {
+        const tripWeek = t.projectWeek ? Number(t.projectWeek) : (typeof getProjectWeekForDate === 'function' ? getProjectWeekForDate(t.date, config.startDate) : 1);
+        return tripWeek === selectedWeek;
+      });
 
   return `
     <div class="trips-view-container">
@@ -505,21 +511,17 @@ export function renderShoppingTripsView(state = {}) {
         </div>
       </div>
 
-      <!-- Week Filtering (W01–W06) -->
-      <div class="week-filter-bar flex items-center gap-2 mb-4 overflow-x-auto py-1">
-        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Week Filter:</span>
-        <button type="button" class="week-filter-chip px-3 py-1 text-xs rounded-full border transition-all cursor-pointer ${activeWeekFilter === 'all' ? 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'}" data-trips-filter="all">
-          All Weeks (${allTrips.length})
-        </button>
-        ${[1, 2, 3, 4, 5, 6].map(w => {
-          const count = allTrips.filter(t => Number(t.projectWeek) === w).length;
-          const isSelected = Number(activeWeekFilter) === w;
-          return `
-            <button type="button" class="week-filter-chip px-3 py-1 text-xs rounded-full border transition-all cursor-pointer ${isSelected ? 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'}" data-trips-filter="${w}">
-              W0${w} ${count > 0 ? `(${count})` : ''}
-            </button>
-          `;
-        }).join('')}
+      <!-- Study Week Active Context Status (Secondary Filter Row Removed) -->
+      <div class="trips-week-status-strip flex items-center justify-between mb-3 text-xs text-slate-500 dark:text-slate-400">
+        <span class="font-medium">
+          Showing: <strong class="text-slate-700 dark:text-slate-200">${selectedWeek === 'all' ? 'All Weeks' : `Week ${selectedWeek} (W0${selectedWeek})`}</strong> 
+          • ${trips.length} ${trips.length === 1 ? 'trip recorded' : 'trips recorded'}
+        </span>
+        ${selectedWeek !== 'all' ? `
+          <button type="button" class="text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer" data-week-select="all">
+            Show All Weeks (${allTrips.length})
+          </button>
+        ` : ''}
       </div>
 
       <!-- Trips List -->

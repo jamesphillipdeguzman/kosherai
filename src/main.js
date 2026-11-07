@@ -12,6 +12,7 @@ import { renderCookModeTab, lidRecipes, DIET_RECIPES } from './components/CookMo
 import { renderSettingsModal } from './components/SettingsModal.js';
 import { renderItemDetailModal } from './components/ItemDetailModal.js';
 import { renderCourseProjectView, createReceiptItemRowHtml } from './components/CourseProjectView.js';
+import { normalizeWeek } from './utils/weekNormalization.js';
 import { parseQuantityAndUnit, createManualItemRowHtml } from './components/ManualTripModal.js';
 import { renderAuthModalHtml, authenticateUser, isValidEmail } from './components/AuthModal.jsx';
 import { getAuthHeaders, getClientAuthToken } from './services/authHeaders.js';
@@ -174,7 +175,8 @@ const state = {
 
   // Six-Week Course Project State
   courseSubTab: 'dashboard', // 'dashboard' | 'trips' | 'groceries' | 'waste' | 'mealplan' | 'export'
-  selectedWeekView: 1,
+  selectedWeekView: 'all',
+  tripsWeekFilter: 'all',
   mealPlanWeek: 2,
   insightsPeriod: 'last_30_days',
   // 5 Independently Collapsible Insight Categories (Defaults to Collapsed)
@@ -1547,11 +1549,14 @@ Cracked black pepper`;
     });
   });
 
-  // Weekly Progress Strip Selection
-  document.querySelectorAll('.week-step-pill[data-week-select]').forEach(btn => {
+  // Weekly Progress Strip / Large Study Cards Selection (All Weeks + W1–W6)
+  document.querySelectorAll('.week-step-pill[data-week-select], [data-week-select]').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const w = parseInt(e.currentTarget.getAttribute('data-week-select'), 10);
+      e.stopPropagation();
+      const rawVal = e.currentTarget.getAttribute('data-week-select');
+      const w = normalizeWeek(rawVal);
       state.selectedWeekView = w;
+      state.tripsWeekFilter = w === 'all' ? 'all' : String(w);
       render();
     });
   });
@@ -2336,12 +2341,14 @@ Cracked black pepper`;
     });
   }
 
-  // Shopping Trips Week Filter Chips (W01–W06)
+  // Legacy / Fallback Trips Week Filter (Syncs with unified shared state)
   document.querySelectorAll('.week-filter-chip[data-trips-filter]').forEach(chip => {
     chip.addEventListener('click', (e) => {
       e.stopPropagation();
       const val = chip.getAttribute('data-trips-filter');
-      state.tripsWeekFilter = val;
+      const norm = normalizeWeek(val);
+      state.selectedWeekView = norm;
+      state.tripsWeekFilter = norm === 'all' ? 'all' : String(norm);
       render();
     });
   });

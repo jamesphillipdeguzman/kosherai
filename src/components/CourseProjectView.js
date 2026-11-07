@@ -69,7 +69,8 @@ import { DIET_RECIPES } from '../data/dietRecipes.js';
 import lidRecipes from '../data/lidRecipes.json' with { type: 'json' };
 import { renderManualTripModal } from './ManualTripModal.js';
 import { renderShoppingTripsView, renderEditTripModal, renderTripCard, renderReceiptLightboxModal } from './ShoppingTripsView.js';
-export { renderManualTripModal, renderShoppingTripsView, renderEditTripModal, renderTripCard, renderReceiptLightboxModal, updateShoppingTrip };
+import { normalizeWeek, resolveItemWeek } from '../utils/weekNormalization.js';
+export { renderManualTripModal, renderShoppingTripsView, renderEditTripModal, renderTripCard, renderReceiptLightboxModal, updateShoppingTrip, normalizeWeek, resolveItemWeek };
 
 export function renderCourseProjectView(state = {}) {
   const activeSubTab = state.courseSubTab || 'dashboard'; // 'dashboard' | 'trips' | 'groceries' | 'waste' | 'mealplan' | 'export'
@@ -78,6 +79,7 @@ export function renderCourseProjectView(state = {}) {
   const comparison = getSixWeekComparison();
   const trips = (state.trips && state.trips.length > 0) ? state.trips : getShoppingTrips();
   const lightboxTrip = state.lightboxTripId ? trips.find(t => t.id === state.lightboxTripId) : null;
+  const selectedWeek = normalizeWeek(state.selectedWeekView || state.selectedWeek || state.tripsWeekFilter || 'all');
 
   const getSubNavClasses = (tabKey) => {
     const isActive = activeSubTab === tabKey;
@@ -108,23 +110,35 @@ export function renderCourseProjectView(state = {}) {
           </div>
         </div>
 
-        <!-- Weekly Progress Pills -->
+        <!-- Weekly Progress Pills / Large Study Cards (All Weeks + W1–W6) -->
         <div class="weekly-cycle-strip">
+          <!-- All Weeks Overview Card -->
+          <button type="button" class="week-step-pill study-week-card ${selectedWeek === 'all' ? 'active bg-teal-600 text-white dark:bg-teal-500' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'} ${trips.length > 0 ? 'has-data' : ''}" data-week-select="all" title="View all study weeks (Weeks 1–6)">
+            <div class="week-pill-num">All Weeks</div>
+            <div class="week-pill-type">Overview</div>
+            <div class="week-pill-dates">${trips.length} ${trips.length === 1 ? 'Trip' : 'Trips'}</div>
+          </button>
+
+          <!-- W1–W6 Study Cards -->
           ${schedule.map(w => {
-    const isCurrent = (state.selectedWeekView || 1) === w.weekNumber;
-    const weekStats = comparison.weeklyData.find(d => d.weekNumber === w.weekNumber);
-    const hasData = weekStats && weekStats.hasRecords;
-    const pillClasses = isCurrent
-      ? 'active bg-teal-600 text-white dark:bg-teal-500'
-      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
-    return `
-              <button class="week-step-pill ${pillClasses} ${hasData ? 'has-data' : ''}" data-week-select="${w.weekNumber}">
+            const isCurrent = selectedWeek === w.weekNumber;
+            const weekStats = comparison.weeklyData.find(d => d.weekNumber === w.weekNumber);
+            const hasData = weekStats && weekStats.hasRecords;
+            const weekTripsCount = trips.filter(t => {
+              const tripWeek = t.projectWeek ? Number(t.projectWeek) : getProjectWeekForDate(t.date, config.startDate);
+              return tripWeek === w.weekNumber;
+            }).length;
+            const pillClasses = isCurrent
+              ? 'active bg-teal-600 text-white dark:bg-teal-500'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
+            return `
+              <button type="button" class="week-step-pill study-week-card ${pillClasses} ${hasData || weekTripsCount > 0 ? 'has-data' : ''}" data-week-select="${w.weekNumber}" title="Filter study to Week ${w.weekNumber}">
                 <div class="week-pill-num">W${w.weekNumber}</div>
                 <div class="week-pill-type">${w.isBaseline ? 'Baseline' : (w.weekNumber === 2 ? 'Intervene' : 'Evaluate')}</div>
-                <div class="week-pill-dates">${w.startDate.slice(5)}</div>
+                <div class="week-pill-dates">${w.startDate.slice(5)} • ${weekTripsCount} ${weekTripsCount === 1 ? 'trip' : 'trips'}</div>
               </button>
             `;
-  }).join('')}
+          }).join('')}
         </div>
 
         <!-- Course Sub-navigation Bar -->
@@ -433,8 +447,16 @@ function renderShoppingTripsTab(state) {
 // 3. GROCERY PURCHASES INVENTORY TAB
 // =========================================================================
 function renderGroceryPurchasesTab(state) {
-  const items = getGroceryItems();
+  const allItems = getGroceryItems();
   const trips = getShoppingTrips();
+  const config = getCourseConfig();
+  const tripsMap = new Map(trips.map(t => [t.id, t]));
+
+  const selectedWeek = normalizeWeek(state.selectedWeekView || state.selectedWeek || state.tripsWeekFilter || 'all');
+
+  const items = selectedWeek === 'all'
+    ? allItems
+    : allItems.filter(i => resolveItemWeek(i, tripsMap, config) === selectedWeek);
 
   return `
     <div class="purchases-view-container">
@@ -446,15 +468,19 @@ function renderGroceryPurchasesTab(state) {
           </p>
         </div>
         <div style="font-family: var(--font-mono); color: var(--text-muted); font-size: 0.85rem;">
-          Total Recorded Items: <strong>${items.length}</strong>
+          ${selectedWeek === 'all' ? `
+            Total Recorded Items: <strong>${allItems.length}</strong>
+          ` : `
+            Week ${selectedWeek} Items: <strong>${items.length}</strong> (of ${allItems.length})
+          `}
         </div>
       </div>
 
       ${items.length === 0 ? `
         <div class="empty-state-card">
           <div class="empty-icon">🥬</div>
-          <h3>No Grocery Items in Inventory</h3>
-          <p>Scan a receipt or add a shopping trip to populate itemized grocery records.</p>
+          <h3>${selectedWeek === 'all' ? 'No Grocery Items in Inventory' : `No Grocery Items in Week ${selectedWeek}`}</h3>
+          <p>${selectedWeek === 'all' ? 'Scan a receipt or add a shopping trip to populate itemized grocery records.' : `No items found for Week ${selectedWeek}. Select "All Weeks" above to view all records.`}</p>
         </div>
       ` : `
         <div class="table-responsive">
@@ -475,6 +501,8 @@ function renderGroceryPurchasesTab(state) {
     const status = (i.lidStatus || 'SAFE').toUpperCase();
     const dbItem = LID_DATABASE.find(db => db.name.toLowerCase() === (i.name || '').toLowerCase() || db.id === i.id || db.id === i.itemId);
     const itemId = dbItem?.id || i.itemId || i.id || ('grocery-' + (i.name || '').toLowerCase().replace(/\s+/g, '-'));
+    const itemWeek = resolveItemWeek(i, tripsMap, config);
+    const parentTrip = tripsMap.get(i.tripId || i.trip_id);
     return `
                   <tr class="grocery-row grocery-card cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors" data-item-id="${escapeHtml(itemId)}" data-grocery-name="${escapeHtml(i.name)}" role="button" tabindex="0" title="Click to view food details and clinical guidance">
                     <td>
@@ -487,7 +515,7 @@ function renderGroceryPurchasesTab(state) {
                       ` : ''}
                     </td>
                     <td style="font-family: var(--font-mono); font-size: 0.8rem;">
-                      Week ${i.projectWeek} • ${i.purchaseDate}
+                      Week ${itemWeek} • ${i.purchaseDate || parentTrip?.date || '—'}
                     </td>
                     <td style="font-family: var(--font-mono);">
                       ${i.quantity} ${escapeHtml(i.unit)}

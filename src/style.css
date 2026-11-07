@@ -3549,11 +3549,25 @@ html.dark .course-subtitle,
 /* Weekly Progress Strip */
 .weekly-cycle-strip {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 16px;
   overflow-x: auto;
   padding-bottom: 4px;
+}
+
+@media (max-width: 860px) {
+  .weekly-cycle-strip {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+  }
+  .week-step-pill {
+    min-width: 88px;
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
 }
 
 .week-step-pill {

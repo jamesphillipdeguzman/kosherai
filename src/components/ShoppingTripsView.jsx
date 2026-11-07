@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getGroceryItems, updateShoppingTrip } from '../services/courseProjectStorage.js';
 import EditShoppingTripModal from './EditShoppingTripModal.jsx';
+import { normalizeWeek } from '../utils/weekNormalization.js';
 import {
   escapeHtml,
   formatNumber,
@@ -32,6 +33,7 @@ export default function ShoppingTripsView({
   onSave,
   editingTripId,
   selectedWeek,
+  onSelectWeek,
   onSelectGrocery,
   onSelectTrip
 }) {
@@ -47,9 +49,11 @@ export default function ShoppingTripsView({
   const [itemQuantity, setItemQuantity] = useState(1);
   const [itemUnit, setItemUnit] = useState('kg');
 
-  const trips = (activeWeekFilter && activeWeekFilter !== 'all')
-    ? allTrips.filter(t => Number(t.projectWeek) === Number(activeWeekFilter))
-    : allTrips;
+  const normSelectedWeek = normalizeWeek(selectedWeek !== undefined ? selectedWeek : activeWeekFilter);
+
+  const trips = normSelectedWeek === 'all'
+    ? allTrips
+    : allTrips.filter(t => normalizeWeek(t.projectWeek) === normSelectedWeek);
 
   useEffect(() => {
     if (!lightboxTrip) return;
@@ -138,30 +142,23 @@ export default function ShoppingTripsView({
 
   return (
     <div className="trips-view-container">
-      {/* Week Filter Bar (W01–W06) */}
-      <div className="week-filter-bar flex items-center gap-2 mb-4 overflow-x-auto py-1">
-        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Week Filter:</span>
-        <button
-          type="button"
-          className={`week-filter-chip px-3 py-1 text-xs rounded-full border transition-all cursor-pointer ${activeWeekFilter === 'all' ? 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'}`}
-          onClick={() => setActiveWeekFilter('all')}
-        >
-          All Weeks ({allTrips.length})
-        </button>
-        {[1, 2, 3, 4, 5, 6].map(w => {
-          const count = allTrips.filter(t => Number(t.projectWeek) === w).length;
-          const isSelected = Number(activeWeekFilter) === w;
-          return (
-            <button
-              key={w}
-              type="button"
-              className={`week-filter-chip px-3 py-1 text-xs rounded-full border transition-all cursor-pointer ${isSelected ? 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'}`}
-              onClick={() => setActiveWeekFilter(w)}
-            >
-              W0{w} {count > 0 ? `(${count})` : ''}
-            </button>
-          );
-        })}
+      {/* Active Study Week Context (Secondary Filter Row Removed) */}
+      <div className="trips-week-status-strip flex items-center justify-between mb-3 text-xs text-slate-500 dark:text-slate-400">
+        <span className="font-medium">
+          Showing: <strong className="text-slate-700 dark:text-slate-200">{normSelectedWeek === 'all' ? 'All Weeks' : `Week ${normSelectedWeek} (W0${normSelectedWeek})`}</strong> • {trips.length} {trips.length === 1 ? 'trip recorded' : 'trips recorded'}
+        </span>
+        {normSelectedWeek !== 'all' && (
+          <button
+            type="button"
+            className="text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer"
+            onClick={() => {
+              if (onSelectWeek) onSelectWeek('all');
+              setActiveWeekFilter('all');
+            }}
+          >
+            Show All Weeks ({allTrips.length})
+          </button>
+        )}
       </div>
 
       <div className="trips-grid">
