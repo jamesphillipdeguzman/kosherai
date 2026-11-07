@@ -226,17 +226,19 @@ export function Header({
           <div className="header-auth-controls inline-flex items-center gap-1.5" id="header-auth-container">
             {currentUser ? (
               <div
-                className="user-profile-pill flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xs border border-slate-200/80 dark:border-slate-700/80 px-2.5 py-1 rounded-full text-xs shadow-2xs"
+                className="user-profile-pill flex items-center gap-2 bg-slate-850/90 dark:bg-slate-800/90 backdrop-blur-xs border border-slate-700/80 dark:border-slate-700/80 px-2.5 py-1 rounded-full text-xs shadow-2xs"
                 title={`Signed in as ${currentUser.name || currentUser.email || 'Tenant User'}${currentUser.email ? ` (${currentUser.email})` : ''}`}
               >
-                <span className="font-semibold text-slate-700 dark:text-slate-200">{firstName}</span>
-                <span className="text-slate-300 dark:text-slate-600">|</span>
+                <span className="text-xs font-semibold text-slate-100 drop-shadow-xs">
+                  {firstName || currentUser?.name || currentUser?.email || 'User'}
+                </span>
+                <span className="text-slate-500">|</span>
                 <button
                   type="button"
                   id="header-signout-btn"
                   onClick={handleSignOut}
                   title="Sign out and clear local device cache"
-                  className="font-medium text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 transition-colors cursor-pointer"
+                  className="text-xs font-medium text-slate-300 hover:text-white dark:text-slate-300 dark:hover:text-white transition-colors cursor-pointer"
                 >
                   Sign Out
                 </button>

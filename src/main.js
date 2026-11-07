@@ -177,6 +177,7 @@ const state = {
   courseSubTab: 'dashboard', // 'dashboard' | 'trips' | 'groceries' | 'waste' | 'mealplan' | 'export'
   selectedWeekView: 'all',
   tripsWeekFilter: 'all',
+  grocerySearch: '',
   mealPlanWeek: 2,
   insightsPeriod: 'last_30_days',
   // 5 Independently Collapsible Insight Categories (Defaults to Collapsed)
@@ -1561,6 +1562,44 @@ Cracked black pepper`;
     });
   });
 
+  // Grocery Search Input & Clear Events (Trips & Purchases Views)
+  const grocerySearchInput = document.querySelector('#grocery-search-input');
+  if (grocerySearchInput) {
+    grocerySearchInput.addEventListener('input', (e) => {
+      state.grocerySearch = e.target.value;
+      render();
+      const nextInput = document.querySelector('#grocery-search-input');
+      if (nextInput) {
+        nextInput.focus();
+        const len = nextInput.value.length;
+        nextInput.setSelectionRange(len, len);
+      }
+    });
+  }
+
+  const handleClearGrocerySearch = (e) => {
+    if (e) e.preventDefault();
+    state.grocerySearch = '';
+    render();
+    const nextInput = document.querySelector('#grocery-search-input');
+    if (nextInput) nextInput.focus();
+  };
+
+  const grocerySearchClear = document.querySelector('#grocery-search-clear');
+  if (grocerySearchClear) {
+    grocerySearchClear.addEventListener('click', handleClearGrocerySearch);
+  }
+
+  const emptyClearSearchBtn = document.querySelector('#empty-clear-search-btn');
+  if (emptyClearSearchBtn) {
+    emptyClearSearchBtn.addEventListener('click', handleClearGrocerySearch);
+  }
+
+  const statusClearSearchBtn = document.querySelector('#status-clear-search-btn');
+  if (statusClearSearchBtn) {
+    statusClearSearchBtn.addEventListener('click', handleClearGrocerySearch);
+  }
+
   // Meal Plan Week Selector
   document.querySelectorAll('[data-mealplan-week]').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -2590,9 +2629,22 @@ Cracked black pepper`;
       let resolvedPhotoUrl = currentTrip.receiptImageUrl || null;
       if (state.editTripPendingFile) {
         try {
-          const compressed = await compressImage(state.editTripPendingFile, 1600, 0.8);
-          const cUrl = await uploadReceiptImageToCloudinary(compressed);
-          resolvedPhotoUrl = cUrl || compressed;
+          const compressed = await compressImage(state.editTripPendingFile, 1000, 0.75);
+          const compressedDataUrl = compressed?.dataUrl || null;
+          const uploadSource = compressed?.blob || state.editTripPendingFile;
+
+          let cUrl = null;
+          if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+            try {
+              cUrl = await uploadReceiptImageToCloudinary(uploadSource);
+            } catch (uploadErr) {
+              console.warn('[EditTrip] Photo upload error:', uploadErr);
+            }
+          }
+
+          resolvedPhotoUrl = (cUrl && typeof cUrl === 'string')
+            ? cUrl
+            : (compressedDataUrl || state.editTripPendingUrl || currentTrip.receiptImageUrl);
         } catch (uploadErr) {
           console.warn('[EditTrip] Photo upload fallback:', uploadErr);
           resolvedPhotoUrl = state.editTripPendingUrl || currentTrip.receiptImageUrl;

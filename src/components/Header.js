@@ -72,19 +72,19 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
         <!-- Dynamic Auth State: Avatar/Sign Out if logged in, Sign In/Get Started if logged out -->
         <div class="header-auth-controls inline-flex items-center gap-1.5" id="header-auth-container">
           ${currentUser ? `
-            <div class="user-profile-pill flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xs border border-slate-200/80 dark:border-slate-700/80 px-2.5 py-1 rounded-full text-xs shadow-2xs" title="Signed in as ${escapeAttr(currentUser.name || currentUser.email || 'Tenant User')}${currentUser.email ? ` (${escapeAttr(currentUser.email)})` : ''}">
+            <div class="user-profile-pill flex items-center gap-2 bg-slate-850/90 dark:bg-slate-800/90 backdrop-blur-xs border border-slate-700/80 dark:border-slate-700/80 px-2.5 py-1 rounded-full text-xs shadow-2xs" title="Signed in as ${escapeAttr(currentUser.name || currentUser.email || 'Tenant User')}${currentUser.email ? ` (${escapeAttr(currentUser.email)})` : ''}">
               <span class="inline-flex items-center gap-1.5">
                 <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-xs flex-shrink-0" title="Online session"></span>
-                <span class="user-first-name font-semibold text-slate-700 dark:text-slate-200">
-                  ${escapeHtml(firstName)}
+                <span class="user-first-name text-xs font-semibold text-slate-100 dark:text-white drop-shadow-xs">
+                  ${escapeHtml(firstName || currentUser?.name || currentUser?.email || 'User')}
                 </span>
               </span>
-              <span class="text-slate-300 dark:text-slate-600 select-none">|</span>
+              <span class="text-slate-500 select-none">|</span>
               <button
                 type="button"
                 id="header-signout-btn"
                 title="Sign out of your session"
-                class="text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 font-medium transition-colors cursor-pointer"
+                class="text-xs font-medium text-slate-300 hover:text-white dark:text-slate-300 dark:hover:text-white transition-colors cursor-pointer"
               >
                 Sign Out
               </button>

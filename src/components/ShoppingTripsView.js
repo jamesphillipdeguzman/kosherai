@@ -1,5 +1,5 @@
 import { getShoppingTrips, getGroceryItems, getProjectConfig, getProjectWeekForDate } from '../services/courseProjectStorage.js';
-import { normalizeWeek } from '../utils/weekNormalization.js';
+import { normalizeWeek, getGroceryItemName, matchesGroceryQuery, getTripGroceryItems } from '../utils/weekNormalization.js';
 
 export function escapeHtml(str) {
   if (!str) return '';
@@ -270,8 +270,8 @@ export function renderEditTripModal(state = {}) {
  * Renders an individual shopping trip card with inline editing mode support
  * and Edit (pencil icon) & Delete Trip buttons.
  */
-export function renderTripCard(trip, isEditing = false) {
-  let items = getGroceryItems(trip.id);
+export function renderTripCard(trip, isEditing = false, matchingItemsOverride = null) {
+  let items = matchingItemsOverride || getGroceryItems(trip.id);
   if (!items || items.length === 0) {
     if (Array.isArray(trip.items) && trip.items.length > 0) items = trip.items;
     else if (Array.isArray(trip.rawItems) && trip.rawItems.length > 0) items = trip.rawItems;
@@ -279,8 +279,9 @@ export function renderTripCard(trip, isEditing = false) {
     else if (Array.isArray(trip.groceryItems) && trip.groceryItems.length > 0) items = trip.groceryItems;
     else items = [];
   }
+  const isSearchActive = Boolean(matchingItemsOverride);
   const primaryItem = items[0] || null;
-  const currentItemName = primaryItem?.name || primaryItem?.raw_receipt_text || primaryItem?.rawReceiptText || primaryItem?.itemName || trip?.extractedItemName || '';
+  const currentItemName = getGroceryItemName(primaryItem) || trip?.extractedItemName || '';
   const currentQuantity = (primaryItem?.quantity !== undefined && primaryItem?.quantity !== null && primaryItem?.quantity !== '')
     ? primaryItem.quantity
     : (primaryItem?.qty ?? 1);
@@ -425,14 +426,21 @@ export function renderTripCard(trip, isEditing = false) {
       <!-- Items Preview -->
       ${items.length > 0 ? `
         <div class="trip-items-preview">
-          <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">Extracted Items:</div>
+          <div style="font-size: 0.75rem; font-weight: 700; color: ${isSearchActive ? 'var(--safe-green, #10b981)' : 'var(--text-muted)'}; margin-bottom: 6px;">
+            ${isSearchActive ? `Matching Groceries (${items.length}):` : 'Extracted Items:'}
+          </div>
           <div class="trip-items-chips">
-            ${items.slice(0, 5).map(i => `
-              <span class="item-mini-chip grocery-card status-${(i.lidStatus || 'SAFE').toLowerCase()} cursor-pointer hover:opacity-85 transition-opacity" data-grocery-name="${escapeHtml(i.name)}" role="button" tabindex="0" title="Click to view food details and guidance">
-                ${escapeHtml(i.name)} (${i.quantity} ${i.unit})
-              </span>
-            `).join('')}
-            ${items.length > 5 ? `<span class="item-mini-chip" style="background: var(--bg-card-hover);">+${items.length - 5} more</span>` : ''}
+            ${items.slice(0, 8).map(i => {
+              const name = getGroceryItemName(i);
+              const qty = (i.quantity !== undefined && i.quantity !== null) ? i.quantity : (i.qty ?? 1);
+              const unit = i.unit || 'kg';
+              return `
+                <span class="item-mini-chip grocery-card status-${(i.lidStatus || 'SAFE').toLowerCase()} cursor-pointer hover:opacity-85 transition-opacity" data-grocery-name="${escapeHtml(name)}" role="button" tabindex="0" title="Click to view food details and guidance">
+                  ${escapeHtml(name)} (${qty} ${unit})
+                </span>
+              `;
+            }).join('')}
+            ${items.length > 8 ? `<span class="item-mini-chip" style="background: var(--bg-card-hover);">+${items.length - 8} more</span>` : ''}
           </div>
         </div>
       ` : ''}
@@ -474,14 +482,41 @@ export function renderTripCard(trip, isEditing = false) {
 export function renderShoppingTripsView(state = {}) {
   const allTrips = (state.trips && state.trips.length > 0) ? state.trips : getShoppingTrips();
   const selectedWeek = normalizeWeek(state.selectedWeekView || state.selectedWeek || state.tripsWeekFilter || 'all');
+  const searchQuery = String(state.grocerySearch || state.searchQuery || '').trim();
   const config = typeof getProjectConfig === 'function' ? getProjectConfig() : { startDate: '2026-10-31' };
 
-  const trips = selectedWeek === 'all'
+  // 1. Filter trips by selected week
+  const weekTrips = selectedWeek === 'all'
     ? allTrips
     : allTrips.filter(t => {
         const tripWeek = t.projectWeek ? Number(t.projectWeek) : (typeof getProjectWeekForDate === 'function' ? getProjectWeekForDate(t.date, config.startDate) : 1);
         return tripWeek === selectedWeek;
       });
+
+  // 2. Fetch all grocery items from storage for comprehensive item-level resolution
+  const allGroceryItems = typeof getGroceryItems === 'function' ? getGroceryItems() : [];
+
+  // 3. Filter by grocery search query if provided
+  let filteredTrips = [];
+  const tripMatchingItemsMap = new Map();
+
+  if (!searchQuery) {
+    filteredTrips = weekTrips;
+  } else {
+    for (const trip of weekTrips) {
+      const items = getTripGroceryItems(trip, allGroceryItems);
+      const matchingItems = items.filter(i => matchesGroceryQuery(i, searchQuery));
+      const storeMatches = String(trip.storeName || '').toLowerCase().includes(searchQuery.toLowerCase());
+
+      if (matchingItems.length > 0) {
+        filteredTrips.push(trip);
+        tripMatchingItemsMap.set(trip.id, matchingItems);
+      } else if (storeMatches) {
+        filteredTrips.push(trip);
+        tripMatchingItemsMap.set(trip.id, items);
+      }
+    }
+  }
 
   return `
     <div class="trips-view-container">
@@ -511,32 +546,76 @@ export function renderShoppingTripsView(state = {}) {
         </div>
       </div>
 
-      <!-- Study Week Active Context Status (Secondary Filter Row Removed) -->
+      <!-- Search Bar for Scanned Grocery Items -->
+      <div class="grocery-search-container mb-3" style="max-width: 580px; width: 100%;">
+        <div class="search-box-wrapper" style="position: relative; margin: 0;">
+          <svg class="search-icon-left" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none;">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input
+            type="text"
+            id="grocery-search-input"
+            class="search-input"
+            placeholder="Search groceries (e.g. Mangga, Bawang, Tilapia)..."
+            value="${escapeHtml(searchQuery)}"
+            style="width: 100%; padding: 12px 42px 12px 44px; border-radius: 12px; font-size: 0.9rem; box-sizing: border-box;"
+            autocomplete="off"
+          />
+          ${searchQuery ? `
+            <button
+              type="button"
+              class="search-clear-btn"
+              id="grocery-search-clear"
+              aria-label="Clear search"
+              style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: #94a3b8; font-size: 14px; cursor: pointer; padding: 4px; border-radius: 50%; display: flex; align-items: center; justify-content: center;"
+            >
+              ✕
+            </button>
+          ` : ''}
+        </div>
+      </div>
+
+      <!-- Study Week Active Context Status -->
       <div class="trips-week-status-strip flex items-center justify-between mb-3 text-xs text-slate-500 dark:text-slate-400">
         <span class="font-medium">
           Showing: <strong class="text-slate-700 dark:text-slate-200">${selectedWeek === 'all' ? 'All Weeks' : `Week ${selectedWeek} (W0${selectedWeek})`}</strong> 
-          • ${trips.length} ${trips.length === 1 ? 'trip recorded' : 'trips recorded'}
+          • ${filteredTrips.length} ${filteredTrips.length === 1 ? 'trip' : 'trips'} ${searchQuery ? `matching "${escapeHtml(searchQuery)}"` : 'recorded'}
         </span>
-        ${selectedWeek !== 'all' ? `
-          <button type="button" class="text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer" data-week-select="all">
-            Show All Weeks (${allTrips.length})
-          </button>
-        ` : ''}
+        <div style="display: flex; gap: 12px; align-items: center;">
+          ${searchQuery ? `
+            <button type="button" class="text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer" id="status-clear-search-btn">
+              Clear Search
+            </button>
+          ` : ''}
+          ${selectedWeek !== 'all' ? `
+            <button type="button" class="text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer" data-week-select="all">
+              Show All Weeks (${allTrips.length})
+            </button>
+          ` : ''}
+        </div>
       </div>
 
       <!-- Trips List -->
-      ${trips.length === 0 ? `
-        <div class="empty-state-card">
-          <div class="empty-icon">🧾</div>
-          <h3>No Shopping Trips Recorded Yet</h3>
-          <p>Scan your first grocery receipt from your camera/phone or add a manual trip record for Week 1 baseline.</p>
+      ${filteredTrips.length === 0 ? `
+        <div class="empty-state-card" style="padding: 32px 16px; text-align: center;">
+          <div class="empty-icon" style="font-size: 2rem; margin-bottom: 8px;">${searchQuery ? '🔍' : '🧾'}</div>
+          <h3>${searchQuery ? `No groceries matching "${escapeHtml(searchQuery)}"` : 'No Shopping Trips Recorded Yet'}</h3>
+          <p>${searchQuery 
+            ? `No matching grocery items found in ${selectedWeek === 'all' ? 'All Weeks' : `Week ${selectedWeek}`}. Try a different item name or clear your search.`
+            : 'Scan your first grocery receipt from your camera/phone or add a manual trip record for Week 1 baseline.'
+          }</p>
           <div style="display: flex; gap: 10px; justify-content: center; margin-top: 14px;">
-            <button class="btn-primary" id="empty-scan-btn">📷 Scan Food</button>
+            ${searchQuery ? `
+              <button class="btn-secondary" id="empty-clear-search-btn">Clear Search</button>
+            ` : `
+              <button class="btn-primary" id="empty-scan-btn">📷 Scan Food</button>
+            `}
           </div>
         </div>
       ` : `
         <div class="trips-grid">
-          ${trips.map(trip => renderTripCard(trip, state.editingTripId === trip.id)).join('')}
+          ${filteredTrips.map(trip => renderTripCard(trip, state.editingTripId === trip.id, tripMatchingItemsMap.get(trip.id) || null)).join('')}
         </div>
       `}
     </div>

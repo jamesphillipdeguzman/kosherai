@@ -90,9 +90,91 @@ export function isWeekMatch(recordWeek, targetWeek) {
   return normRecord === normTarget;
 }
 
+/**
+ * Resolves the display name of a grocery item supporting all field variations:
+ * name, itemName, item_name, productName, product_name, raw_receipt_text, rawReceiptText
+ *
+ * @param {object|string} item
+ * @returns {string}
+ */
+export function getGroceryItemName(item) {
+  if (!item) return '';
+  if (typeof item === 'string') return item.trim();
+  const name = (
+    item.name ||
+    item.itemName ||
+    item.item_name ||
+    item.productName ||
+    item.product_name ||
+    item.raw_receipt_text ||
+    item.rawReceiptText ||
+    item.itemDescription ||
+    item.description ||
+    ''
+  );
+  return String(name).trim();
+}
+
+/**
+ * Checks whether a grocery item matches a search query (case-insensitive, trimmed).
+ *
+ * @param {object|string} item
+ * @param {string} query
+ * @returns {boolean}
+ */
+export function matchesGroceryQuery(item, query) {
+  if (!query || !String(query).trim()) return true;
+  const cleanQuery = String(query).trim().toLowerCase();
+  const name = getGroceryItemName(item).toLowerCase();
+  if (name.includes(cleanQuery)) return true;
+
+  const raw = String(item.raw_receipt_text || item.rawReceiptText || '').toLowerCase();
+  if (raw && raw.includes(cleanQuery)) return true;
+
+  return false;
+}
+
+/**
+ * Retrieves all grocery items associated with a trip across both the separate
+ * grocery items collection and nested trip arrays.
+ *
+ * @param {object} trip
+ * @param {Array<object>} [allGroceryItems]
+ * @returns {Array<object>}
+ */
+export function getTripGroceryItems(trip, allGroceryItems = null) {
+  if (!trip) return [];
+  const tripId = trip.id;
+
+  // 1. Check separate grocery collection if provided
+  if (Array.isArray(allGroceryItems) && tripId) {
+    const matched = allGroceryItems.filter(i => i.tripId === tripId || i.trip_id === tripId);
+    if (matched.length > 0) return matched;
+  }
+
+  // 2. Check nested trip item arrays
+  if (Array.isArray(trip.items) && trip.items.length > 0) return trip.items;
+  if (Array.isArray(trip.rawItems) && trip.rawItems.length > 0) return trip.rawItems;
+  if (Array.isArray(trip.extractedItems) && trip.extractedItems.length > 0) return trip.extractedItems;
+  if (Array.isArray(trip.groceryItems) && trip.groceryItems.length > 0) return trip.groceryItems;
+
+  if (trip.extractedItemName) {
+    return [{
+      name: trip.extractedItemName,
+      quantity: trip.totalScaleWeightKg || 1,
+      unit: 'kg'
+    }];
+  }
+
+  return [];
+}
+
 export default {
   normalizeWeek,
   resolveItemWeek,
-  isWeekMatch
+  isWeekMatch,
+  getGroceryItemName,
+  matchesGroceryQuery,
+  getTripGroceryItems
 };
 

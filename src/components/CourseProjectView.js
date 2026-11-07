@@ -69,8 +69,8 @@ import { DIET_RECIPES } from '../data/dietRecipes.js';
 import lidRecipes from '../data/lidRecipes.json' with { type: 'json' };
 import { renderManualTripModal } from './ManualTripModal.js';
 import { renderShoppingTripsView, renderEditTripModal, renderTripCard, renderReceiptLightboxModal } from './ShoppingTripsView.js';
-import { normalizeWeek, resolveItemWeek } from '../utils/weekNormalization.js';
-export { renderManualTripModal, renderShoppingTripsView, renderEditTripModal, renderTripCard, renderReceiptLightboxModal, updateShoppingTrip, normalizeWeek, resolveItemWeek };
+import { normalizeWeek, resolveItemWeek, getGroceryItemName, matchesGroceryQuery } from '../utils/weekNormalization.js';
+export { renderManualTripModal, renderShoppingTripsView, renderEditTripModal, renderTripCard, renderReceiptLightboxModal, updateShoppingTrip, normalizeWeek, resolveItemWeek, getGroceryItemName, matchesGroceryQuery };
 
 export function renderCourseProjectView(state = {}) {
   const activeSubTab = state.courseSubTab || 'dashboard'; // 'dashboard' | 'trips' | 'groceries' | 'waste' | 'mealplan' | 'export'
@@ -453,10 +453,14 @@ function renderGroceryPurchasesTab(state) {
   const tripsMap = new Map(trips.map(t => [t.id, t]));
 
   const selectedWeek = normalizeWeek(state.selectedWeekView || state.selectedWeek || state.tripsWeekFilter || 'all');
+  const searchQuery = String(state.grocerySearch || state.searchQuery || '').trim();
 
-  const items = selectedWeek === 'all'
-    ? allItems
-    : allItems.filter(i => resolveItemWeek(i, tripsMap, config) === selectedWeek);
+  const items = allItems.filter(i => {
+    const weekMatches = selectedWeek === 'all' || resolveItemWeek(i, tripsMap, config) === selectedWeek;
+    if (!weekMatches) return false;
+    if (!searchQuery) return true;
+    return matchesGroceryQuery(i, searchQuery);
+  });
 
   return `
     <div class="purchases-view-container">
@@ -476,11 +480,69 @@ function renderGroceryPurchasesTab(state) {
         </div>
       </div>
 
+      <!-- Search Bar for Scanned Grocery Items -->
+      <div class="grocery-search-container mb-3" style="max-width: 580px; width: 100%;">
+        <div class="search-box-wrapper" style="position: relative; margin: 0;">
+          <svg class="search-icon-left" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none;">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input
+            type="text"
+            id="grocery-search-input"
+            class="search-input"
+            placeholder="Search groceries (e.g. Mangga, Bawang, Tilapia)..."
+            value="${escapeHtml(searchQuery)}"
+            style="width: 100%; padding: 12px 42px 12px 44px; border-radius: 12px; font-size: 0.9rem; box-sizing: border-box;"
+            autocomplete="off"
+          />
+          ${searchQuery ? `
+            <button
+              type="button"
+              class="search-clear-btn"
+              id="grocery-search-clear"
+              aria-label="Clear search"
+              style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: #94a3b8; font-size: 14px; cursor: pointer; padding: 4px; border-radius: 50%; display: flex; align-items: center; justify-content: center;"
+            >
+              ✕
+            </button>
+          ` : ''}
+        </div>
+      </div>
+
+      <!-- Active Context & Status Strip -->
+      <div class="trips-week-status-strip flex items-center justify-between mb-3 text-xs text-slate-500 dark:text-slate-400">
+        <span class="font-medium">
+          Showing: <strong class="text-slate-700 dark:text-slate-200">${selectedWeek === 'all' ? 'All Weeks' : `Week ${selectedWeek} (W0${selectedWeek})`}</strong> 
+          • ${items.length} ${items.length === 1 ? 'item' : 'items'} ${searchQuery ? `matching "${escapeHtml(searchQuery)}"` : 'recorded'}
+        </span>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          ${searchQuery ? `
+            <button type="button" class="text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer" id="status-clear-search-btn">
+              Clear Search
+            </button>
+          ` : ''}
+          ${selectedWeek !== 'all' ? `
+            <button type="button" class="text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer" data-week-select="all">
+              Show All Weeks (${allItems.length})
+            </button>
+          ` : ''}
+        </div>
+      </div>
+
       ${items.length === 0 ? `
-        <div class="empty-state-card">
-          <div class="empty-icon">🥬</div>
-          <h3>${selectedWeek === 'all' ? 'No Grocery Items in Inventory' : `No Grocery Items in Week ${selectedWeek}`}</h3>
-          <p>${selectedWeek === 'all' ? 'Scan a receipt or add a shopping trip to populate itemized grocery records.' : `No items found for Week ${selectedWeek}. Select "All Weeks" above to view all records.`}</p>
+        <div class="empty-state-card" style="padding: 32px 16px; text-align: center;">
+          <div class="empty-icon" style="font-size: 2rem; margin-bottom: 8px;">${searchQuery ? '🔍' : '🥬'}</div>
+          <h3>${searchQuery ? `No groceries matching "${escapeHtml(searchQuery)}"` : (selectedWeek === 'all' ? 'No Grocery Items in Inventory' : `No Grocery Items in Week ${selectedWeek}`)}</h3>
+          <p>${searchQuery 
+            ? `No matching grocery items found in ${selectedWeek === 'all' ? 'All Weeks' : `Week ${selectedWeek}`}. Try a different item name or clear your search.`
+            : (selectedWeek === 'all' ? 'Scan a receipt or add a shopping trip to populate itemized grocery records.' : `No items found for Week ${selectedWeek}. Select "All Weeks" above to view all records.`)
+          }</p>
+          <div style="display: flex; gap: 10px; justify-content: center; margin-top: 14px;">
+            ${searchQuery ? `
+              <button class="btn-secondary" id="empty-clear-search-btn">Clear Search</button>
+            ` : ''}
+          </div>
         </div>
       ` : `
         <div class="table-responsive">
@@ -499,26 +561,28 @@ function renderGroceryPurchasesTab(state) {
             <tbody>
               ${items.map(i => {
     const status = (i.lidStatus || 'SAFE').toUpperCase();
-    const dbItem = LID_DATABASE.find(db => db.name.toLowerCase() === (i.name || '').toLowerCase() || db.id === i.id || db.id === i.itemId);
-    const itemId = dbItem?.id || i.itemId || i.id || ('grocery-' + (i.name || '').toLowerCase().replace(/\s+/g, '-'));
+    const displayName = getGroceryItemName(i);
+    const dbItem = LID_DATABASE.find(db => db.name.toLowerCase() === displayName.toLowerCase() || db.id === i.id || db.id === i.itemId);
+    const itemId = dbItem?.id || i.itemId || i.id || ('grocery-' + displayName.toLowerCase().replace(/\s+/g, '-'));
     const itemWeek = resolveItemWeek(i, tripsMap, config);
     const parentTrip = tripsMap.get(i.tripId || i.trip_id);
     return `
-                  <tr class="grocery-row grocery-card cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors" data-item-id="${escapeHtml(itemId)}" data-grocery-name="${escapeHtml(i.name)}" role="button" tabindex="0" title="Click to view food details and clinical guidance">
+                  <tr class="grocery-row grocery-card cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors" data-item-id="${escapeHtml(itemId)}" data-grocery-name="${escapeHtml(displayName)}" role="button" tabindex="0" title="Click to view food details and clinical guidance">
                     <td>
                       <div style="font-weight: 700;" class="text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1.5">
                         <span>${dbItem?.icon || '🥬'}</span>
-                        <span>${escapeHtml(i.name)}</span>
+                        <span>${escapeHtml(displayName)}</span>
                       </div>
-                      ${i.rawReceiptText && i.rawReceiptText !== i.name ? `
+                      ${i.rawReceiptText && i.rawReceiptText !== displayName ? `
                         <div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">${escapeHtml(i.rawReceiptText)}</div>
                       ` : ''}
                     </td>
                     <td style="font-family: var(--font-mono); font-size: 0.8rem;">
-                      Week ${itemWeek} • ${i.purchaseDate || parentTrip?.date || '—'}
+                      <div>Week ${itemWeek} • ${i.purchaseDate || parentTrip?.date || '—'}</div>
+                      ${parentTrip?.storeName ? `<div style="font-size: 0.72rem; color: var(--text-muted);">${escapeHtml(parentTrip.storeName)}</div>` : ''}
                     </td>
                     <td style="font-family: var(--font-mono);">
-                      ${i.quantity} ${escapeHtml(i.unit)}
+                      ${i.quantity || 1} ${escapeHtml(i.unit || 'kg')}
                     </td>
                     <td style="font-family: var(--font-mono);">
                       ₱${formatNumber(i.unitPrice)}

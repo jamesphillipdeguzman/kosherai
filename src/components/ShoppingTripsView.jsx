@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getGroceryItems, updateShoppingTrip } from '../services/courseProjectStorage.js';
 import EditShoppingTripModal from './EditShoppingTripModal.jsx';
-import { normalizeWeek } from '../utils/weekNormalization.js';
+import { normalizeWeek, getGroceryItemName, matchesGroceryQuery, getTripGroceryItems } from '../utils/weekNormalization.js';
 import {
   escapeHtml,
   formatNumber,
@@ -35,11 +35,14 @@ export default function ShoppingTripsView({
   selectedWeek,
   onSelectWeek,
   onSelectGrocery,
-  onSelectTrip
+  onSelectTrip,
+  searchQuery: propSearchQuery,
+  onSearchChange
 }) {
   const rawTrips = propTrips || shoppingTrips || filteredTrips || (typeof getShoppingTrips === 'function' ? getShoppingTrips() : []);
   const allTrips = Array.isArray(rawTrips) ? rawTrips : [];
   const [activeWeekFilter, setActiveWeekFilter] = useState(selectedWeek || 'all');
+  const [searchQuery, setSearchQuery] = useState(propSearchQuery || '');
   const [selectedGrocery, setSelectedGrocery] = useState(null);
   const [editingId, setEditingId] = useState(editingTripId || null);
   const [modalTrip, setModalTrip] = useState(null);
@@ -49,11 +52,44 @@ export default function ShoppingTripsView({
   const [itemQuantity, setItemQuantity] = useState(1);
   const [itemUnit, setItemUnit] = useState('kg');
 
+  useEffect(() => {
+    if (propSearchQuery !== undefined) {
+      setSearchQuery(propSearchQuery);
+    }
+  }, [propSearchQuery]);
+
   const normSelectedWeek = normalizeWeek(selectedWeek !== undefined ? selectedWeek : activeWeekFilter);
 
-  const trips = normSelectedWeek === 'all'
+  const weekTrips = normSelectedWeek === 'all'
     ? allTrips
     : allTrips.filter(t => normalizeWeek(t.projectWeek) === normSelectedWeek);
+
+  const cleanQuery = searchQuery.trim().toLowerCase();
+
+  const tripMatchingItemsMap = new Map();
+  const trips = !cleanQuery
+    ? weekTrips
+    : weekTrips.filter(t => {
+        let tripItems = getGroceryItems(t.id);
+        if (!tripItems || tripItems.length === 0) {
+          if (Array.isArray(t.items) && t.items.length > 0) tripItems = t.items;
+          else if (Array.isArray(t.rawItems) && t.rawItems.length > 0) tripItems = t.rawItems;
+          else if (Array.isArray(t.extractedItems) && t.extractedItems.length > 0) tripItems = t.extractedItems;
+          else if (Array.isArray(t.groceryItems) && t.groceryItems.length > 0) tripItems = t.groceryItems;
+          else tripItems = [];
+        }
+        const matches = tripItems.filter(i => matchesGroceryQuery(i, cleanQuery));
+        const storeMatches = String(t.storeName || '').toLowerCase().includes(cleanQuery);
+        if (matches.length > 0) {
+          tripMatchingItemsMap.set(t.id, matches);
+          return true;
+        }
+        if (storeMatches) {
+          tripMatchingItemsMap.set(t.id, tripItems);
+          return true;
+        }
+        return false;
+      });
 
   useEffect(() => {
     if (!lightboxTrip) return;
@@ -142,26 +178,105 @@ export default function ShoppingTripsView({
 
   return (
     <div className="trips-view-container">
-      {/* Active Study Week Context (Secondary Filter Row Removed) */}
-      <div className="trips-week-status-strip flex items-center justify-between mb-3 text-xs text-slate-500 dark:text-slate-400">
-        <span className="font-medium">
-          Showing: <strong className="text-slate-700 dark:text-slate-200">{normSelectedWeek === 'all' ? 'All Weeks' : `Week ${normSelectedWeek} (W0${normSelectedWeek})`}</strong> • {trips.length} {trips.length === 1 ? 'trip recorded' : 'trips recorded'}
-        </span>
-        {normSelectedWeek !== 'all' && (
-          <button
-            type="button"
-            className="text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer"
-            onClick={() => {
-              if (onSelectWeek) onSelectWeek('all');
-              setActiveWeekFilter('all');
+      {/* Search Bar for Scanned Grocery Items */}
+      <div className="grocery-search-container mb-3" style={{ maxWidth: '580px', width: '100%' }}>
+        <div className="search-box-wrapper" style={{ position: 'relative', margin: 0 }}>
+          <svg className="search-icon-left" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input
+            type="text"
+            id="grocery-search-input"
+            className="search-input"
+            placeholder="Search groceries (e.g. Mangga, Bawang, Tilapia)..."
+            value={searchQuery}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSearchQuery(val);
+              if (onSearchChange) onSearchChange(val);
             }}
-          >
-            Show All Weeks ({allTrips.length})
-          </button>
-        )}
+            style={{ width: '100%', padding: '12px 42px 12px 44px', borderRadius: '12px', fontSize: '0.9rem', boxSizing: 'border-box' }}
+            autoComplete="off"
+          />
+          {searchQuery ? (
+            <button
+              type="button"
+              className="search-clear-btn"
+              id="grocery-search-clear"
+              aria-label="Clear search"
+              onClick={() => {
+                setSearchQuery('');
+                if (onSearchChange) onSearchChange('');
+              }}
+              style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '14px', cursor: 'pointer', padding: '4px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              ✕
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <div className="trips-grid">
+      {/* Active Study Week Context */}
+      <div className="trips-week-status-strip flex items-center justify-between mb-3 text-xs text-slate-500 dark:text-slate-400">
+        <span className="font-medium">
+          Showing: <strong className="text-slate-700 dark:text-slate-200">{normSelectedWeek === 'all' ? 'All Weeks' : `Week ${normSelectedWeek} (W0${normSelectedWeek})`}</strong> 
+          • {trips.length} {trips.length === 1 ? 'trip' : 'trips'} {cleanQuery ? `matching "${searchQuery}"` : 'recorded'}
+        </span>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {cleanQuery && (
+            <button
+              type="button"
+              className="text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer"
+              onClick={() => {
+                setSearchQuery('');
+                if (onSearchChange) onSearchChange('');
+              }}
+            >
+              Clear Search
+            </button>
+          )}
+          {normSelectedWeek !== 'all' && (
+            <button
+              type="button"
+              className="text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer"
+              onClick={() => {
+                if (onSelectWeek) onSelectWeek('all');
+                setActiveWeekFilter('all');
+              }}
+            >
+              Show All Weeks ({allTrips.length})
+            </button>
+          )}
+        </div>
+      </div>
+
+      {trips.length === 0 ? (
+        <div className="empty-state-card" style={{ padding: '32px 16px', textAlign: 'center' }}>
+          <div className="empty-icon" style={{ fontSize: '2rem', marginBottom: '8px' }}>{cleanQuery ? '🔍' : '🧾'}</div>
+          <h3>{cleanQuery ? `No groceries matching "${searchQuery}"` : 'No Shopping Trips Recorded Yet'}</h3>
+          <p>{cleanQuery
+            ? `No matching grocery items found in ${normSelectedWeek === 'all' ? 'All Weeks' : `Week ${normSelectedWeek}`}. Try a different item name or clear your search.`
+            : 'Scan your first grocery receipt from your camera/phone or add a manual trip record for Week 1 baseline.'}
+          </p>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '14px' }}>
+            {cleanQuery ? (
+              <button
+                type="button"
+                className="btn-secondary"
+                id="empty-clear-search-btn"
+                onClick={() => {
+                  setSearchQuery('');
+                  if (onSearchChange) onSearchChange('');
+                }}
+              >
+                Clear Search
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <div className="trips-grid">
         {trips.map(trip => {
           const isEditing = editingId === trip.id;
           if (isEditing) {
@@ -278,7 +393,7 @@ export default function ShoppingTripsView({
             );
           }
 
-          let items = getGroceryItems(trip.id);
+          let items = tripMatchingItemsMap.get(trip.id) || getGroceryItems(trip.id);
           if (!items || items.length === 0) {
             if (Array.isArray(trip.items) && trip.items.length > 0) items = trip.items;
             else if (Array.isArray(trip.rawItems) && trip.rawItems.length > 0) items = trip.rawItems;
@@ -357,37 +472,47 @@ export default function ShoppingTripsView({
               {/* Extracted Items / Grocery Cards Preview */}
               {items.length > 0 && (
                 <div className="trip-items-preview my-2.5">
-                  <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">Extracted Items:</div>
+                  <div className={`text-[11px] font-bold ${cleanQuery ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'} mb-1`}>
+                    {cleanQuery ? `Matching Groceries (${items.length}):` : 'Extracted Items:'}
+                  </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {items.slice(0, 5).map((i, idx) => (
-                      <span
-                        key={i.id || idx}
-                        className={`item-mini-chip grocery-card status-${(i.lidStatus || 'SAFE').toLowerCase()} cursor-pointer hover:opacity-80 transition-opacity`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (onSelectGrocery) onSelectGrocery(i);
-                          else setSelectedGrocery(i);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
+                    {items.slice(0, 8).map((i, idx) => {
+                      const name = getGroceryItemName(i);
+                      const qty = (i.quantity !== undefined && i.quantity !== null) ? i.quantity : (i.qty ?? 1);
+                      const unit = i.unit || 'kg';
+                      return (
+                        <span
+                          key={i.id || idx}
+                          className={`item-mini-chip grocery-card status-${(i.lidStatus || 'SAFE').toLowerCase()} cursor-pointer hover:opacity-80 transition-opacity`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
                             e.stopPropagation();
                             if (onSelectGrocery) onSelectGrocery(i);
                             else setSelectedGrocery(i);
-                          }
-                        }}
-                        title="Click to view food details"
-                      >
-                        {i.name} ({i.quantity} {i.unit})
-                      </span>
-                    ))}
-                    {items.length > 5 ? (
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (onSelectGrocery) onSelectGrocery(i);
+                              else setSelectedGrocery(i);
+                            }
+                          }}
+                          title="Click to view food details"
+                        >
+                          {name} ({qty} {unit})
+                        </span>
+                      );
+                    })}
+                    {items.length > 8 ? (
                       <span className="item-mini-chip" style={{ background: 'var(--bg-card-hover, rgba(148, 163, 184, 0.15))' }}>
-                        +{items.length - 5} more
+                        +{items.length - 8} more
                       </span>
                     ) : null}
+                  </div>
+                </div>
+              )}
                   </div>
                 </div>
               )}

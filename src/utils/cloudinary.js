@@ -32,15 +32,62 @@ export function getRecipeImageUrl(imageRef, fallback = 'https://images.unsplash.
  * using the unsigned upload preset, returning a permanent secure HTTPS URL.
  *
  * If the source is already a Cloudinary HTTPS URL, it is returned immediately without re-uploading.
+ * Automatically unwraps compression result objects like { blob, dataUrl }.
+ * Never passes invalid objects or [object Object] to Cloudinary.
  *
- * @param {File|Blob|string} source
+ * @param {File|Blob|string|object} source
  * @returns {Promise<string|null>}
  */
 export async function uploadReceiptImageToCloudinary(source) {
   if (!source) return null;
-  if (typeof source === 'string') {
-    if (source.startsWith('https://res.cloudinary.com')) {
-      return source;
+
+  // 1. Unpack wrapper objects like { blob, dataUrl }, { file }, or compression results
+  let fileToUpload = source;
+  if (source && typeof source === 'object' && !(typeof Blob !== 'undefined' && source instanceof Blob)) {
+    if (source.blob && typeof Blob !== 'undefined' && source.blob instanceof Blob) {
+      fileToUpload = source.blob;
+    } else if (typeof source.dataUrl === 'string' && source.dataUrl.startsWith('data:')) {
+      fileToUpload = source.dataUrl;
+    } else if (source.file && (typeof Blob !== 'undefined' && source.file instanceof Blob)) {
+      fileToUpload = source.file;
+    } else if (typeof source.url === 'string' && source.url.startsWith('http')) {
+      return source.url;
+    } else if (typeof source.secure_url === 'string' && source.secure_url.startsWith('http')) {
+      return source.secure_url;
+    } else {
+      console.warn('[Cloudinary] Unsupported source object wrapper:', source);
+      return null;
+    }
+  }
+
+  // 2. Handle string sources (Cloudinary URLs, data URIs, blob URLs)
+  if (typeof fileToUpload === 'string') {
+    // If already on Cloudinary, return immediately
+    if (fileToUpload.startsWith('https://res.cloudinary.com')) {
+      return fileToUpload;
+    }
+
+    // Guard against literal '[object Object]' or invalid strings
+    if (fileToUpload.includes('[object Object]') || !fileToUpload.trim()) {
+      console.warn('[Cloudinary] Refusing to upload invalid string source:', fileToUpload);
+      return null;
+    }
+
+    if (fileToUpload.startsWith('blob:')) {
+      try {
+        const res = await fetch(fileToUpload);
+        fileToUpload = await res.blob();
+      } catch (e) {
+        console.warn('[Cloudinary] Could not resolve blob: URL:', e);
+        return null;
+      }
+    } else if (fileToUpload.startsWith('data:')) {
+      // Cloudinary upload API accepts data: URIs directly
+    } else if (fileToUpload.startsWith('http://') || fileToUpload.startsWith('https://')) {
+      // Valid remote URL supported by Cloudinary
+    } else {
+      console.warn('[Cloudinary] Unrecognized string format for image upload');
+      return null;
     }
   }
 
@@ -48,25 +95,18 @@ export async function uploadReceiptImageToCloudinary(source) {
   const uploadPreset = UPLOAD_PRESET;
 
   try {
-    let fileToUpload = source;
-    if (typeof source === 'string') {
-      if (source.startsWith('blob:')) {
-        try {
-          const res = await fetch(source);
-          fileToUpload = await res.blob();
-        } catch {
-          // ignore error if blob fetch fails in headless/test environments
-        }
-      } else if (source.startsWith('data:')) {
-        // Cloudinary upload API directly accepts data: URIs as the 'file' parameter
-        fileToUpload = source;
-      } else {
-        return source;
-      }
+    const formData = new FormData();
+
+    if (typeof Blob !== 'undefined' && fileToUpload instanceof Blob) {
+      const fileName = fileToUpload.name || 'receipt.jpg';
+      formData.append('file', fileToUpload, fileName);
+    } else if (typeof fileToUpload === 'string') {
+      formData.append('file', fileToUpload);
+    } else {
+      console.warn('[Cloudinary] Refusing to append non-file source to FormData:', fileToUpload);
+      return null;
     }
 
-    const formData = new FormData();
-    formData.append('file', fileToUpload);
     formData.append('upload_preset', uploadPreset);
     formData.append('folder', 'kosherai/receipts');
 
@@ -77,7 +117,10 @@ export async function uploadReceiptImageToCloudinary(source) {
 
     if (res.ok) {
       const data = await res.json();
-      return data.secure_url || data.url || null;
+      const resolvedUrl = data.secure_url || data.url || null;
+      if (resolvedUrl && typeof resolvedUrl === 'string') {
+        return resolvedUrl;
+      }
     } else {
       const errText = await res.text().catch(() => '');
       console.warn('[Cloudinary Upload Error]', res.status, errText);

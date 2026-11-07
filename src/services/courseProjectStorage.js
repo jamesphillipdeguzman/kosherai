@@ -342,10 +342,18 @@ export async function saveShoppingTrip(tripData, items = []) {
     });
 
     let receiptUrl = tripData.receiptImageUrl || null;
-    if (receiptUrl && (receiptUrl.startsWith('data:') || receiptUrl.startsWith('blob:'))) {
+    if (receiptUrl && typeof receiptUrl === 'object') {
+      receiptUrl = receiptUrl.dataUrl || receiptUrl.url || receiptUrl.secure_url || null;
+    }
+    if (typeof receiptUrl === 'string' && receiptUrl.includes('[object Object]')) {
+      receiptUrl = null;
+    }
+    if (receiptUrl && typeof receiptUrl === 'string' && (receiptUrl.startsWith('data:') || receiptUrl.startsWith('blob:'))) {
       try {
         const cUrl = await uploadReceiptImageToCloudinary(receiptUrl);
-        if (cUrl) receiptUrl = cUrl;
+        if (cUrl && typeof cUrl === 'string' && cUrl.startsWith('http')) {
+          receiptUrl = cUrl;
+        }
       } catch (err) {
         console.warn('[Cloudinary] Failed to upload receipt image:', err);
       }
@@ -1237,10 +1245,19 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
       ? updatedFields.receiptImageUrl
       : (updatedFields.receipt_image_url !== undefined ? updatedFields.receipt_image_url : existing.receiptImageUrl);
 
-    if (receiptImageUrl && (receiptImageUrl.startsWith('data:') || receiptImageUrl.startsWith('blob:'))) {
+    if (receiptImageUrl && typeof receiptImageUrl === 'object') {
+      receiptImageUrl = receiptImageUrl.dataUrl || receiptImageUrl.url || receiptImageUrl.secure_url || null;
+    }
+    if (typeof receiptImageUrl === 'string' && receiptImageUrl.includes('[object Object]')) {
+      receiptImageUrl = existing.receiptImageUrl || null;
+    }
+
+    if (receiptImageUrl && typeof receiptImageUrl === 'string' && (receiptImageUrl.startsWith('data:') || receiptImageUrl.startsWith('blob:'))) {
       try {
         const cUrl = await uploadReceiptImageToCloudinary(receiptImageUrl);
-        if (cUrl) receiptImageUrl = cUrl;
+        if (cUrl && typeof cUrl === 'string' && cUrl.startsWith('http')) {
+          receiptImageUrl = cUrl;
+        }
       } catch (err) {
         console.warn('[Cloudinary] Failed to upload updated receipt image:', err);
       }

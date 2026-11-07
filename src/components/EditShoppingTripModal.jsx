@@ -88,13 +88,17 @@ export default function EditShoppingTripModal({
 
   if (!isOpen || !trip) return null;
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
       setPendingFile(file);
       setPhotoRemoved(false);
-      const preview = URL.createObjectURL(file);
-      setPhotoPreview(preview);
+      try {
+        const compressed = await compressImage(file, 1000, 0.75);
+        setPhotoPreview(compressed?.dataUrl || URL.createObjectURL(file));
+      } catch {
+        setPhotoPreview(URL.createObjectURL(file));
+      }
     }
     if (e.target) e.target.value = '';
   };
@@ -136,17 +140,32 @@ export default function EditShoppingTripModal({
     setIsSaving(true);
 
     try {
-      let resolvedPhotoUrl = trip.receiptImageUrl;
+      let resolvedPhotoUrl = trip.receiptImageUrl || null;
 
       if (pendingFile) {
-        // Compress image first
+        // Compress client-side first (max 1000px, 0.75 quality, <150KB)
         try {
-          const compressed = await compressImage(pendingFile, 1600, 0.8);
-          const cUrl = await uploadReceiptImageToCloudinary(compressed);
-          resolvedPhotoUrl = cUrl || compressed;
+          const compressed = await compressImage(pendingFile, 1000, 0.75);
+          const compressedDataUrl = compressed?.dataUrl || null;
+          const uploadSource = compressed?.blob || pendingFile;
+
+          // Attempt Cloudinary upload if online
+          let cUrl = null;
+          if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+            try {
+              cUrl = await uploadReceiptImageToCloudinary(uploadSource);
+            } catch (uploadErr) {
+              console.warn('[EditModal] Cloudinary upload error:', uploadErr);
+            }
+          }
+
+          // If successful, use Cloudinary secure_url; otherwise retain compressed local dataUrl as offline image
+          resolvedPhotoUrl = (cUrl && typeof cUrl === 'string')
+            ? cUrl
+            : (compressedDataUrl || photoPreview || trip.receiptImageUrl);
         } catch (err) {
-          console.warn('[EditModal] Upload fallback:', err);
-          resolvedPhotoUrl = photoPreview;
+          console.warn('[EditModal] Image compression/upload fallback:', err);
+          resolvedPhotoUrl = photoPreview || trip.receiptImageUrl;
         }
       } else if (photoRemoved) {
         resolvedPhotoUrl = null;
