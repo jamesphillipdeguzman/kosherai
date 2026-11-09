@@ -19,9 +19,9 @@ function getStorageKey(protocolId = 'lid') {
 /**
  * Loads cached mappings from localStorage into inMemoryCache
  */
-export function initIngredientImageCache(protocolId = 'lid') {
+export function initIngredientImageCache(protocolId = 'lid', reload = false) {
   const normProto = (protocolId || 'lid').toLowerCase();
-  if (!inMemoryCache[normProto]) {
+  if (!inMemoryCache[normProto] || reload) {
     inMemoryCache[normProto] = {};
     if (typeof localStorage !== 'undefined') {
       try {
@@ -39,40 +39,121 @@ export function initIngredientImageCache(protocolId = 'lid') {
 }
 
 /**
- * Synchronously resolves the ingredient image URL.
- * Checks Neon Cloudinary mapping -> item.imageUrl -> generatedImages -> fallback.
- * 
- * Never constructs unverified URLs with hardcoded recipe versions;
- * always serves genuine Cloudinary secure URLs.
+ * Constructs an optimized Cloudinary delivery URL from a confirmed public ID.
+ * Follows Cloudinary standard:
+ * https://res.cloudinary.com/[CLOUD_NAME]/image/upload/f_auto,q_auto,w_400,c_limit/[VERSION/][PUBLIC_ID]
  *
- * @param {string} ingredientId - Item ID (e.g. 'salt-kosher')
- * @param {string} protocolId - Active diet protocol (defaults to 'lid')
- * @param {string|null} fallback - Fallback URL or null
+ * @param {string} publicId - Confirmed Cloudinary public ID
+ * @param {string|number|null} version - Optional asset version
+ * @returns {string|null}
+ */
+export function buildCloudinaryUrl(publicId, version = null) {
+  if (!publicId) return null;
+  if (typeof publicId === 'string' && /^https?:\/\//i.test(publicId)) {
+    return publicId;
+  }
+
+  const cleanId = String(publicId).replace(/^\/+/, '');
+  const cloudName = CLOUD_NAME || 'dego6hgcb';
+  const vPart = version ? `v${String(version).replace(/^v/, '')}/` : '';
+
+  return `https://res.cloudinary.com/${cloudName}/image/upload/f_auto,q_auto,w_400,c_limit/${vPart}${cleanId}`;
+}
+
+/**
+ * Centrally and safely resolves the ingredient image URL.
+ * 
+ * Supports:
+ * 1. An existing complete Cloudinary HTTPS URL.
+ * 2. An object with secure_url, url, or public_id (from Cloudinary or database mapping).
+ * 3. An ingredient database item object (with id, imageUrl, image).
+ * 4. An ingredient slug / identifier (checks Neon database mapping & local cache).
+ * 5. A confirmed Cloudinary public ID (builds optimized delivery URL).
+ * 
+ * Never blindly prepends folders or invents unverified URLs.
+ * Returns null or designed fallback when no image exists, avoiding 404 network errors.
+ *
+ * @param {string|object|null} imageOrItem - Image URL, public ID, database mapping, or ingredient item/ID
+ * @param {string} protocolId - Dietary protocol ID (defaults to 'lid')
+ * @param {string|null} fallback - Optional fallback URL
  * @returns {string|null} Resolved secure image URL or null
  */
-export function getIngredientImageUrl(ingredientId, protocolId = 'lid', fallback = null) {
-  if (!ingredientId) return fallback || null;
+export function getIngredientImageUrl(imageOrItem, protocolId = 'lid', fallback = null) {
+  if (!imageOrItem) return fallback || null;
   const normProto = (protocolId || 'lid').toLowerCase();
 
-  // 1. Check in-memory / local Neon cache
-  const cached = inMemoryCache[normProto] || initIngredientImageCache(normProto);
-  if (cached && cached[ingredientId]) {
-    const entry = cached[ingredientId];
-    const url = typeof entry === 'string' ? entry : entry.secure_url;
-    if (url && typeof url === 'string') return url;
+  // 1. If imageOrItem is an object
+  if (typeof imageOrItem === 'object') {
+    // 1a: Direct Cloudinary / database mapping record
+    if (imageOrItem.secure_url && typeof imageOrItem.secure_url === 'string') {
+      return imageOrItem.secure_url;
+    }
+    if (imageOrItem.url && typeof imageOrItem.url === 'string') {
+      return imageOrItem.url;
+    }
+    if (imageOrItem.public_id) {
+      return buildCloudinaryUrl(imageOrItem.public_id, imageOrItem.version || imageOrItem.asset_version);
+    }
+
+    // 1b: Ingredient database item (e.g. { id: 'salt-kosher', imageUrl: ..., name: ... })
+    if (imageOrItem.imageUrl && typeof imageOrItem.imageUrl === 'string' && /^https?:\/\//i.test(imageOrItem.imageUrl)) {
+      return imageOrItem.imageUrl;
+    }
+    if (imageOrItem.image && typeof imageOrItem.image === 'string' && /^https?:\/\//i.test(imageOrItem.image)) {
+      return imageOrItem.image;
+    }
+    if (imageOrItem.id) {
+      return getIngredientImageUrl(imageOrItem.id, normProto, imageOrItem.imageUrl || fallback);
+    }
+
+    return fallback || null;
   }
 
-  // 2. Fallback to generated image asset cache if available
-  if (generatedImages && generatedImages[ingredientId]) {
-    return generatedImages[ingredientId];
+  // 2. Complete HTTPS URL (preserve as-is)
+  if (typeof imageOrItem === 'string' && /^https?:\/\//i.test(imageOrItem)) {
+    return imageOrItem;
   }
 
-  // 3. Fallback provided by caller (e.g. item.imageUrl)
-  if (fallback && typeof fallback === 'string' && (fallback.startsWith('http://') || fallback.startsWith('https://'))) {
-    return fallback;
+  // 3. String value: could be an ingredient ID/slug OR a confirmed Cloudinary public ID
+  if (typeof imageOrItem === 'string') {
+    const trimmed = imageOrItem.trim();
+    if (!trimmed) return fallback || null;
+
+    // 3a. Check cached database mapping for this ingredient ID under protocol
+    const cached = inMemoryCache[normProto] || initIngredientImageCache(normProto);
+    if (cached && cached[trimmed]) {
+      const entry = cached[trimmed];
+      if (typeof entry === 'string') {
+        if (/^https?:\/\//i.test(entry)) return entry;
+        return buildCloudinaryUrl(entry);
+      }
+      if (entry.secure_url) return entry.secure_url;
+      if (entry.url) return entry.url;
+      if (entry.public_id) return buildCloudinaryUrl(entry.public_id, entry.version || entry.asset_version);
+    }
+
+    // 3b. Fallback to generated image asset cache if available
+    if (generatedImages && generatedImages[trimmed]) {
+      return generatedImages[trimmed];
+    }
+
+    // 3c. If a valid fallback URL was provided by caller
+    if (fallback && typeof fallback === 'string' && /^https?:\/\//i.test(fallback)) {
+      return fallback;
+    }
+
+    // 3d. If the string contains a slash (e.g. 'kosherai/lid_protocol/ingredients/salt-kosher'),
+    // it is a confirmed Cloudinary public ID path
+    if (trimmed.includes('/')) {
+      return buildCloudinaryUrl(trimmed);
+    }
+
+    // 3e. Otherwise, it is an unmapped ingredient identifier or slug without a confirmed image.
+    // Do NOT generate a fake URL that 404s; return fallback or null.
+    return fallback || null;
   }
 
-  return null;
+  return fallback || null;
 }
 
 /**
@@ -343,6 +424,7 @@ export async function deleteIngredientMapping(id, protocol = 'lid', ingredientId
 
 export default {
   initIngredientImageCache,
+  buildCloudinaryUrl,
   getIngredientImageUrl,
   fetchIngredientImages,
   uploadIngredientImage,

@@ -7,6 +7,7 @@ import { isValidPostgresUrl } from '../trips.js';
 import { ensureIngredientImagesTable } from '../ingredient-images.js';
 import { matchAssetToIngredient } from '../../lib/ingredientImageMatcher.js';
 import { LID_DATABASE } from '../../src/data/lidDatabase.js';
+import { buildCloudinaryUrl } from '../../src/services/ingredientImageService.js';
 
 function sendJson(res, statusCode, data) {
   if (typeof res.status === 'function' && typeof res.json === 'function') {
@@ -245,9 +246,9 @@ export default async function handler(req, res) {
 
         for (const asset of assetsToProcess) {
           const match = matchAssetToIngredient(asset, LID_DATABASE, body.protocol || null);
-          const secureUrl = asset.secure_url || asset.url || '';
           const publicId = asset.public_id || '';
           const assetVersion = asset.version ? String(asset.version) : null;
+          const secureUrl = asset.secure_url || asset.url || (publicId ? buildCloudinaryUrl(publicId, assetVersion) : '');
           const format = asset.format || (publicId.endsWith('.webp') ? 'webp' : 'jpg');
           const originalFilename = asset.original_filename || publicId.split('/').pop() || '';
 
@@ -325,7 +326,9 @@ export default async function handler(req, res) {
           status = 'active'
         } = body;
 
-        if (!ingredient_id || !public_id || !secure_url) {
+        const resolvedSecureUrl = secure_url || (public_id ? buildCloudinaryUrl(public_id, asset_version) : null);
+
+        if (!ingredient_id || !public_id || !resolvedSecureUrl) {
           return sendJson(res, 400, {
             error: 'MISSING_FIELDS',
             message: 'ingredient_id, public_id, and secure_url are required.'
@@ -338,7 +341,7 @@ export default async function handler(req, res) {
           INSERT INTO ingredient_images (
             id, protocol_id, ingredient_id, cloudinary_asset_id, public_id, secure_url, asset_version, format, original_filename, status, updated_at
           ) VALUES (
-            ${id}, ${protocol_id.toLowerCase()}, ${ingredient_id}, ${body.cloudinary_asset_id || null}, ${public_id}, ${secure_url}, ${asset_version ? String(asset_version) : null}, ${format}, ${original_filename}, ${status}, NOW()
+            ${id}, ${protocol_id.toLowerCase()}, ${ingredient_id}, ${body.cloudinary_asset_id || null}, ${public_id}, ${resolvedSecureUrl}, ${asset_version ? String(asset_version) : null}, ${format}, ${original_filename}, ${status}, NOW()
           )
           ON CONFLICT (protocol_id, ingredient_id) DO UPDATE SET
             public_id = EXCLUDED.public_id,

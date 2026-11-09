@@ -8,6 +8,7 @@ import {
 import { LID_DATABASE } from '../src/data/lidDatabase.js';
 import {
   getIngredientImageUrl,
+  buildCloudinaryUrl,
   initIngredientImageCache
 } from '../src/services/ingredientImageService.js';
 import { renderCheckerTab } from '../src/components/CheckerTab.js';
@@ -107,25 +108,52 @@ console.log('Test 2: Asset Matching Engine Hierarchy');
 // ============================================================================
 // TEST 3: Client Ingredient Image URL Resolution & Recipe Version Protection
 // ============================================================================
-console.log('Test 3: Synchronous Image Resolution & URL Integrity');
+console.log('Test 3: Synchronous Image Resolution, buildCloudinaryUrl & 404 Prevention');
 {
-  // Pre-seed local cache
+  // 3a. Complete HTTPS URL preserved
+  const completeUrl = 'https://res.cloudinary.com/dego6hgcb/image/upload/v179384/kosherai/lid_protocol/ingredients/salt-kosher.webp';
+  assert.strictEqual(getIngredientImageUrl(completeUrl), completeUrl);
+
+  // 3b. Object with public_id and version
+  const assetObj = {
+    public_id: 'kosherai/lid_protocol/ingredients/salt-kosher',
+    version: '179384'
+  };
+  const expectedBuiltUrl = buildCloudinaryUrl(assetObj.public_id, assetObj.version);
+  assert.strictEqual(
+    expectedBuiltUrl,
+    'https://res.cloudinary.com/dego6hgcb/image/upload/f_auto,q_auto,w_400,c_limit/v179384/kosherai/lid_protocol/ingredients/salt-kosher'
+  );
+  assert.strictEqual(getIngredientImageUrl(assetObj), expectedBuiltUrl);
+
+  // 3c. Confirmed public ID string containing folder path
+  const publicIdPath = 'kosherai/lid_protocol/ingredients/banana-ketchup';
+  assert.strictEqual(getIngredientImageUrl(publicIdPath), buildCloudinaryUrl(publicIdPath));
+
+  // 3d. Pre-seeded local cache resolution for ingredient slug
   mockStorage['kosherai_ingredient_images_lid'] = JSON.stringify({
     'salt-kosher': {
-      secure_url: 'https://res.cloudinary.com/dego6hgcb/image/upload/v99999/kosherai/lid/salt-kosher.webp',
+      secure_url: 'https://res.cloudinary.com/dego6hgcb/image/upload/f_auto,q_auto,w_400,c_limit/v99999/kosherai/lid_protocol/ingredients/salt-kosher',
       status: 'active'
     }
   });
-  initIngredientImageCache('lid');
+  initIngredientImageCache('lid', true);
 
   const resolved = getIngredientImageUrl('salt-kosher', 'lid');
-  assert.strictEqual(resolved, 'https://res.cloudinary.com/dego6hgcb/image/upload/v99999/kosherai/lid/salt-kosher.webp');
+  assert.strictEqual(resolved, 'https://res.cloudinary.com/dego6hgcb/image/upload/f_auto,q_auto,w_400,c_limit/v99999/kosherai/lid_protocol/ingredients/salt-kosher');
 
-  // Verify that resolution never constructs fake recipe versions (e.g. 1793066348, 1793084102)
-  const missingResolved = getIngredientImageUrl('non-existent-item-12345', 'lid');
-  assert.strictEqual(missingResolved, null);
+  // 3e. Unmapped item slug must return null (or fallback) rather than fake 404 URL
+  const unmappedResolved = getIngredientImageUrl('banana-ketchup', 'lid');
+  assert.strictEqual(unmappedResolved, null, 'Unmapped item slug must return null to prevent 404 network errors');
 
-  console.log('  ✅ Synchronous URL resolution and recipe version protection passed.');
+  // 3f. Ingredient object support
+  const itemObj = { id: 'salt-kosher', name: 'Kosher Salt' };
+  assert.strictEqual(getIngredientImageUrl(itemObj, 'lid'), resolved);
+
+  const unmappedItemObj = { id: 'sayote-chayote', name: 'Sayote' };
+  assert.strictEqual(getIngredientImageUrl(unmappedItemObj, 'lid'), null);
+
+  console.log('  ✅ Synchronous URL resolution, buildCloudinaryUrl, and 404 prevention passed.');
 }
 
 // ============================================================================
@@ -195,14 +223,14 @@ console.log('Test 6: Admin API Discovery & Upsert Verification');
 {
   const mockAssets = [
     {
-      public_id: 'kosherai/lid/salt-kosher',
-      secure_url: 'https://res.cloudinary.com/dego6hgcb/image/upload/v12345/salt-kosher.webp',
+      public_id: 'kosherai/lid_protocol/ingredients/salt-kosher',
+      secure_url: 'https://res.cloudinary.com/dego6hgcb/image/upload/f_auto,q_auto,w_400,c_limit/v1794200001/kosherai/lid_protocol/ingredients/salt-kosher',
       format: 'webp',
       original_filename: 'salt-kosher.webp'
     },
     {
-      public_id: 'kosherai/lid/banana-ketchup',
-      secure_url: 'https://res.cloudinary.com/dego6hgcb/image/upload/v12345/banana-ketchup.webp',
+      public_id: 'kosherai/lid_protocol/ingredients/banana-ketchup',
+      secure_url: 'https://res.cloudinary.com/dego6hgcb/image/upload/f_auto,q_auto,w_400,c_limit/v1794200001/kosherai/lid_protocol/ingredients/banana-ketchup',
       format: 'webp',
       original_filename: 'banana-ketchup.webp'
     }
@@ -238,33 +266,64 @@ console.log('Test 6: Admin API Discovery & Upsert Verification');
   assert.strictEqual(responseData.matchedCount, 2);
   assert.ok(responseData.results.some(r => r.ingredientId === 'salt-kosher' && r.status === 'active'));
   assert.ok(responseData.results.some(r => r.ingredientId === 'banana-ketchup' && r.status === 'active'));
-  console.log('  ✅ Admin discovery & matching executed with 2/2 matched assets.');
+
+  // Clean up mock test records from Neon PostgreSQL database
+  try {
+    const { neon } = await import('@neondatabase/serverless');
+    const sql = neon(process.env.DATABASE_URL);
+    await sql.query("DELETE FROM ingredient_images WHERE secure_url LIKE '%v1794200001%' OR secure_url LIKE '%v12345%' OR secure_url LIKE '%v99999%';");
+  } catch (cleanErr) {
+    console.warn('  ⚠️ Test cleanup warning:', cleanErr?.message);
+  }
+
+  console.log('  ✅ Admin discovery & matching executed with 2/2 matched assets and cleaned up.');
 }
 
 // ============================================================================
 // TEST 7: UI Rendering Verification (CheckerTab, SettingsModal, AdminModal)
 // ============================================================================
-console.log('Test 7: UI Component Rendering');
+console.log('Test 7: UI Component Rendering & 404 Prevention');
 {
-  // 1. CheckerTab image rendering
-  const checkerHtml = renderCheckerTab({
+  // 1. CheckerTab: unmapped ingredient renders placeholder icon WITHOUT <img> tag
+  // (Prevents broken image 404 requests in the browser)
+  delete mockStorage['kosherai_ingredient_images_lid'];
+  initIngredientImageCache('lid', true);
+
+  const unmappedCheckerHtml = renderCheckerTab({
+    searchQuery: 'Sayote',
+    searchResults: LID_DATABASE.filter(i => i.id === 'sayote-chayote'),
+    activeDiet: 'lid'
+  });
+  assert.ok(!unmappedCheckerHtml.includes('<img'), 'Unmapped ingredient must not render <img> tag (prevents 404s)');
+  assert.ok(unmappedCheckerHtml.includes('🍐') || unmappedCheckerHtml.includes('🥬'), 'Unmapped ingredient must render culinary category icon placeholder');
+
+  // 2. CheckerTab: verified mapped ingredient renders optimized Cloudinary image
+  mockStorage['kosherai_ingredient_images_lid'] = JSON.stringify({
+    'salt-kosher': {
+      secure_url: 'https://res.cloudinary.com/dego6hgcb/image/upload/f_auto,q_auto,w_400,c_limit/kosherai/lid_protocol/ingredients/salt-kosher',
+      status: 'active'
+    }
+  });
+  initIngredientImageCache('lid', true);
+
+  const mappedCheckerHtml = renderCheckerTab({
     searchQuery: 'Kosher Salt',
     searchResults: LID_DATABASE.filter(i => i.id === 'salt-kosher'),
     activeDiet: 'lid'
   });
-  assert.ok(checkerHtml.includes('https://res.cloudinary.com/dego6hgcb/image/upload/v99999/kosherai/lid/salt-kosher.webp'), 'CheckerTab must render Cloudinary image URL');
-  assert.ok(checkerHtml.includes('onerror="this.style.display=\'none\''), 'CheckerTab must include resilient onerror fallback');
+  assert.ok(mappedCheckerHtml.includes('https://res.cloudinary.com/dego6hgcb/image/upload/f_auto,q_auto,w_400,c_limit/kosherai/lid_protocol/ingredients/salt-kosher'), 'CheckerTab must render Cloudinary image URL');
+  assert.ok(mappedCheckerHtml.includes('onerror="this.style.display=\'none\''), 'CheckerTab must include resilient onerror fallback');
 
-  // 2. SettingsModal Admin Trigger
+  // 3. SettingsModal Admin Trigger
   const settingsHtml = renderSettingsModal({}, 'dark', true, 'lid');
   assert.ok(settingsHtml.includes('id="open-ingredient-admin-btn"'), 'SettingsModal must render Manage Photos button');
 
-  // 3. AdminModal Dashboard Stats & Action Controls
+  // 4. AdminModal Dashboard Stats & Action Controls
   const adminHtml = renderIngredientImageAdminModal({
     activeProtocol: 'lid',
     stats: { totalIngredients: 36, withImage: 1, missingImage: 35, pendingReview: 0 },
     mappings: [
-      { id: 'img_lid_salt-kosher', protocol_id: 'lid', ingredient_id: 'salt-kosher', secure_url: 'https://res.cloudinary.com/dego6hgcb/image/upload/v99999/salt-kosher.webp', status: 'active' }
+      { id: 'img_lid_salt-kosher', protocol_id: 'lid', ingredient_id: 'salt-kosher', secure_url: 'https://res.cloudinary.com/dego6hgcb/image/upload/f_auto,q_auto,w_400,c_limit/kosherai/lid_protocol/ingredients/salt-kosher', status: 'active' }
     ]
   });
 
@@ -273,7 +332,7 @@ console.log('Test 7: UI Component Rendering');
   assert.ok(adminHtml.includes('id="admin-image-protocol-select"'), 'AdminModal must render Protocol selector');
   assert.ok(adminHtml.includes('🟢 Mapped Photos'), 'AdminModal must render Mapped Photos stat');
 
-  console.log('  ✅ UI component rendering verified.');
+  console.log('  ✅ UI component rendering and 404 prevention verified.');
 }
 
 console.log('\n======================================================================');
