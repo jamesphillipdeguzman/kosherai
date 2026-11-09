@@ -350,6 +350,8 @@ function render() {
       uploadFormOpen: state.adminImageUploadFormOpen,
       selectedIngredientId: state.adminImageSelectedIngredientId,
       uploadPreviewUrl: state.adminImageUploadPreviewUrl,
+      selectedFileName: state.adminImageSelectedFile?.name || null,
+      selectedFileSize: state.adminImageSelectedFile?.size || null,
       isUploading: state.adminImageUploading,
       isDiscovering: state.adminImageDiscovering
     }) : ''}
@@ -981,6 +983,34 @@ function attachEventHandlers() {
     adminImageFileInput.addEventListener('change', (e) => {
       const file = e.target.files?.[0];
       if (file) {
+        state.adminImageSelectedFile = file;
+        state.adminImageUploadPreviewUrl = URL.createObjectURL(file);
+        render();
+      }
+    });
+  }
+
+  const adminImageDropzone = document.querySelector('#admin-image-dropzone');
+  if (adminImageDropzone) {
+    ['dragenter', 'dragover'].forEach(eventName => {
+      adminImageDropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        adminImageDropzone.classList.add('dropzone-active');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      adminImageDropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        adminImageDropzone.classList.remove('dropzone-active');
+      });
+    });
+
+    adminImageDropzone.addEventListener('drop', (e) => {
+      const file = e.dataTransfer?.files?.[0];
+      if (file && file.type.startsWith('image/')) {
         state.adminImageSelectedFile = file;
         state.adminImageUploadPreviewUrl = URL.createObjectURL(file);
         render();

@@ -10,6 +10,7 @@ import settingsApiHandler from '../api/settings.js';
 import scansApiHandler from '../api/scans.js';
 import { uploadReceiptImageToCloudinary } from '../src/utils/cloudinary.js';
 import { handleTenantAccountChange, TENANT_STORAGE_KEYS } from '../src/services/courseProjectStorage.js';
+import { getSafeTestDatabaseUrl } from '../lib/databaseSafety.js';
 
 // Setup Mock In-Memory localStorage & window for Node test environment
 const mockStorage = new Map();
@@ -74,8 +75,12 @@ function createMockRes() {
 }
 
 async function runTests() {
-  assert(isValidPostgresUrl(DATABASE_URL), 'Neon DATABASE_URL must be valid for tests.');
-  const sql = neon(DATABASE_URL);
+  const testDbUrl = getSafeTestDatabaseUrl();
+  if (!testDbUrl) {
+    console.log('ℹ️ [Protected] DATABASE_URL_TEST is not configured or matches production database. Skipping live Neon tests to protect production data.');
+    process.exit(0);
+  }
+  const sql = neon(testDbUrl);
 
   // Use a dedicated isolated test user
   const TEST_USER_A = 'test_user_persistence_a_' + Date.now();

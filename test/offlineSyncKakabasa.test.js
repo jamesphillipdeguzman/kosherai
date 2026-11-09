@@ -5,6 +5,7 @@ import { isValidPostgresUrl } from '../api/trips.js';
 import tripsApiHandler from '../api/trips.js';
 import foodWasteApiHandler from '../api/food-waste.js';
 import scansApiHandler from '../api/scans.js';
+import { getSafeTestDatabaseUrl } from '../lib/databaseSafety.js';
 import {
   saveShoppingTrip,
   getShoppingTrips,
@@ -102,8 +103,12 @@ function createMockRes() {
 }
 
 async function runTests() {
-  assert(isValidPostgresUrl(DATABASE_URL), 'Neon DATABASE_URL must be valid for tests.');
-  const sql = neon(DATABASE_URL);
+  const testDbUrl = getSafeTestDatabaseUrl();
+  if (!testDbUrl) {
+    console.log('ℹ️ [Protected] DATABASE_URL_TEST is not configured or matches production database. Skipping live Neon tests to protect production data.');
+    process.exit(0);
+  }
+  const sql = neon(testDbUrl);
 
   // Setup isolated test users in Neon
   const TEST_USER_A = 'test_kakabasa_user_a_' + Date.now();

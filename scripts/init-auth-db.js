@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import 'dotenv/config';
+import { isProductionEnvironment } from '../lib/databaseSafety.js';
 
 const sql = neon(process.env.DATABASE_URL);
 
@@ -14,6 +15,7 @@ export async function initAuthDatabase() {
       email TEXT NOT NULL UNIQUE,
       "emailVerified" BOOLEAN NOT NULL DEFAULT FALSE,
       image TEXT,
+      role TEXT DEFAULT 'user',
       "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -29,10 +31,11 @@ export async function initAuthDatabase() {
     );
   `;
 
-  // Ensure camelCase columns exist on user
+  // Ensure camelCase columns and role exist on user
   await sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "emailVerified" BOOLEAN NOT NULL DEFAULT FALSE;`;
   await sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();`;
   await sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();`;
+  await sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';`;
 
   // 2. Session table
   await sql`
@@ -109,18 +112,15 @@ export async function initAuthDatabase() {
   await sql`ALTER TABLE "verification" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();`;
   await sql`ALTER TABLE "verification" ALTER COLUMN expires_at DROP NOT NULL;`;
 
-  // 5. Ensure usr_primary_admin exists in both "user" and users tables
-  await sql`
-    INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
-    VALUES ('usr_primary_admin', 'Primary Admin', 'admin@kosherai.local', true, NOW(), NOW())
-    ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
-  `;
-  await sql`
-    INSERT INTO users (id, email, full_name, created_at, updated_at)
-    VALUES ('usr_primary_admin', 'admin@kosherai.local', 'Primary Admin', NOW(), NOW())
-    ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
-  `;
-  console.log('[Auth DB] Synchronized usr_primary_admin into both tables.');
+  // 5. Only seed mock admin in isolated non-production test environments if explicitly requested
+  if (!isProductionEnvironment() && process.env.NODE_ENV === 'test' && process.env.SEED_TEST_USERS === 'true') {
+    await sql`
+      INSERT INTO "user" (id, name, email, "emailVerified", role, "createdAt", "updatedAt")
+      VALUES ('usr_primary_admin', 'Primary Admin', 'admin@kosherai.local', true, 'admin', NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
+    `;
+    console.log('[Auth DB] Synchronized test usr_primary_admin into test environment.');
+  }
 
   console.log('[Auth DB] Tables created and synchronized successfully.');
 }

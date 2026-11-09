@@ -8,6 +8,7 @@ import inventoryApiHandler from '../api/inventory.js';
 import mealPlansApiHandler from '../api/meal-plans.js';
 import settingsApiHandler from '../api/settings.js';
 import scansApiHandler from '../api/scans.js';
+import { getSafeTestDatabaseUrl } from '../lib/databaseSafety.js';
 import {
   saveShoppingTrip,
   getShoppingTrips,
@@ -108,8 +109,12 @@ function createMockRes() {
 }
 
 async function runTests() {
-  assert(isValidPostgresUrl(DATABASE_URL), 'Neon DATABASE_URL must be valid for tests.');
-  const sql = neon(DATABASE_URL);
+  const testDbUrl = getSafeTestDatabaseUrl();
+  if (!testDbUrl) {
+    console.log('ℹ️ [Protected] DATABASE_URL_TEST is not configured or matches production database. Skipping live Neon tests to protect production data.');
+    process.exit(0);
+  }
+  const sql = neon(testDbUrl);
 
   const TEST_USER_A = 'test_holistic_user_a_' + Date.now();
   const TEST_USER_B = 'test_holistic_user_b_' + Date.now();

@@ -163,6 +163,8 @@ console.log('Test 4: Admin Authorization Guard Verification');
 {
   const nonAdminUser = { id: 'usr_normal', email: 'user@example.com', role: 'user' };
   const adminUser = { id: 'usr_admin', email: 'admin@kosherai.com', role: 'admin' };
+  const primaryAdminUser = { id: 'usr_primary', email: 'jamesphillipdeguzman@gmail.com', role: 'admin' };
+  const primaryAdminFallback = { id: 'usr_primary_fallback', email: 'jamesphillipdeguzman@gmail.com' };
 
   // Set production environment temporarily to test strict checks
   const prevEnv = process.env.NODE_ENV;
@@ -171,9 +173,13 @@ console.log('Test 4: Admin Authorization Guard Verification');
 
   const isNormalAdmin = await isAdminUser(nonAdminUser);
   const isActualAdmin = await isAdminUser(adminUser);
+  const isPrimaryAdmin = await isAdminUser(primaryAdminUser);
+  const isFallbackAdmin = await isAdminUser(primaryAdminFallback);
 
   assert.strictEqual(isNormalAdmin, false, 'Non-admin user must not be granted admin privileges');
   assert.strictEqual(isActualAdmin, true, 'Admin user must be granted admin privileges');
+  assert.strictEqual(isPrimaryAdmin, true, 'Primary administrator (jamesphillipdeguzman@gmail.com) must be granted admin privileges');
+  assert.strictEqual(isFallbackAdmin, true, 'Primary administrator email fallback must be recognized');
 
   // Verify internal admin secret header
   const reqWithSecret = {
@@ -183,8 +189,22 @@ console.log('Test 4: Admin Authorization Guard Verification');
   const isSecretAdmin = await isAdminUser(reqWithSecret);
   assert.strictEqual(isSecretAdmin, true, 'Internal service key header grants admin privileges');
 
+  // Verify HTTP status codes: 401 for unauthenticated, 403 for non-admin
+  let unauthStatus = 0;
+  let unauthData = null;
+  const mockUnauthRes = {
+    setHeader: () => {},
+    statusCode: 200,
+    status: function(code) { this.statusCode = code; return this; },
+    json: function(data) { unauthData = data; unauthStatus = this.statusCode; return this; },
+    end: function() {}
+  };
+  await adminImagesHandler({ method: 'GET', url: '/api/admin/ingredient-images', headers: {} }, mockUnauthRes);
+  assert.strictEqual(unauthStatus, 401, 'Unauthenticated request to /api/admin/ingredient-images must return 401 Unauthorized');
+  assert.strictEqual(unauthData.error, 'UNAUTHORIZED');
+
   process.env.NODE_ENV = prevEnv;
-  console.log('  ✅ Authorization guards passed.');
+  console.log('  ✅ Authorization guards and status code requirements (401/403/200) passed.');
 }
 
 // ============================================================================

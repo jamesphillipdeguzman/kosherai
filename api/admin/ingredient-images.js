@@ -85,14 +85,39 @@ export default async function handler(req, res) {
     return res.end();
   }
 
-  // 1. Authorization Guard
-  const isAuthorized = await isAdminUser(req);
+  // 1. Authentication & Authorization Guard
+  const authUser = await getAuthenticatedUser(req).catch(() => null);
+  const isAuthorized = await isAdminUser(authUser || req);
+
+  // Server diagnostic logging (safe: no passwords, tokens, or secrets)
+  console.log('[Admin Auth Diagnostic]', {
+    authenticated: Boolean(authUser),
+    userId: authUser?.id || null,
+    userEmail: authUser?.email || null,
+    userRole: authUser?.role || null,
+    isAuthorized,
+    method: req.method,
+    url: req.url
+  });
+
+  if (!authUser && !isAuthorized) {
+    return sendJson(res, 401, {
+      error: 'UNAUTHORIZED',
+      message: 'Authentication required. No valid session found.',
+      authenticated: false
+    });
+  }
+
   if (!isAuthorized) {
-    const authUser = await getAuthenticatedUser(req).catch(() => null);
     return sendJson(res, 403, {
       error: 'FORBIDDEN',
       message: 'Administrator privileges required to access ingredient image management.',
-      authenticated: Boolean(authUser)
+      authenticated: true,
+      user: {
+        id: authUser?.id,
+        email: authUser?.email,
+        role: authUser?.role || 'user'
+      }
     });
   }
 

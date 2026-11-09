@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import { neon } from '@neondatabase/serverless';
 import 'dotenv/config';
 import { auth, getAuthenticatedUser } from '../lib/auth.ts';
+import { getSafeTestDatabaseUrl } from '../lib/databaseSafety.js';
 import tripsApiHandler from '../api/trips.js';
 import scansApiHandler from '../api/scans.js';
 import foodWasteApiHandler from '../api/food-waste.js';
@@ -10,10 +11,10 @@ import recipeInteractionsHandler from '../api/recipe-interactions.js';
 
 console.log('🧪 Starting Tenant-Scoped Multi-Tenancy & Better Auth Test Suite...\n');
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = getSafeTestDatabaseUrl();
 if (!databaseUrl) {
-  console.error('❌ DATABASE_URL is not configured in .env. Cannot run live Neon multi-tenancy tests.');
-  process.exit(1);
+  console.log('ℹ️ [Protected] DATABASE_URL_TEST is not configured or matches production database. Skipping live Neon multi-tenancy tests to protect production data.');
+  process.exit(0);
 }
 
 const sql = neon(databaseUrl);
