@@ -11,6 +11,16 @@ import { renderSubstitutesTab } from './components/SubstitutesTab.js';
 import { renderCookModeTab, lidRecipes, DIET_RECIPES } from './components/CookModeTab.js';
 import { renderSettingsModal } from './components/SettingsModal.js';
 import { renderItemDetailModal } from './components/ItemDetailModal.js';
+import { renderIngredientImageAdminModal } from './components/IngredientImageAdminModal.js';
+import {
+  initIngredientImageCache,
+  fetchIngredientImages,
+  uploadIngredientImage,
+  discoverAndMatchCloudinaryAssets,
+  fetchAdminImageSummary,
+  updateIngredientMapping,
+  deleteIngredientMapping
+} from './services/ingredientImageService.js';
 import { renderCourseProjectView, createReceiptItemRowHtml } from './components/CourseProjectView.js';
 import { normalizeWeek } from './utils/weekNormalization.js';
 import { parseQuantityAndUnit, createManualItemRowHtml } from './components/ManualTripModal.js';
@@ -226,7 +236,22 @@ const state = {
 
   // Manual Header Cloud Sync State
   isSyncing: false,
-  justSynced: false
+  justSynced: false,
+
+  // Administrator Ingredient Image Management Hub
+  adminImageModalOpen: false,
+  adminImageProtocol: 'lid',
+  adminImageStats: { totalIngredients: 36, withImage: 0, missingImage: 36, pendingReview: 0 },
+  adminImageMappings: [],
+  adminImageSearchQuery: '',
+  adminImageStatusFilter: 'all',
+  adminImageStatusMsg: '',
+  adminImageUploadFormOpen: false,
+  adminImageSelectedIngredientId: null,
+  adminImageUploadPreviewUrl: null,
+  adminImageSelectedFile: null,
+  adminImageUploading: false,
+  adminImageDiscovering: false
 };
 
 // Main DOM Render Function
@@ -244,6 +269,7 @@ function render() {
     state.editWasteModalOpen ||
     state.mealPlanModalOpen ||
     state.settingsOpen ||
+    state.adminImageModalOpen ||
     state.authModalOpen ||
     state.selectedItem ||
     state.selectedScanItem
@@ -314,10 +340,37 @@ function render() {
 
     ${state.selectedItem ? renderItemDetailModal(state.selectedItem, state.activeDiet) : ''}
     ${state.settingsOpen ? renderSettingsModal(state.settings, state.theme, state.showProjectTab, state.activeDiet, state.scannerEnabled) : ''}
+    ${state.adminImageModalOpen ? renderIngredientImageAdminModal({
+      activeProtocol: state.adminImageProtocol,
+      stats: state.adminImageStats,
+      mappings: state.adminImageMappings,
+      searchQuery: state.adminImageSearchQuery,
+      statusFilter: state.adminImageStatusFilter,
+      statusMessage: state.adminImageStatusMsg,
+      uploadFormOpen: state.adminImageUploadFormOpen,
+      selectedIngredientId: state.adminImageSelectedIngredientId,
+      uploadPreviewUrl: state.adminImageUploadPreviewUrl,
+      isUploading: state.adminImageUploading,
+      isDiscovering: state.adminImageDiscovering
+    }) : ''}
     ${state.authModalOpen ? renderAuthModalHtml({ isOpen: true, mode: state.authModalMode, errorMsg: state.authModalError, isLoading: state.authModalLoading, values: state.authModalValues || {} }) : ''}
   `;
 
   attachEventHandlers();
+}
+
+async function loadAdminImageData(protocol = 'lid') {
+  try {
+    const summary = await fetchAdminImageSummary(protocol, 'all');
+    if (summary && summary.success) {
+      state.adminImageStats = summary.stats || state.adminImageStats;
+      state.adminImageMappings = summary.mappings || [];
+      state.adminImageProtocol = protocol;
+    }
+  } catch (err) {
+    console.warn('[AdminImage] Load error:', err);
+    state.adminImageStatusMsg = err.message || 'Failed to load image administration data.';
+  }
 }
 
 // Event Delegation & Handler Attachments
@@ -328,6 +381,7 @@ function attachEventHandlers() {
     headerDietSelector.addEventListener('change', (e) => {
       const selected = e.target.value;
       state.activeDiet = setActiveDiet(selected);
+      fetchIngredientImages(state.activeDiet).catch(() => {});
       render();
     });
   }
@@ -337,6 +391,7 @@ function attachEventHandlers() {
     settingsDietSelect.addEventListener('change', (e) => {
       const selected = e.target.value;
       state.activeDiet = setActiveDiet(selected);
+      fetchIngredientImages(state.activeDiet).catch(() => {});
       render();
     });
   }
@@ -794,6 +849,229 @@ function attachEventHandlers() {
         state.settingsOpen = false;
         render();
       }
+    });
+  }
+
+  // Admin Ingredient Image Management Hub Triggers & Actions
+  const openIngredientAdminBtn = document.querySelector('#open-ingredient-admin-btn');
+  if (openIngredientAdminBtn) {
+    openIngredientAdminBtn.addEventListener('click', async () => {
+      state.settingsOpen = false;
+      state.adminImageModalOpen = true;
+      state.adminImageProtocol = state.activeDiet || 'lid';
+      state.adminImageStatusMsg = '';
+      render();
+      await loadAdminImageData(state.adminImageProtocol);
+      render();
+    });
+  }
+
+  const adminImageCloseBtn = document.querySelector('#admin-image-close-btn');
+  const adminImageDoneBtn = document.querySelector('#admin-image-done-btn');
+  if (adminImageCloseBtn) {
+    adminImageCloseBtn.addEventListener('click', () => {
+      state.adminImageModalOpen = false;
+      render();
+    });
+  }
+  if (adminImageDoneBtn) {
+    adminImageDoneBtn.addEventListener('click', () => {
+      state.adminImageModalOpen = false;
+      render();
+    });
+  }
+
+  const adminImageOverlay = document.querySelector('#admin-image-modal-overlay');
+  if (adminImageOverlay) {
+    adminImageOverlay.addEventListener('click', (e) => {
+      if (e.target === adminImageOverlay && !state.adminImageUploading && !state.adminImageDiscovering) {
+        state.adminImageModalOpen = false;
+        render();
+      }
+    });
+  }
+
+  const adminImageProtocolSelect = document.querySelector('#admin-image-protocol-select');
+  if (adminImageProtocolSelect) {
+    adminImageProtocolSelect.addEventListener('change', async (e) => {
+      const proto = e.target.value;
+      state.adminImageProtocol = proto;
+      render();
+      await loadAdminImageData(proto);
+      render();
+    });
+  }
+
+  document.querySelectorAll('.admin-status-filter-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      state.adminImageStatusFilter = e.currentTarget.getAttribute('data-filter') || 'all';
+      render();
+    });
+  });
+
+  const adminImageSearchInput = document.querySelector('#admin-image-search-input');
+  if (adminImageSearchInput) {
+    adminImageSearchInput.addEventListener('input', (e) => {
+      state.adminImageSearchQuery = e.target.value || '';
+      render();
+      const el = document.querySelector('#admin-image-search-input');
+      if (el) {
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      }
+    });
+  }
+
+  const adminImageDiscoverBtn = document.querySelector('#admin-image-discover-btn');
+  if (adminImageDiscoverBtn) {
+    adminImageDiscoverBtn.addEventListener('click', async () => {
+      state.adminImageDiscovering = true;
+      state.adminImageStatusMsg = 'Scanning Cloudinary for existing ingredient photographs...';
+      render();
+      try {
+        const result = await discoverAndMatchCloudinaryAssets({
+          protocol: state.adminImageProtocol
+        });
+        state.adminImageStatusMsg = `Discovery Complete: ${result.discoveredCount || 0} scanned, ${result.matchedCount || 0} active matched, ${result.pendingReviewCount || 0} pending review.`;
+        await loadAdminImageData(state.adminImageProtocol);
+      } catch (err) {
+        state.adminImageStatusMsg = `Discovery error: ${err.message}`;
+      } finally {
+        state.adminImageDiscovering = false;
+        render();
+      }
+    });
+  }
+
+  const adminImageToggleUploadBtn = document.querySelector('#admin-image-toggle-upload-btn');
+  if (adminImageToggleUploadBtn) {
+    adminImageToggleUploadBtn.addEventListener('click', () => {
+      state.adminImageUploadFormOpen = !state.adminImageUploadFormOpen;
+      state.adminImageUploadPreviewUrl = null;
+      state.adminImageSelectedFile = null;
+      render();
+    });
+  }
+
+  const adminImageCancelUploadBtn = document.querySelector('#admin-image-cancel-upload-btn');
+  if (adminImageCancelUploadBtn) {
+    adminImageCancelUploadBtn.addEventListener('click', () => {
+      state.adminImageUploadFormOpen = false;
+      state.adminImageUploadPreviewUrl = null;
+      state.adminImageSelectedFile = null;
+      render();
+    });
+  }
+
+  document.querySelectorAll('.admin-upload-for-item-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const ingId = e.currentTarget.getAttribute('data-ingredient-id');
+      state.adminImageSelectedIngredientId = ingId;
+      state.adminImageUploadFormOpen = true;
+      render();
+      const selectEl = document.querySelector('#upload-ingredient-select');
+      if (selectEl) selectEl.value = ingId;
+      const formEl = document.querySelector('#admin-image-upload-form');
+      if (formEl) formEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
+
+  const adminImageFileInput = document.querySelector('#admin-image-file-input');
+  if (adminImageFileInput) {
+    adminImageFileInput.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        state.adminImageSelectedFile = file;
+        state.adminImageUploadPreviewUrl = URL.createObjectURL(file);
+        render();
+      }
+    });
+  }
+
+  const adminImageUploadForm = document.querySelector('#admin-image-upload-form');
+  if (adminImageUploadForm) {
+    adminImageUploadForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const ingredientId = document.querySelector('#upload-ingredient-select')?.value;
+      const file = state.adminImageSelectedFile;
+
+      if (!ingredientId) {
+        state.adminImageStatusMsg = 'Please select a target ingredient.';
+        render();
+        return;
+      }
+      if (!file) {
+        state.adminImageStatusMsg = 'Please choose an image file to upload.';
+        render();
+        return;
+      }
+
+      state.adminImageUploading = true;
+      state.adminImageStatusMsg = 'Uploading to Cloudinary and updating database...';
+      render();
+
+      try {
+        await uploadIngredientImage({
+          file,
+          protocolId: state.adminImageProtocol,
+          ingredientId,
+          status: 'active'
+        });
+        state.adminImageStatusMsg = `Successfully uploaded and mapped photograph for ${ingredientId}!`;
+        state.adminImageUploadFormOpen = false;
+        state.adminImageSelectedFile = null;
+        state.adminImageUploadPreviewUrl = null;
+        await loadAdminImageData(state.adminImageProtocol);
+      } catch (err) {
+        state.adminImageStatusMsg = `Upload error: ${err.message}`;
+      } finally {
+        state.adminImageUploading = false;
+        render();
+      }
+    });
+  }
+
+  document.querySelectorAll('.admin-approve-mapping-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const mappingId = e.currentTarget.getAttribute('data-mapping-id');
+      const ingredientId = e.currentTarget.getAttribute('data-ingredient-id');
+      try {
+        await updateIngredientMapping(mappingId, { status: 'active' });
+        await fetchIngredientImages(state.adminImageProtocol, true);
+        await loadAdminImageData(state.adminImageProtocol);
+        state.adminImageStatusMsg = `Approved mapping for ${ingredientId} as active.`;
+        render();
+      } catch (err) {
+        state.adminImageStatusMsg = `Approval error: ${err.message}`;
+        render();
+      }
+    });
+  });
+
+  document.querySelectorAll('.admin-delete-mapping-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const mappingId = e.currentTarget.getAttribute('data-mapping-id');
+      const ingredientId = e.currentTarget.getAttribute('data-ingredient-id');
+      if (confirm(`Are you sure you want to unlink the image for ${ingredientId}?`)) {
+        try {
+          await deleteIngredientMapping(mappingId, state.adminImageProtocol, ingredientId);
+          await fetchIngredientImages(state.adminImageProtocol, true);
+          await loadAdminImageData(state.adminImageProtocol);
+          state.adminImageStatusMsg = `Unlinked image for ${ingredientId}.`;
+          render();
+        } catch (err) {
+          state.adminImageStatusMsg = `Delete error: ${err.message}`;
+          render();
+        }
+      }
+    });
+  });
+
+  const adminImageDismissMsg = document.querySelector('#admin-image-dismiss-msg');
+  if (adminImageDismissMsg) {
+    adminImageDismissMsg.addEventListener('click', () => {
+      state.adminImageStatusMsg = '';
+      render();
     });
   }
 
@@ -3604,6 +3882,9 @@ window.addEventListener('keydown', (e) => {
     } else if (state.settingsOpen) {
       state.settingsOpen = false;
       render();
+    } else if (state.adminImageModalOpen) {
+      state.adminImageModalOpen = false;
+      render();
     } else if (state.lightboxTripId) {
       state.lightboxTripId = null;
       render();
@@ -3734,6 +4015,12 @@ async function initializeAuthSession() {
 (async function bootstrapApp() {
   render();
   try {
+    initIngredientImageCache(state.activeDiet);
+    fetchIngredientImages(state.activeDiet).then(() => {
+      if (state.activeTab === 'checker') render();
+    }).catch(() => {});
+  } catch (_) {}
+  try {
     await initializeAuthSession();
     await pushThenRestoreFromNeon();
   } catch (err) {
@@ -3742,4 +4029,12 @@ async function initializeAuthSession() {
   fetchAllRecipeInteractions().then(() => render()).catch(() => {});
   syncPendingRecipeInteractions().catch(() => {});
 })();
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('kosherai:ingredient-images-updated', () => {
+    if (state.activeTab === 'checker' || state.adminImageModalOpen) {
+      render();
+    }
+  });
+}
 

@@ -1,6 +1,7 @@
 // Quick Search & Multi-Diet Checker Tab Component (Offline First)
 import { LID_CATEGORIES, STATUS, getItemDietaryInfo, getItemStatus, getCategoryEmoji, getCategoryIcon } from '../data/lidDatabase.js';
 import { searchDatabase } from '../services/ruleEngine.js';
+import { getIngredientImageUrl } from '../services/ingredientImageService.js';
 import generatedImages from '../data/generatedImages.json' with { type: 'json' };
 
 export function renderCheckerTab(state) {
@@ -127,7 +128,7 @@ function renderIngredientCard(item, activeDiet = 'lid') {
   }
 
   const swaps = info.substitutes || [];
-  const imgUrl = item.imageUrl || generatedImages?.[item.id] || null;
+  const imgUrl = getIngredientImageUrl(item.id, activeDiet, item.imageUrl);
 
   return `
     <div class="ingredient-card group ${statusClass}" data-item-id="${item.id}" role="button" tabindex="0">

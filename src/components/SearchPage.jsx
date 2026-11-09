@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { LID_DATABASE, LID_CATEGORIES, STATUS, getItemDietaryInfo, getItemStatus } from '../data/lidDatabase.js';
+import { LID_DATABASE, LID_CATEGORIES, STATUS, getItemDietaryInfo, getItemStatus, getCategoryIcon } from '../data/lidDatabase.js';
+import { getIngredientImageUrl } from '../services/ingredientImageService.js';
 
 export const QUICK_LOOKUPS = [
   'Sayote',
@@ -205,27 +206,49 @@ export function SearchPage({ foodItems = LID_DATABASE, activeDiet = 'lid', onSel
             const info = getItemDietaryInfo(item, activeDiet);
             const isSafe = info.status === STATUS.SAFE;
             const isAvoid = info.status === STATUS.AVOID;
+            const imgUrl = getIngredientImageUrl(item.id, activeDiet, item.imageUrl);
             return (
               <div
                 key={item.id}
                 onClick={() => onSelectItem && onSelectItem(item)}
                 className="ingredient-card p-4 rounded-xl border border-slate-800 bg-slate-900/60 hover:border-slate-700 transition cursor-pointer"
               >
-                <div className="flex justify-between items-start gap-2">
-                  <h3 className="font-bold text-white text-base">{item.name}</h3>
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                      isSafe
-                        ? 'border border-emerald-600/50 bg-emerald-500/10 text-emerald-300'
-                        : isAvoid
-                        ? 'border border-rose-600/50 bg-rose-500/10 text-rose-300'
-                        : 'border border-amber-600/50 bg-amber-500/10 text-amber-300'
-                    }`}
-                  >
-                    {info.status}
-                  </span>
+                <div className="flex items-start gap-3">
+                  <div className="relative flex items-center justify-center rounded-xl bg-slate-800 border border-slate-700/60 flex-shrink-0 select-none overflow-hidden w-12 h-12 text-xl card-thumbnail-wrap">
+                    {imgUrl ? (
+                      <img
+                        src={imgUrl}
+                        alt={item.name}
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          if (e.target.nextElementSibling) e.target.nextElementSibling.style.display = 'inline-block';
+                        }}
+                      />
+                    ) : null}
+                    <span style={{ display: imgUrl ? 'none' : 'inline-block' }}>
+                      {item.icon || getCategoryIcon(item.category, item.name)}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start gap-2">
+                      <h3 className="font-bold text-white text-base truncate">{item.name}</h3>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[11px] font-bold shrink-0 ${
+                          isSafe
+                            ? 'border border-emerald-600/50 bg-emerald-500/10 text-emerald-300'
+                            : isAvoid
+                            ? 'border border-rose-600/50 bg-rose-500/10 text-rose-300'
+                            : 'border border-amber-600/50 bg-amber-500/10 text-amber-300'
+                        }`}
+                      >
+                        {info.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">{item.category}</p>
+                  </div>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">{item.category}</p>
                 <p className="text-xs text-slate-300 mt-2 line-clamp-2">
                   {item.dietaryStatus?.[activeDiet]?.note || item.generalDescription || item.description || ''}
                 </p>

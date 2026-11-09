@@ -2407,6 +2407,24 @@ html.light .modal-content {
   max-width: 540px !important;
 }
 
+.admin-image-modal-box {
+  max-width: 680px !important;
+  max-height: 92vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.admin-image-list::-webkit-scrollbar {
+  width: 6px;
+}
+.admin-image-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-image-list::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 9999px;
+}
+
 .settings-sub-badge {
   font-size: 0.72rem;
   font-weight: 700;

@@ -211,6 +211,24 @@ export function renderSettingsModal(settings = {}, currentTheme = 'dark', showPr
             <div class="form-help">Saves scanned grocery photos to your personal Cloudinary cloud.</div>
           </div>
 
+          <!-- 5b. Administrator: Ingredient Image Management -->
+          <div class="form-group" style="padding-top: 8px; border-top: 1px solid var(--border-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+              <div style="flex: 1;">
+                <label class="form-label" style="margin-bottom: 2px;">
+                  <span>🖼️ Ingredient Image Management</span>
+                  <span class="settings-sub-badge" style="color: var(--safe-green);">Admin Hub</span>
+                </label>
+                <div class="form-help" style="margin-top: 2px;">
+                  Discover, upload, review, and map Cloudinary ingredient photographs across protocols.
+                </div>
+              </div>
+              <button type="button" id="open-ingredient-admin-btn" class="btn-secondary" style="padding: 6px 14px; font-size: 0.8rem; white-space: nowrap; font-weight: 600;">
+                Manage Photos
+              </button>
+            </div>
+          </div>
+
           <!-- 6. Target Date -->
           <div class="form-group">
             <label class="form-label" for="prep-date-input">

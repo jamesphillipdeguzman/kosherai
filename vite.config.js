@@ -7,6 +7,8 @@ import recipeInteractionsHandler from './api/recipe-interactions.js';
 import inventoryApiHandler from './api/inventory.js';
 import mealPlansApiHandler from './api/meal-plans.js';
 import settingsApiHandler from './api/settings.js';
+import ingredientImagesHandler from './api/ingredient-images.js';
+import adminIngredientImagesHandler from './api/admin/ingredient-images.js';
 
 export default defineConfig({
   server: {
@@ -172,6 +174,42 @@ export default defineConfig({
               await settingsApiHandler(req, res);
             } catch (err) {
               console.error('[Vite Settings API Error]:', err);
+              if (!res.headersSent) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  error: 'INTERNAL_SERVER_ERROR',
+                  message: err.message
+                }));
+              }
+            }
+            return;
+          }
+
+          // Intercept /api/admin/ingredient-images route
+          if (url.pathname.startsWith('/api/admin/ingredient-images')) {
+            try {
+              await adminIngredientImagesHandler(req, res);
+            } catch (err) {
+              console.error('[Vite Admin Ingredient Images API Error]:', err);
+              if (!res.headersSent) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  error: 'INTERNAL_SERVER_ERROR',
+                  message: err.message
+                }));
+              }
+            }
+            return;
+          }
+
+          // Intercept /api/ingredient-images route
+          if (url.pathname.startsWith('/api/ingredient-images')) {
+            try {
+              await ingredientImagesHandler(req, res);
+            } catch (err) {
+              console.error('[Vite Ingredient Images API Error]:', err);
               if (!res.headersSent) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');
