@@ -226,13 +226,22 @@ export function renderIngredientImageAdminModal(props = {}) {
                   <label class="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-1.5">
                     Image Preview
                   </label>
-                  <div class="admin-image-preview-container flex items-center justify-center w-full h-[180px] max-h-[200px] rounded-xl bg-slate-950/70 border border-slate-800/80 overflow-hidden p-2.5 relative">
+                  <div class="admin-image-preview-container w-full h-48 sm:h-52 flex items-center justify-center bg-slate-950/80 border border-slate-800/80 rounded-xl overflow-hidden p-2 relative shadow-inner">
                     ${uploadPreviewUrl ? `
                       <img 
                         src="${uploadPreviewUrl}" 
                         alt="Upload Preview" 
-                        class="admin-image-preview-img max-h-[168px] max-w-full object-contain rounded-lg shadow-md transition-transform duration-200" 
+                        class="admin-image-preview-img max-h-full max-w-full w-auto h-auto object-contain rounded-lg" 
                       />
+                    ` : (mappingByIngredientId[selectedIngredientId]?.secure_url || getIngredientImageUrl(selectedIngredientId, activeProtocol)) ? `
+                      <div class="flex flex-col items-center justify-center h-full w-full">
+                        <img 
+                          src="${mappingByIngredientId[selectedIngredientId]?.secure_url || getIngredientImageUrl(selectedIngredientId, activeProtocol)}" 
+                          alt="Current Saved Photograph" 
+                          class="admin-image-preview-img max-h-full max-w-full w-auto h-auto object-contain rounded-lg opacity-60" 
+                        />
+                        <span class="text-[11px] text-slate-400 mt-1.5 font-medium">Current saved photo — choose or drop new file above to replace</span>
+                      </div>
                     ` : `
                       <div class="flex flex-col items-center justify-center text-slate-500 text-xs text-center select-none py-3">
                         <div class="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-2">
@@ -324,12 +333,12 @@ export function renderIngredientImageAdminModal(props = {}) {
                 <div class="admin-image-item-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-slate-700/80 transition-all">
                   <div class="flex items-center gap-3.5 min-w-0">
                     <!-- Thumbnail -->
-                    <div class="w-14 h-14 rounded-xl bg-slate-800/90 border border-slate-700/60 overflow-hidden flex items-center justify-center shrink-0 shadow-sm relative group">
+                    <div class="w-14 h-14 rounded-xl bg-slate-800/90 border border-slate-700/60 overflow-hidden flex items-center justify-center shrink-0 shadow-sm relative p-1">
                       ${imgUrl ? `
                         <img 
                           src="${escapeHtml(imgUrl)}" 
                           alt="${escapeHtml(item.name)}" 
-                          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                          class="max-h-full max-w-full w-auto h-auto object-contain rounded-md" 
                           loading="lazy"
                           onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='inline-block';"
                         />

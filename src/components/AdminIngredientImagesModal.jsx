@@ -19,8 +19,8 @@ function formatBytes(bytes) {
  * - Constrained outer modal: max-w-2xl, max-h-[85vh], overflow-hidden
  * - Fixed header and footer for accessible controls at all viewport sizes
  * - Scrollable body with custom scrollbar
- * - Drag-and-drop dropzone with hover & active feedback
- * - Constrained preview container: height ~180px, max-height 200px, object-contain
+ * - Consistent bounded image containment (h-48 sm:h-52, object-contain) for BOTH
+ *   the temporary upload preview and the active/saved Cloudinary image.
  */
 export default function AdminIngredientImagesModal({
   isOpen = false,
@@ -34,9 +34,9 @@ export default function AdminIngredientImagesModal({
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   
-  // Upload panel state
+  // Selected ingredient & upload panel state
+  const [selectedIngredientId, setSelectedIngredientId] = useState('salt-kosher');
   const [uploadFormOpen, setUploadFormOpen] = useState(false);
-  const [selectedIngredientId, setSelectedIngredientId] = useState('');
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -114,6 +114,12 @@ export default function AdminIngredientImagesModal({
     });
   }
 
+  // Active / Selected Ingredient Resolution
+  const activeIngredientId = selectedIngredientId || (displayedItems[0]?.id || LID_DATABASE[0]?.id || 'salt-kosher');
+  const selectedIngredient = LID_DATABASE.find(item => item.id === activeIngredientId) || LID_DATABASE[0];
+  const selectedMapping = selectedIngredient ? mappingByIngredientId[selectedIngredient.id] : null;
+  const savedImageUrl = selectedMapping?.secure_url || (selectedIngredient ? getIngredientImageUrl(selectedIngredient.id, activeProtocol, selectedIngredient.imageUrl) : null);
+
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -147,7 +153,8 @@ export default function AdminIngredientImagesModal({
 
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedIngredientId || !uploadFile) {
+    const targetId = activeIngredientId;
+    if (!targetId || !uploadFile) {
       setStatusMessage({ type: 'error', text: 'Please select an ingredient and choose an image file.' });
       return;
     }
@@ -165,7 +172,7 @@ export default function AdminIngredientImagesModal({
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({
-              ingredientId: selectedIngredientId,
+              ingredientId: targetId,
               protocolId: activeProtocol,
               imageData: base64Data,
               filename: uploadFile.name
@@ -174,11 +181,11 @@ export default function AdminIngredientImagesModal({
 
           const data = await res.json();
           if (res.ok && data.success) {
-            setStatusMessage({ type: 'success', text: `Uploaded and mapped ${selectedIngredientId} successfully!` });
+            setStatusMessage({ type: 'success', text: `Uploaded and mapped ${selectedIngredient?.name || targetId} successfully!` });
             setUploadFormOpen(false);
             setUploadFile(null);
             setUploadPreviewUrl(null);
-            loadMappings();
+            await loadMappings();
           } else {
             setStatusMessage({ type: 'error', text: data.message || 'Upload failed. Check Cloudinary settings.' });
           }
@@ -377,9 +384,10 @@ export default function AdminIngredientImagesModal({
             </div>
           )}
 
-          {/* Collapsible Upload Panel with Dropzone & Preview */}
-          {uploadFormOpen && (
-            <div className="upload-panel p-4 sm:p-5 rounded-xl bg-slate-900/90 border border-emerald-500/40 shadow-xl space-y-4 animate-fadeIn">
+          {/* Active Ingredient Display / Upload Panel */}
+          {uploadFormOpen ? (
+            /* Upload Form Panel */
+            <div className="upload-panel p-4 sm:p-5 rounded-2xl bg-slate-900/90 border border-emerald-500/40 shadow-xl space-y-4 animate-fadeIn">
               <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <span className="text-base">📤</span>
@@ -397,8 +405,12 @@ export default function AdminIngredientImagesModal({
                     <select
                       id="upload-ingredient-field"
                       required
-                      value={selectedIngredientId}
-                      onChange={(e) => setSelectedIngredientId(e.target.value)}
+                      value={activeIngredientId}
+                      onChange={(e) => {
+                        setSelectedIngredientId(e.target.value);
+                        setUploadFile(null);
+                        setUploadPreviewUrl(null);
+                      }}
                       className="w-full text-xs bg-slate-800/90 text-slate-100 border border-slate-700/80 rounded-xl p-2.5 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 cursor-pointer"
                     >
                       <option value="">-- Choose Ingredient --</option>
@@ -469,25 +481,34 @@ export default function AdminIngredientImagesModal({
                   )}
                 </div>
 
-                {/* Constrained Image Preview Container */}
+                {/* Upload Image Preview Container - Bounded h-48 sm:h-52 with object-contain */}
                 <div>
                   <label className="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-1.5">
                     Image Preview
                   </label>
-                  <div className="admin-image-preview-container flex items-center justify-center w-full h-[180px] max-h-[200px] rounded-xl bg-slate-950/70 border border-slate-800/80 overflow-hidden p-2.5 relative">
+                  <div className="admin-image-preview-container w-full h-48 sm:h-52 flex items-center justify-center bg-slate-950/80 border border-slate-800/80 rounded-xl overflow-hidden p-2 relative shadow-inner">
                     {uploadPreviewUrl ? (
                       <img
                         src={uploadPreviewUrl}
                         alt="Upload Preview"
-                        className="admin-image-preview-img max-h-[168px] max-w-full object-contain rounded-lg shadow-md transition-transform duration-200"
+                        className="admin-image-preview-img max-h-full max-w-full w-auto h-auto object-contain rounded-lg"
                       />
+                    ) : savedImageUrl ? (
+                      <div className="flex flex-col items-center justify-center h-full w-full">
+                        <img
+                          src={savedImageUrl}
+                          alt="Current Saved Photograph"
+                          className="admin-image-preview-img max-h-full max-w-full w-auto h-auto object-contain rounded-lg opacity-60"
+                        />
+                        <span className="text-[11px] text-slate-400 mt-1.5 font-medium">Current saved photo — choose or drop new file above to replace</span>
+                      </div>
                     ) : (
-                      <div className="flex flex-col items-center justify-center text-slate-500 text-xs text-center select-none py-3">
+                      <div className="flex flex-col items-center justify-center text-slate-500 text-xs py-4 text-center select-none">
                         <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-2">
                           <span className="text-2xl opacity-60">🖼️</span>
                         </div>
-                        <span className="font-medium text-slate-400 text-xs">Photograph Preview</span>
-                        <span className="text-[10px] text-slate-500 mt-0.5">Preview appears here after choosing an image</span>
+                        <span className="font-semibold text-slate-400">Photograph Preview</span>
+                        <span className="text-[11px] text-slate-500 mt-0.5">Preview appears here after choosing an image</span>
                       </div>
                     )}
                   </div>
@@ -518,6 +539,114 @@ export default function AdminIngredientImagesModal({
                   </button>
                 </div>
               </form>
+            </div>
+          ) : (
+            /* Active / Saved Ingredient Display Card - Exact same container & styling */
+            <div className="active-ingredient-card p-4 sm:p-5 rounded-2xl bg-slate-900/90 border border-slate-800/80 shadow-xl space-y-3.5 animate-fadeIn">
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Active Ingredient Photo</span>
+                  <span className="text-xs text-slate-500">•</span>
+                  <span className="text-xs font-medium text-slate-200">{selectedIngredient?.name}</span>
+                </div>
+                {selectedMapping ? (
+                  selectedMapping.status === 'pending_review' ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      🟡 Review
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                      🟢 Active
+                    </span>
+                  )
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                    ⚪ No Image
+                  </span>
+                )}
+              </div>
+
+              {/* Bounded Image Container - Fixed responsive height h-48 sm:h-52 with object-contain */}
+              <div className="admin-image-preview-container w-full h-48 sm:h-52 flex items-center justify-center bg-slate-950/80 border border-slate-800/80 rounded-xl overflow-hidden p-2 relative shadow-inner">
+                {savedImageUrl ? (
+                  <img
+                    src={savedImageUrl}
+                    alt={selectedIngredient?.name || 'Active ingredient photo'}
+                    className="admin-image-preview-img max-h-full max-w-full w-auto h-auto object-contain rounded-lg"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-slate-500 text-xs py-4 text-center select-none">
+                    <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-2">
+                      <span className="text-2xl opacity-60">{selectedIngredient?.icon || getCategoryIcon(selectedIngredient?.category, selectedIngredient?.name)}</span>
+                    </div>
+                    <span className="font-semibold text-slate-300">No photograph uploaded yet</span>
+                    <span className="text-[11px] text-slate-500 mt-0.5">Click "Upload Photo" below to link a Cloudinary image</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Metadata and Controls row below image */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-white truncate">{selectedIngredient?.name}</h3>
+                    <span className="font-mono text-[10px] text-slate-500 bg-slate-800/60 px-1.5 py-0.5 rounded">{selectedIngredient?.id}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-1">
+                    <span className="text-slate-300">{selectedIngredient?.category}</span>
+                    <span>•</span>
+                    <span className="text-emerald-400/90 font-medium uppercase text-[10px]">{activeProtocol}</span>
+                    {selectedMapping?.public_id && (
+                      <>
+                        <span>•</span>
+                        <span className="text-[10px] font-mono text-teal-400 truncate max-w-[200px] sm:max-w-xs" title={selectedMapping.public_id}>
+                          ☁️ {selectedMapping.public_id}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Replace / Upload / Unlink Controls */}
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  {selectedMapping?.status === 'pending_review' && (
+                    <button
+                      type="button"
+                      onClick={() => handleApprove(selectedMapping.id)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 transition active:scale-95 flex items-center gap-1"
+                    >
+                      <span>✓</span>
+                      <span>Approve</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedIngredientId(selectedIngredient?.id);
+                      setUploadFormOpen(true);
+                      setUploadFile(null);
+                      setUploadPreviewUrl(null);
+                    }}
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-900/30 transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>{savedImageUrl ? '🔄' : '➕'}</span>
+                    <span>{savedImageUrl ? 'Replace Photo' : 'Upload Photo'}</span>
+                  </button>
+                  {selectedMapping && (
+                    <button
+                      type="button"
+                      onClick={() => handleUnlink(selectedMapping.id)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 transition active:scale-95"
+                      title="Unlink image mapping"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -584,19 +713,31 @@ export default function AdminIngredientImagesModal({
                 const hasMapping = Boolean(mapping && mapping.secure_url);
                 const isPending = mapping && mapping.status === 'pending_review';
                 const imgUrl = getIngredientImageUrl(item.id, activeProtocol, item.imageUrl);
+                const isSelected = item.id === activeIngredientId;
 
                 return (
                   <div
                     key={item.id}
-                    className="admin-image-item-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl bg-slate-900/70 border border-slate-800/80 hover:border-slate-700/80 transition-all"
+                    onClick={() => {
+                      setSelectedIngredientId(item.id);
+                      setUploadFormOpen(false);
+                      setUploadFile(null);
+                      setUploadPreviewUrl(null);
+                    }}
+                    className={`admin-image-item-card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-slate-800/90 border-emerald-500/70 shadow-md ring-1 ring-emerald-500/40'
+                        : 'bg-slate-900/70 border-slate-800/80 hover:border-slate-700/80'
+                    }`}
                   >
                     <div className="flex items-center gap-3.5 min-w-0">
-                      <div className="w-14 h-14 rounded-xl bg-slate-800/90 border border-slate-700/60 overflow-hidden flex items-center justify-center shrink-0 shadow-sm relative group">
+                      {/* Thumbnail Container */}
+                      <div className="w-14 h-14 rounded-xl bg-slate-800/90 border border-slate-700/60 overflow-hidden flex items-center justify-center shrink-0 shadow-sm relative p-1">
                         {imgUrl ? (
                           <img
                             src={imgUrl}
                             alt={item.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            className="max-h-full max-w-full w-auto h-auto object-contain rounded-md"
                             loading="lazy"
                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
                           />
@@ -644,7 +785,10 @@ export default function AdminIngredientImagesModal({
                       {isPending && (
                         <button
                           type="button"
-                          onClick={() => handleApprove(mapping.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleApprove(mapping.id);
+                          }}
                           className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 transition active:scale-95 flex items-center gap-1"
                           title="Approve photograph"
                         >
@@ -654,7 +798,10 @@ export default function AdminIngredientImagesModal({
                       )}
                       <button
                         type="button"
-                        onClick={() => handleStartUploadForIngredient(item.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStartUploadForIngredient(item.id);
+                        }}
                         className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition active:scale-95 flex items-center gap-1"
                         title="Upload or replace photograph"
                       >
@@ -664,7 +811,10 @@ export default function AdminIngredientImagesModal({
                       {hasMapping && (
                         <button
                           type="button"
-                          onClick={() => handleUnlink(mapping.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUnlink(mapping.id);
+                          }}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 transition active:scale-95"
                           title="Unlink image mapping"
                         >

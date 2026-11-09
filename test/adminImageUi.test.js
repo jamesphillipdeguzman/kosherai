@@ -124,7 +124,39 @@ console.log('\nTest 4: Gallery Card Presentation, Action Alignment & Metadata');
   console.log('  ✅ Responsive card layout, metadata rows, and action button alignment verified.');
 }
 
+// ============================================================================
+// TEST 5: React AdminIngredientImagesModal.jsx Consistent Image Containment
+// ============================================================================
+console.log('\nTest 5: React AdminIngredientImagesModal.jsx Preview & Active Image Containment');
+{
+  const fs = await import('node:fs');
+  const jsxCode = fs.readFileSync('src/components/AdminIngredientImagesModal.jsx', 'utf8');
+
+  // Verify bounded image container has h-48 sm:h-52, overflow-hidden, and centered alignment
+  assert.ok(jsxCode.includes('h-48 sm:h-52'), 'Image container must use fixed responsive height h-48 sm:h-52');
+  assert.ok(jsxCode.includes('overflow-hidden'), 'Image container must enforce overflow-hidden');
+  assert.ok(jsxCode.includes('bg-slate-950/80'), 'Image container must have dark background');
+  assert.ok(jsxCode.includes('flex items-center justify-center'), 'Image container must center the image');
+
+  // Verify image element containment styling (preserving aspect ratio without zooming/clipping)
+  assert.ok(jsxCode.includes('max-h-full max-w-full w-auto h-auto object-contain rounded-lg'), 'Image must use max-h-full max-w-full w-auto h-auto object-contain rounded-lg');
+
+  // Verify Active Image Controls are visible below the container
+  assert.ok(jsxCode.includes('Active Ingredient Photo'), 'Must render Active Ingredient Photo header');
+  assert.ok(jsxCode.includes('Replace Photo') || jsxCode.includes('Upload Photo'), 'Must display Replace/Upload Photo button below image');
+  assert.ok(jsxCode.includes('selectedIngredient?.id') || jsxCode.includes('activeIngredientId'), 'Must display ingredient ID');
+  assert.ok(jsxCode.includes('selectedMapping?.public_id'), 'Must display Cloudinary public ID when mapped');
+
+  // Verify thumbnail containment in list
+  assert.ok(jsxCode.includes('max-h-full max-w-full w-auto h-auto object-contain rounded-md'), 'List thumbnails must use object-contain rounded-md (preventing zoom/crop)');
+
+  // Verify no object-cover is used on the active or preview images
+  assert.ok(!jsxCode.includes('object-cover'), 'Must not use object-cover which crops and zooms images');
+
+  console.log('  ✅ React AdminIngredientImagesModal preview and active image containment verified.');
+}
+
 console.log('\n======================================================================');
-console.log('🎉 ALL ADMIN IMAGE UI & CSS TESTS (1 THROUGH 4) PASSED SUCCESSFULLY!');
+console.log('🎉 ALL ADMIN IMAGE UI & CSS TESTS (1 THROUGH 5) PASSED SUCCESSFULLY!');
 console.log('======================================================================\n');
 
