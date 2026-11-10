@@ -94,6 +94,34 @@ console.log('3. Navigating to http://localhost:' + PORT);
 await sendCdp('Page.navigate', { url: `http://localhost:${PORT}/` });
 await sleep(2000);
 
+// Install fetch mock for /api/admin/ingredient-images
+await sendCdp('Runtime.evaluate', {
+  expression: `
+    (() => {
+      const origFetch = window.fetch;
+      window.fetch = async (url, opts) => {
+        if (typeof url === 'string' && url.includes('/api/admin/ingredient-images')) {
+          return new Response(JSON.stringify({
+            success: true,
+            stats: { totalIngredients: 36, withImage: 1, missingImage: 35, pendingReview: 0 },
+            mappings: [
+              {
+                id: 'img_lid_salt-kosher',
+                protocol_id: 'lid',
+                ingredient_id: 'salt-kosher',
+                secure_url: 'https://res.cloudinary.com/dego6hgcb/image/upload/f_auto,q_auto,w_400,c_limit/kosherai/lid_protocol/ingredients/salt-kosher',
+                public_id: 'kosherai/lid_protocol/ingredients/salt-kosher',
+                status: 'active'
+              }
+            ]
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        return origFetch(url, opts);
+      };
+    })()
+  `
+});
+
 // 4. Authenticate as admin via event with retry loop
 console.log('4. Authenticating as admin and opening Manage Tab...');
 await sendCdp('Runtime.evaluate', {
@@ -197,6 +225,19 @@ for (const vp of viewports) {
   });
   await sleep(400);
 
+  // Ensure manage tab is active on this viewport
+  await sendCdp('Runtime.evaluate', {
+    expression: `
+      (() => {
+        const btn = document.querySelector('[data-tab="manage"]');
+        if (btn && !document.querySelector('.ingredient-gallery')) {
+          btn.click();
+        }
+      })()
+    `
+  });
+  await sleep(300);
+
   const inspection = await sendCdp('Runtime.evaluate', {
     expression: `
       (() => {
@@ -205,6 +246,25 @@ for (const vp of viewports) {
         const images = document.querySelectorAll('.ingredient-card__image img');
         const containers = document.querySelectorAll('.ingredient-card__image');
         
+        // Salt card inspection
+        const saltCard = document.querySelector('[data-ingredient-id="salt-kosher"]');
+        let saltDetail = null;
+        if (saltCard) {
+          const thumbBox = saltCard.querySelector('.ingredient-card__image');
+          const saltImg = thumbBox ? thumbBox.querySelector('img') : null;
+          const saltPlaceholders = thumbBox ? thumbBox.querySelectorAll('.ingredient-card__placeholder') : [];
+          saltDetail = {
+            hasImg: Boolean(saltImg),
+            placeholdersCount: saltPlaceholders.length,
+            hasImageErrorText: saltCard.textContent.includes('Image Error'),
+            imgWidth: saltImg ? window.getComputedStyle(saltImg).width : null,
+            imgHeight: saltImg ? window.getComputedStyle(saltImg).height : null,
+            imgObjectFit: saltImg ? window.getComputedStyle(saltImg).objectFit : null,
+            containerWidth: thumbBox ? window.getComputedStyle(thumbBox).width : null,
+            containerHeight: thumbBox ? window.getComputedStyle(thumbBox).height : null
+          };
+        }
+
         let sampleImage = null;
         let sampleContainer = null;
         if (images.length > 0) {
@@ -238,6 +298,7 @@ for (const vp of viewports) {
           gridTemplateColumns: galleryStyle?.gridTemplateColumns,
           sampleImage,
           sampleContainer,
+          saltDetail,
           bodyScrollWidth: document.body.scrollWidth,
           bodyClientWidth: document.body.clientWidth,
           hasHorizontalOverflow: document.body.scrollWidth > document.body.clientWidth
@@ -254,6 +315,10 @@ for (const vp of viewports) {
   console.log('  Grid template columns count:', res?.gridTemplateColumns ? res.gridTemplateColumns.split(' ').length : 0);
   console.log('  Container height:', res?.sampleContainer?.height, '| overflow:', res?.sampleContainer?.overflow);
   console.log('  Image object-fit:', res?.sampleImage?.objectFit, '| maxWidth:', res?.sampleImage?.maxWidth);
+  if (res?.saltDetail) {
+    console.log('  Salt card -> hasImg:', res.saltDetail.hasImg, '| placeholders:', res.saltDetail.placeholdersCount, '| hasImageErrorText:', res.saltDetail.hasImageErrorText);
+    console.log('  Salt img width x height:', res.saltDetail.imgWidth, 'x', res.saltDetail.imgHeight, 'inside container:', res.saltDetail.containerWidth, 'x', res.saltDetail.containerHeight);
+  }
   console.log('  Horizontal overflow:', res?.hasHorizontalOverflow ? '⚠️ YES' : '✅ NO');
 
   // Screenshot
@@ -263,11 +328,48 @@ for (const vp of viewports) {
   console.log(`  📸 Screenshot saved: ${shotPath}`);
 }
 
-// 7. Test opening dialog
-console.log('\n7. Clicking card to open editing dialog...');
+// 7. Test simulated genuine image loading error
+console.log('\n7. Testing simulated image load error on salt card...');
+const errorResult = await sendCdp('Runtime.evaluate', {
+  expression: `
+    (() => {
+      const saltCard = document.querySelector('[data-ingredient-id="salt-kosher"]');
+      if (!saltCard) return { success: false, reason: 'no salt card' };
+      const img = saltCard.querySelector('.ingredient-card__image img');
+      if (!img) return { success: false, reason: 'no img' };
+
+      // Dispatch error event to test replaceWith fallback
+      img.dispatchEvent(new Event('error'));
+
+      const thumbBox = saltCard.querySelector('.ingredient-card__image');
+      const remainingImg = thumbBox.querySelector('img');
+      const placeholders = thumbBox.querySelectorAll('.ingredient-card__placeholder');
+
+      return {
+        success: true,
+        remainingImg: Boolean(remainingImg),
+        placeholdersCount: placeholders.length,
+        placeholderText: placeholders[0] ? placeholders[0].textContent.trim().replace(/\\s+/g, ' ') : null
+      };
+    })()
+  `,
+  returnByValue: true
+});
+console.log('  Simulated image error handling result:', errorResult?.result?.value);
+
+const fallbackShot = await sendCdp('Page.captureScreenshot', { format: 'png' });
+const fallbackShotPath = path.join(SHOTS_DIR, 'manage-gallery-error-fallback.png');
+fs.writeFileSync(fallbackShotPath, Buffer.from(fallbackShot.data, 'base64'));
+console.log(`  📸 Error fallback screenshot saved: ${fallbackShotPath}`);
+
+// 8. Test opening dialog
+console.log('\n8. Clicking card to open editing dialog...');
 const openDialog = await sendCdp('Runtime.evaluate', {
   expression: `
     (() => {
+      // Re-click manage to refresh cards
+      const btn = document.querySelector('[data-tab="manage"]');
+      if (btn) btn.click();
       const firstCard = document.querySelector('.ingredient-card');
       if (firstCard) {
         firstCard.click();

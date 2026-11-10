@@ -159,6 +159,13 @@ export default function AdminIngredientImagesView({
                     alt={item.name}
                     className="admin-preview-img"
                     loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      const p = document.createElement('div');
+                      p.className = 'ingredient-card__placeholder';
+                      p.innerHTML = '<span class="ingredient-card__placeholder-icon">⚠️</span><span>Image Unavailable</span>';
+                      e.currentTarget.replaceWith(p);
+                    }}
                   />
                 ) : (
                   <div className="ingredient-card__placeholder">

@@ -121,6 +121,10 @@ console.log('\nTest 4: Gallery Card Presentation, Action Alignment & Metadata');
   assert.ok(html.includes('admin-upload-for-item-btn'), 'Item must provide Upload/Replace button');
   assert.ok(html.includes('kosherai/lid_protocol/ingredients/salt-kosher'), 'Public ID must be rendered in details');
 
+  // Verify NO duplicate image or "Image Error" text appears on mapped ingredient cards
+  assert.ok(!html.includes('Image Error'), 'Mapped ingredient card must NEVER render "Image Error" or duplicate preview beside photo');
+  assert.ok(html.includes('No Image'), 'Unmapped ingredients must render single "No Image" placeholder');
+
   console.log('  ✅ Responsive card layout, metadata rows, and action button alignment verified.');
 }
 

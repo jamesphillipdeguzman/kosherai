@@ -208,12 +208,8 @@ export function renderIngredientImageAdminModal(props = {}) {
                   alt="${escapeHtml(item.name)}"
                   class="admin-preview-img"
                   loading="lazy"
-                  onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';"
+                  onerror="this.onerror=null; const p=document.createElement('div'); p.className='ingredient-card__placeholder'; p.innerHTML='<span class=\\'ingredient-card__placeholder-icon\\'>⚠️</span><span>Image Unavailable</span>'; this.replaceWith(p);"
                 />
-                <div style="display: none;" class="ingredient-card__placeholder">
-                  <span class="ingredient-card__placeholder-icon">${escapeHtml(item.icon || getCategoryIcon(item.category, item.name))}</span>
-                  <span>Image Error</span>
-                </div>
               ` : `
                 <div class="ingredient-card__placeholder">
                   <span class="ingredient-card__placeholder-icon">📷</span>
