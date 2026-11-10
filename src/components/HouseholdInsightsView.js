@@ -150,19 +150,19 @@ function renderInsightSectionCard({
                 ${escapeHtml(title)}
               </h3>
               ${badgeText ? `
-                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeColor || 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'}">
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeColor || 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700'}">
                   ${badgeText}
                 </span>
               ` : ''}
             </div>
-            <p class="text-xs text-slate-600 dark:text-slate-400 truncate">
+            <p class="text-xs text-slate-600 dark:text-slate-300 truncate">
               ${escapeHtml(subtitle)}
             </p>
           </div>
         </div>
 
         <div class="flex items-center gap-2.5 shrink-0 ml-2">
-          <span class="text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:inline select-none">
+          <span class="text-xs font-medium text-slate-500 dark:text-slate-300 hidden sm:inline select-none">
             ${isExpanded ? 'Collapse' : 'Expand'}
           </span>
           <div class="p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-transform duration-200 ${
@@ -228,10 +228,10 @@ export function renderHouseholdInsightsDashboard(state = {}) {
         <div class="flex items-center gap-4">
           <div class="w-16 h-16 rounded-2xl flex items-center justify-center font-black text-3xl shadow-inner ${
             scorecard.grade === 'A'
-              ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+              ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30'
               : (scorecard.grade === 'B'
-                ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30'
-                : 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30')
+                ? 'bg-blue-500/20 text-blue-800 dark:text-blue-200 border border-blue-500/30'
+                : 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-500/30')
           }">
             ${scorecard.grade}
           </div>
@@ -240,20 +240,20 @@ export function renderHouseholdInsightsDashboard(state = {}) {
               <span class="text-3xl font-black text-slate-900 dark:text-slate-100 font-mono tracking-tight">
                 ${scorecard.score}
               </span>
-              <span class="text-sm font-semibold text-slate-400">/ 100 Points</span>
+              <span class="text-sm font-semibold text-slate-500 dark:text-slate-400">/ 100 Points</span>
             </div>
-            <div class="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mt-0.5">
+            <div class="text-xs font-semibold text-emerald-700 dark:text-emerald-300 mt-0.5">
               ${scorecard.score >= 80 ? '🌟 Excellent Household Stewardship' : (scorecard.score >= 60 ? '👍 Good Baseline Performance' : '⚠️ Room for Purchasing Optimization')}
             </div>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 max-w-xl">
+            <p class="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 max-w-xl">
               ${escapeHtml(scorecard.gradeExplanation || 'Comprehensive composite score evaluating purchasing accuracy, inventory rotation, and food waste minimization.')}
             </p>
           </div>
         </div>
 
         <div class="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-1 text-xs">
-          <span class="font-mono font-bold text-slate-700 dark:text-slate-300">100 Pts Maximum</span>
-          <span class="text-[11px] text-slate-400">5 Weighted Categories</span>
+          <span class="font-mono font-bold text-slate-700 dark:text-slate-200">100 Pts Maximum</span>
+          <span class="text-[11px] text-slate-500 dark:text-slate-400">5 Weighted Categories</span>
         </div>
       </div>
 
@@ -265,14 +265,14 @@ export function renderHouseholdInsightsDashboard(state = {}) {
             <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between gap-2.5">
               <div>
                 <div class="flex items-center justify-between text-xs mb-1">
-                  <span class="font-bold text-slate-800 dark:text-slate-200">${escapeHtml(ind.indicator)}</span>
-                  <span class="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">${ind.score} / ${ind.maxScore} pts</span>
+                  <span class="font-bold text-slate-900 dark:text-slate-100">${escapeHtml(ind.indicator)}</span>
+                  <span class="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-300">${ind.score} / ${ind.maxScore} pts</span>
                 </div>
                 <div class="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-                  <div class="bg-emerald-500 h-full rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+                  <div class="bg-emerald-500 dark:bg-emerald-400 h-full rounded-full transition-all duration-500" style="width: ${pct}%"></div>
                 </div>
               </div>
-              <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+              <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
                 ${escapeHtml(ind.detail)}
               </p>
             </div>
@@ -280,7 +280,7 @@ export function renderHouseholdInsightsDashboard(state = {}) {
         }).join('')}
       </div>
 
-      <div class="text-[11px] text-slate-400 flex items-center gap-1.5 pt-1">
+      <div class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 pt-1">
         <span>ℹ️</span>
         <span>Score updates dynamically with recorded grocery trips, inventory consumption, and measured waste logs.</span>
       </div>
@@ -954,10 +954,10 @@ export function renderHouseholdInsightsDashboard(state = {}) {
           icon: '🏅',
           badgeText: `Grade ${scorecard.grade} (${scorecard.score}/100)`,
           badgeColor: scorecard.grade === 'A'
-            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+            ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 border-emerald-500/30'
             : (scorecard.grade === 'B'
-              ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30'
-              : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'),
+              ? 'bg-blue-500/15 text-blue-800 dark:text-blue-200 border-blue-500/30'
+              : 'bg-amber-500/15 text-amber-800 dark:text-amber-200 border-amber-500/30'),
           isExpanded: isScorecardExpanded,
           contentHtml: scorecardHtml
         })}
@@ -969,7 +969,7 @@ export function renderHouseholdInsightsDashboard(state = {}) {
           subtitle: 'Realized food cost, avoidable purchases, weekly consumption, and comparisons.',
           icon: '💰',
           badgeText: `Waste: ${formatPeso(report.wasteCost.totalEstimatedWasteCost)} · Avoidable: ${report.potentialPurchaseSavingsFormatted}`,
-          badgeColor: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+          badgeColor: 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 border-emerald-500/30',
           isExpanded: isFinancialExpanded,
           contentHtml: financialHtml
         })}
@@ -984,8 +984,8 @@ export function renderHouseholdInsightsDashboard(state = {}) {
             ? `🚨 ${wasteRisks.highRiskCount} High Risk`
             : (wasteRisks.moderateRiskCount > 0 ? `⚠️ ${wasteRisks.moderateRiskCount} Moderate` : '✅ 0 Spoilage Risks'),
           badgeColor: wasteRisks.highRiskCount > 0
-            ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
-            : (wasteRisks.moderateRiskCount > 0 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'),
+            ? 'bg-rose-500/15 text-rose-800 dark:text-rose-200 border-rose-500/30'
+            : (wasteRisks.moderateRiskCount > 0 ? 'bg-amber-500/15 text-amber-800 dark:text-amber-200 border-amber-500/30' : 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 border-emerald-500/30'),
           isExpanded: isRiskAlertsExpanded,
           contentHtml: riskAlertsHtml
         })}
@@ -997,7 +997,7 @@ export function renderHouseholdInsightsDashboard(state = {}) {
           subtitle: 'Recommended grocery purchases considering inventory, consumption, and meal plans.',
           icon: '🛒',
           badgeText: `${purchasing.recommendations.filter(r => r.recommendedPurchaseKg > 0).length} Categories Recommended`,
-          badgeColor: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',
+          badgeColor: 'bg-blue-500/15 text-blue-800 dark:text-blue-200 border-blue-500/30',
           isExpanded: isPurchasingExpanded,
           contentHtml: purchasingHtml
         })}
@@ -1009,7 +1009,7 @@ export function renderHouseholdInsightsDashboard(state = {}) {
           subtitle: 'Week-by-week comparisons of household spending, purchases, and food waste.',
           icon: '📈',
           badgeText: `${overview.totalSpendingFormatted} Spent · ${overview.wasteRatioFormatted} Waste`,
-          badgeColor: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30',
+          badgeColor: 'bg-purple-500/15 text-purple-800 dark:text-purple-200 border-purple-500/30',
           isExpanded: isTrendsExpanded,
           contentHtml: trendsHtml
         })}

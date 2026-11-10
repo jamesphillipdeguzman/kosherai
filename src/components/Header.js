@@ -65,22 +65,32 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
       </div>
 
       <div class="header-actions flex items-center gap-2">
-        <div class="status-pill" title="${isOnline ? 'Online - AI Verification Available' : 'Offline Mode - Local Database Active'}">
-          <span class="status-dot ${isOnline ? '' : 'offline'}"></span>
-          <span class="status-label">${isOnline ? 'Online' : 'Offline'}</span>
-        </div>
+        <!-- Consolidated Network Connection & User Status Pill -->
+        ${currentUser && isOnline ? `
+          <div class="status-pill status-pill-user online inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 transition-all select-none shadow-2xs" title="Network connection active · Signed in as ${escapeAttr(currentUser.name || currentUser.email || 'User')}${currentUser.email ? ` (${escapeAttr(currentUser.email)})` : ''}">
+            <span class="status-dot"></span>
+            <span class="user-avatar-badge w-5 h-5 rounded-full bg-emerald-600 text-white font-bold text-[11px] inline-flex items-center justify-center flex-shrink-0 select-none">
+              ${escapeHtml(initial)}
+            </span>
+            <span class="status-label user-first-name font-semibold truncate max-w-[110px]">
+              ${escapeHtml(firstName || 'User')}
+            </span>
+          </div>
+        ` : (!isOnline ? `
+          <div class="status-pill status-pill-offline offline inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-500/30 transition-all select-none shadow-2xs" title="Offline · Device has no active network connection">
+            <span class="status-dot offline"></span>
+            <span class="status-label font-semibold">Offline</span>
+          </div>
+        ` : `
+          <div class="status-pill online inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 select-none shadow-2xs" title="Network connection active">
+            <span class="status-dot"></span>
+            <span class="status-label font-semibold">Online</span>
+          </div>
+        `)}
 
-        <!-- Dynamic Auth State: Avatar/Sign Out if logged in, Sign In/Get Started if logged out -->
+        <!-- Dynamic Auth State: Sign Out if logged in, Sign In/Get Started if logged out -->
         <div class="header-auth-controls inline-flex items-center gap-1.5" id="header-auth-container">
           ${currentUser ? `
-            <div class="user-profile-pill inline-flex items-center gap-1.5 bg-slate-850/90 dark:bg-slate-800/90 border border-slate-700/80 px-2 py-1 rounded-full text-xs shadow-2xs" title="Signed in as ${escapeAttr(currentUser.name || currentUser.email || 'Tenant User')}${currentUser.email ? ` (${escapeAttr(currentUser.email)})` : ''}">
-              <span class="user-avatar-badge w-5 h-5 rounded-full bg-emerald-600 text-white font-bold text-[11px] inline-flex items-center justify-center flex-shrink-0 select-none">
-                ${escapeHtml(initial)}
-              </span>
-              <span class="user-first-name text-xs font-semibold text-slate-100 dark:text-white truncate">
-                ${escapeHtml(firstName || currentUser?.name || currentUser?.email || 'User')}
-              </span>
-            </div>
             <button
               type="button"
               id="header-signout-btn"

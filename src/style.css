@@ -6278,9 +6278,42 @@ html.dark .header-signout-btn:focus-visible,
 }
 
 /* ==================== RESPONSIVE HEADER ERGONOMICS ==================== */
+/* Consolidated User & Connectivity Status Pill */
+.status-pill.status-pill-user.online {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  color: #065f46 !important;
+}
+
+html.dark .status-pill.status-pill-user.online,
+:root:not(.light) .status-pill.status-pill-user.online {
+  background-color: rgba(6, 78, 59, 0.35) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+  color: #6ee7b7 !important;
+}
+
+.status-pill.status-pill-offline.offline {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+  color: #92400e !important;
+}
+
+html.dark .status-pill.status-pill-offline.offline,
+:root:not(.light) .status-pill.status-pill-offline.offline {
+  background-color: rgba(69, 26, 3, 0.35) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+  color: #fde68a !important;
+}
+
+.status-pill .user-first-name {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Keep header auth buttons and controls reachable on phones */
 @media (max-width: 520px) {
-  .app-header .status-pill,
   .app-header .brand-badge { display: none !important; }
   .header-auth-buttons { gap: 6px; }
   #header-signin-btn,
@@ -6290,17 +6323,18 @@ html.dark .header-signout-btn:focus-visible,
   .app-header .brand-icon { width: 26px; height: 26px; flex-shrink: 0; }
   .app-header .brand-title { font-size: 1rem; white-space: nowrap; }
   .app-header .header-actions { gap: 4px; flex-shrink: 0; min-width: 0; }
-  .user-first-name { max-width: 70px; }
+  .status-pill { padding: 3px 8px !important; font-size: 0.7rem !important; gap: 4px !important; }
+  .status-pill .user-first-name,
+  .user-first-name { max-width: 70px !important; }
 }
 
 @media (max-width: 440px) {
-  .user-first-name { display: none !important; }
-  .user-profile-pill { padding: 4px !important; }
+  .status-pill .user-first-name,
+  .user-first-name { max-width: 55px !important; }
   .header-signout-btn { padding: 6px 9px; min-height: 36px; }
 }
 
 @media (max-width: 360px) {
-  .user-profile-pill { display: none !important; }
   .signout-text { display: none !important; }
   .header-signout-btn {
     width: 38px !important;
@@ -6310,6 +6344,9 @@ html.dark .header-signout-btn:focus-visible,
     padding: 0 !important;
     border-radius: var(--radius-md, 12px) !important;
   }
+  .status-pill { padding: 2px 6px !important; }
+  .status-pill .user-first-name,
+  .user-first-name { max-width: 45px !important; }
 }
 
 /* =========================================================================
@@ -6523,4 +6560,88 @@ html.dark .dark\:border-slate-800,
 html.dark .dark\:border-slate-800\/80,
 :root:not(.light) .dark\:border-slate-800\/80 {
   border-color: rgba(51, 65, 85, 0.6) !important;
+}
+
+/* =========================================================================
+   COLORED BADGE, STATUS & METRIC TEXT CONTRAST UTILITIES (LIGHT & DARK MODE)
+   ========================================================================= */
+
+/* Light Mode Base Text Colors */
+.text-emerald-700 { color: #047857 !important; }
+.text-emerald-800 { color: #065f46 !important; }
+.text-blue-600 { color: #2563eb !important; }
+.text-blue-700 { color: #1d4ed8 !important; }
+.text-blue-800 { color: #1e40af !important; }
+.text-amber-700 { color: #b45309 !important; }
+.text-amber-800 { color: #92400e !important; }
+.text-rose-700 { color: #be123c !important; }
+.text-rose-800 { color: #9f1239 !important; }
+.text-purple-700 { color: #7e22ce !important; }
+.text-purple-800 { color: #6b21a8 !important; }
+
+/* Dark Mode Text Color Overrides */
+html.dark .dark\:text-emerald-200, :root:not(.light) .dark\:text-emerald-200 { color: #a7f3d0 !important; }
+html.dark .dark\:text-emerald-300, :root:not(.light) .dark\:text-emerald-300 { color: #6ee7b7 !important; }
+html.dark .dark\:text-emerald-400, :root:not(.light) .dark\:text-emerald-400 { color: #34d399 !important; }
+
+html.dark .dark\:text-blue-200, :root:not(.light) .dark\:text-blue-200 { color: #bfdbfe !important; }
+html.dark .dark\:text-blue-300, :root:not(.light) .dark\:text-blue-300 { color: #93c5fd !important; }
+html.dark .dark\:text-blue-400, :root:not(.light) .dark\:text-blue-400 { color: #60a5fa !important; }
+
+html.dark .dark\:text-amber-200, :root:not(.light) .dark\:text-amber-200 { color: #fde68a !important; }
+html.dark .dark\:text-amber-300, :root:not(.light) .dark\:text-amber-300 { color: #fcd34d !important; }
+html.dark .dark\:text-amber-400, :root:not(.light) .dark\:text-amber-400 { color: #fbbf24 !important; }
+
+html.dark .dark\:text-rose-200, :root:not(.light) .dark\:text-rose-200 { color: #fecdd3 !important; }
+html.dark .dark\:text-rose-300, :root:not(.light) .dark\:text-rose-300 { color: #fda4af !important; }
+html.dark .dark\:text-rose-400, :root:not(.light) .dark\:text-rose-400 { color: #f87171 !important; }
+
+html.dark .dark\:text-purple-200, :root:not(.light) .dark\:text-purple-200 { color: #e9d5ff !important; }
+html.dark .dark\:text-purple-300, :root:not(.light) .dark\:text-purple-300 { color: #d8b4fe !important; }
+html.dark .dark\:text-purple-400, :root:not(.light) .dark\:text-purple-400 { color: #c084fc !important; }
+
+html.dark .dark\:text-slate-100, :root:not(.light) .dark\:text-slate-100 { color: #f1f5f9 !important; }
+html.dark .dark\:text-slate-200, :root:not(.light) .dark\:text-slate-200 { color: #e2e8f0 !important; }
+html.dark .dark\:text-slate-300, :root:not(.light) .dark\:text-slate-300 { color: #cbd5e1 !important; }
+html.dark .dark\:text-slate-400, :root:not(.light) .dark\:text-slate-400 { color: #94a3b8 !important; }
+
+/* Badge Background & Border Utilities */
+.bg-emerald-500\/10 { background-color: rgba(16, 185, 129, 0.1) !important; }
+.bg-emerald-500\/15 { background-color: rgba(16, 185, 129, 0.15) !important; }
+.bg-emerald-500\/20 { background-color: rgba(16, 185, 129, 0.2) !important; }
+.border-emerald-500\/20 { border-color: rgba(16, 185, 129, 0.2) !important; }
+.border-emerald-500\/30 { border-color: rgba(16, 185, 129, 0.3) !important; }
+
+.bg-blue-500\/10 { background-color: rgba(59, 130, 246, 0.1) !important; }
+.bg-blue-500\/15 { background-color: rgba(59, 130, 246, 0.15) !important; }
+.bg-blue-500\/20 { background-color: rgba(59, 130, 246, 0.2) !important; }
+.border-blue-500\/20 { border-color: rgba(59, 130, 246, 0.2) !important; }
+.border-blue-500\/30 { border-color: rgba(59, 130, 246, 0.3) !important; }
+
+.bg-amber-500\/10 { background-color: rgba(245, 158, 11, 0.1) !important; }
+.bg-amber-500\/15 { background-color: rgba(245, 158, 11, 0.15) !important; }
+.bg-amber-500\/20 { background-color: rgba(245, 158, 11, 0.2) !important; }
+.border-amber-500\/30 { border-color: rgba(245, 158, 11, 0.3) !important; }
+
+.bg-rose-500\/10 { background-color: rgba(244, 63, 94, 0.1) !important; }
+.bg-rose-500\/15 { background-color: rgba(244, 63, 94, 0.15) !important; }
+.border-rose-500\/30 { border-color: rgba(244, 63, 94, 0.3) !important; }
+
+.bg-purple-500\/10 { background-color: rgba(168, 85, 247, 0.1) !important; }
+.bg-purple-500\/15 { background-color: rgba(168, 85, 247, 0.15) !important; }
+.border-purple-500\/30 { border-color: rgba(168, 85, 247, 0.3) !important; }
+
+/* High-contrast overrides for text inside dark insight collapsible cards */
+html.dark .insight-collapsible-card .text-blue-700,
+html.dark .insight-collapsible-card .text-blue-800,
+:root:not(.light) .insight-collapsible-card .text-blue-700,
+:root:not(.light) .insight-collapsible-card .text-blue-800 {
+  color: #93c5fd !important;
+}
+
+html.dark .insight-collapsible-card .text-purple-700,
+html.dark .insight-collapsible-card .text-purple-800,
+:root:not(.light) .insight-collapsible-card .text-purple-700,
+:root:not(.light) .insight-collapsible-card .text-purple-800 {
+  color: #d8b4fe !important;
 }

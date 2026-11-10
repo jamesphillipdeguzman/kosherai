@@ -48,22 +48,22 @@ function InsightSectionCard({
                 {title}
               </h3>
               {badgeText && (
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeColor || 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeColor || 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700'}`}>
                   {badgeText}
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-600 dark:text-slate-400 truncate">
+            <p className="text-xs text-slate-600 dark:text-slate-300 truncate">
               {subtitle}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0 ml-2">
-          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:inline select-none">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-300 hidden sm:inline select-none">
             {isExpanded ? 'Collapse' : 'Expand'}
           </span>
-          <div className={`p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 transition-transform duration-200 ${
+          <div className={`p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-transform duration-200 ${
             isExpanded ? 'rotate-180' : 'rotate-0'
           }`}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -310,36 +310,55 @@ export default function HouseholdInsightsView({
           <div className="flex flex-col gap-4">
             <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl flex items-center justify-center font-black text-3xl shadow-inner bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center font-black text-3xl shadow-inner ${
+                  scorecard.grade === 'A'
+                    ? 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30'
+                    : (scorecard.grade === 'B'
+                      ? 'bg-blue-500/20 text-blue-800 dark:text-blue-200 border border-blue-500/30'
+                      : 'bg-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-500/30')
+                }`}>
                   {scorecard.grade}
                 </div>
                 <div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-black text-slate-900 dark:text-slate-100 font-mono tracking-tight">{scorecard.score}</span>
-                    <span className="text-sm font-semibold text-slate-400">/ 100 Points</span>
+                    <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">/ 100 Points</span>
                   </div>
-                  <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mt-0.5">
-                    {scorecard.score >= 80 ? '🌟 Excellent Household Stewardship' : '👍 Good Baseline Performance'}
+                  <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 mt-0.5">
+                    {scorecard.score >= 80 ? '🌟 Excellent Household Stewardship' : (scorecard.score >= 60 ? '👍 Good Baseline Performance' : '⚠️ Room for Purchasing Optimization')}
                   </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 max-w-xl">
+                    {scorecard.gradeExplanation || 'Comprehensive composite score evaluating purchasing accuracy, inventory rotation, and food waste minimization.'}
+                  </p>
                 </div>
+              </div>
+
+              <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-1 text-xs">
+                <span className="font-mono font-bold text-slate-700 dark:text-slate-200">100 Pts Maximum</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">5 Weighted Categories</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
               {scorecard.breakdown.map(ind => (
                 <div key={ind.indicator} className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between gap-2.5">
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="font-bold text-slate-800 dark:text-slate-200">{ind.indicator}</span>
-                      <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">{ind.score} / {ind.maxScore} pts</span>
+                      <span className="font-bold text-slate-900 dark:text-slate-100">{ind.indicator}</span>
+                      <span className="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-300">{ind.score} / {ind.maxScore} pts</span>
                     </div>
                     <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-                      <div className="bg-emerald-500 h-full rounded-full transition-all" style={{ width: `${(ind.score / ind.maxScore) * 100}%` }}></div>
+                      <div className="bg-emerald-500 dark:bg-emerald-400 h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(0, Math.min(100, (ind.score / ind.maxScore) * 100))}%` }}></div>
                     </div>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">{ind.detail}</p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">{ind.detail}</p>
                 </div>
               ))}
+            </div>
+
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 pt-1">
+              <span>ℹ️</span>
+              <span>Score updates dynamically with recorded grocery trips, inventory consumption, and measured waste logs.</span>
             </div>
           </div>
         </InsightSectionCard>
@@ -351,33 +370,33 @@ export default function HouseholdInsightsView({
           subtitle="Realized food cost, avoidable purchases, weekly consumption, and comparisons."
           icon="💰"
           badgeText={`Waste: ${formatPeso(report.wasteCost.totalEstimatedWasteCost)} · Avoidable: ${report.potentialPurchaseSavingsFormatted}`}
-          badgeColor="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+          badgeColor="bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 border-emerald-500/30"
           isExpanded={sectionsExpanded.financial}
           onToggle={toggleSection}
         >
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-4 rounded-xl bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200/60 dark:border-rose-900/30 flex flex-col justify-between">
               <div>
-                <span className="text-[11px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider block">Realized Food Cost</span>
-                <div className="text-2xl font-black font-mono text-rose-900 dark:text-rose-200 mt-1">{formatPeso(report.wasteCost.totalEstimatedWasteCost)}</div>
+                <span className="text-[11px] font-bold text-rose-800 dark:text-rose-200 uppercase tracking-wider block">Realized Food Cost</span>
+                <div className="text-2xl font-black font-mono text-rose-950 dark:text-rose-100 mt-1">{formatPeso(report.wasteCost.totalEstimatedWasteCost)}</div>
               </div>
-              <span className="text-[11px] text-rose-600/80 dark:text-rose-400/80 mt-2 font-medium">{report.wasteCost.pricedRecordsCount} verified from receipt unit prices</span>
+              <span className="text-[11px] text-rose-700 dark:text-rose-300 mt-2 font-medium">{report.wasteCost.pricedRecordsCount} verified from receipt unit prices</span>
             </div>
 
             <div className="p-4 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/30 flex flex-col justify-between">
               <div>
-                <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">Avoidable Purchases</span>
-                <div className="text-2xl font-black font-mono text-emerald-900 dark:text-emerald-200 mt-1">{report.potentialPurchaseSavingsFormatted}</div>
+                <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-200 uppercase tracking-wider block">Avoidable Purchases</span>
+                <div className="text-2xl font-black font-mono text-emerald-950 dark:text-emerald-100 mt-1">{report.potentialPurchaseSavingsFormatted}</div>
               </div>
-              <span className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 mt-2 font-medium">{report.totalPotentialReductionKg.toFixed(1)} kg surplus covered by inventory</span>
+              <span className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-2 font-medium">{report.totalPotentialReductionKg.toFixed(1)} kg surplus covered by inventory</span>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex flex-col justify-between">
               <div>
-                <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">Weekly Consumption</span>
+                <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider block">Weekly Consumption</span>
                 <div className="text-2xl font-black font-mono text-slate-900 dark:text-slate-100 mt-1">{consumption.totalHouseholdConsumedKg.toFixed(1)} kg</div>
               </div>
-              <span className="text-[11px] text-slate-500 mt-2 font-medium">Across {consumption.totalExplicitConsumptionEvents} tracked meal events</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 font-medium">Across {consumption.totalExplicitConsumptionEvents} tracked meal events</span>
             </div>
           </div>
         </InsightSectionCard>
@@ -389,7 +408,7 @@ export default function HouseholdInsightsView({
           subtitle="Perishable spoilage risks, expiration alerts, and velocity-based forecasts."
           icon="⚠️"
           badgeText={wasteRisks.highRiskCount > 0 ? `🚨 ${wasteRisks.highRiskCount} High Risk` : '✅ 0 Spoilage Risks'}
-          badgeColor={wasteRisks.highRiskCount > 0 ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30' : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'}
+          badgeColor={wasteRisks.highRiskCount > 0 ? 'bg-rose-500/15 text-rose-800 dark:text-rose-200 border-rose-500/30' : 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 border-emerald-500/30'}
           isExpanded={sectionsExpanded.riskAlerts}
           onToggle={toggleSection}
         >
@@ -400,7 +419,7 @@ export default function HouseholdInsightsView({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-xs text-slate-900 dark:text-slate-100">{risk.itemName}</span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-200/80 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{risk.quantity} {risk.unit}</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-200/80 dark:bg-slate-700 text-slate-800 dark:text-slate-200">{risk.quantity} {risk.unit}</span>
                     </div>
                     <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{risk.category} • 📍 {risk.storageLocation || 'Kitchen'}</div>
                   </div>
@@ -411,7 +430,7 @@ export default function HouseholdInsightsView({
           ) : (
             <div className="p-6 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 text-center">
               <span className="text-3xl select-none opacity-60">🥬</span>
-              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-2">Zero Spoilage Risks Detected</p>
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 mt-2">Zero Spoilage Risks Detected</p>
             </div>
           )}
         </InsightSectionCard>
@@ -423,7 +442,7 @@ export default function HouseholdInsightsView({
           subtitle="Recommended grocery purchases considering inventory, consumption, and meal plans."
           icon="🛒"
           badgeText={`${purchasing.recommendations.filter(r => r.recommendedPurchaseKg > 0).length} Categories Recommended`}
-          badgeColor="bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30"
+          badgeColor="bg-blue-500/15 text-blue-800 dark:text-blue-200 border-blue-500/30"
           isExpanded={sectionsExpanded.purchasing}
           onToggle={toggleSection}
         >
@@ -433,16 +452,16 @@ export default function HouseholdInsightsView({
                 <div>
                   <div className="flex items-center justify-between text-xs font-bold text-slate-900 dark:text-slate-100">
                     <span>{rec.category}</span>
-                    <span className="font-mono text-emerald-600 dark:text-emerald-400">Buy {rec.recommendedPurchaseKg} kg</span>
+                    <span className="font-mono text-emerald-700 dark:text-emerald-300">Buy {rec.recommendedPurchaseKg} kg</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-1 text-[11px] font-mono text-slate-500 mt-2 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                  <div className="grid grid-cols-2 gap-1 text-[11px] font-mono text-slate-600 dark:text-slate-300 mt-2 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
                     <div>
-                      <span className="text-[9px] uppercase font-sans text-slate-400 block">Expected</span>
-                      <span>{rec.expectedConsumptionKg} kg</span>
+                      <span className="text-[9px] uppercase font-sans text-slate-500 dark:text-slate-400 block">Expected</span>
+                      <span className="text-slate-800 dark:text-slate-200 font-bold">{rec.expectedConsumptionKg} kg</span>
                     </div>
                     <div>
-                      <span className="text-[9px] uppercase font-sans text-slate-400 block">On-Hand</span>
-                      <span>{rec.inventoryOnHandKg} kg</span>
+                      <span className="text-[9px] uppercase font-sans text-slate-500 dark:text-slate-400 block">On-Hand</span>
+                      <span className="text-slate-800 dark:text-slate-200 font-bold">{rec.inventoryOnHandKg} kg</span>
                     </div>
                   </div>
                 </div>
@@ -458,21 +477,24 @@ export default function HouseholdInsightsView({
           subtitle="Week-by-week comparisons of household spending, purchases, and food waste."
           icon="📈"
           badgeText={`${overview.totalSpendingFormatted} Spent · ${overview.wasteRatioFormatted} Waste`}
-          badgeColor="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30"
+          badgeColor="bg-purple-500/15 text-purple-800 dark:text-purple-200 border-purple-500/30"
           isExpanded={sectionsExpanded.trends}
           onToggle={toggleSection}
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
-              <span className="text-[10px] uppercase font-semibold text-slate-400 block">Total Grocery Spending</span>
+              <span className="text-[10px] uppercase font-semibold text-slate-500 dark:text-slate-400 block">Total Grocery Spending</span>
               <div className="text-xl font-bold font-mono text-slate-900 dark:text-slate-100 mt-1">{overview.totalSpendingFormatted}</div>
-              <span className="text-[11px] text-slate-400 block mt-1">{overview.tripsCount || 0} shopping runs in selected period</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-1">{overview.tripsCount || 0} shopping runs in selected period</span>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
-              <span className="text-[10px] uppercase font-semibold text-slate-400 block">Waste-to-Purchase Ratio</span>
+              <span className="text-[10px] uppercase font-semibold text-slate-500 dark:text-slate-400 block">Waste-to-Purchase Ratio</span>
               <div className="text-xl font-bold font-mono text-slate-900 dark:text-slate-100 mt-1">{overview.wasteRatioFormatted}</div>
-              <span className="text-[11px] text-slate-400 block mt-1">{overview.totalWasteWeightKg?.toFixed(2)} kg food scrap logged</span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-1">{overview.totalWasteWeightKg?.toFixed(2)} kg food scrap logged</span>
+            </div>
+          </div>
+        </InsightSectionCard>
             </div>
           </div>
         </InsightSectionCard>

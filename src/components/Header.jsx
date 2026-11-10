@@ -7,7 +7,7 @@ import { syncAndHydrateUserData } from '../services/courseProjectStorage.js';
 export { DIET_DESCRIPTIONS, getDietDescription };
 
 export function Header({
-  isOnline = true,
+  isOnline: propIsOnline,
   appMode = 'diet',
   showProjectTab = true,
   activeDiet = 'lid',
@@ -34,6 +34,32 @@ export function Header({
   const activeDescription = useMemo(() => {
     return getDietDescription(activeDiet);
   }, [activeDiet]);
+
+  const [isBrowserOnline, setIsBrowserOnline] = useState(() => {
+    if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') {
+      return navigator.onLine;
+    }
+    return propIsOnline !== undefined ? propIsOnline : true;
+  });
+
+  useEffect(() => {
+    if (propIsOnline !== undefined) {
+      setIsBrowserOnline(propIsOnline);
+    }
+  }, [propIsOnline]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleOnline = () => setIsBrowserOnline(true);
+    const handleOffline = () => setIsBrowserOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authInitialMode, setAuthInitialMode] = useState('signin');
@@ -218,42 +244,56 @@ export function Header({
         </button>
 
         <div className="header-actions flex items-center gap-2">
-          <div className="status-pill" title={isOnline ? 'Online - AI Verification Available' : 'Offline Mode - Local Database Active'}>
-            <span className={`status-dot ${isOnline ? '' : 'offline'}`}></span>
-            <span className="status-label">{isOnline ? 'Online' : 'Offline'}</span>
-          </div>
+          {/* Consolidated Network Connection & User Status Pill */}
+          {currentUser && isBrowserOnline ? (
+            <div
+              className="status-pill status-pill-user online inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 transition-all select-none shadow-2xs"
+              title={`Network connection active · Signed in as ${currentUser.name || currentUser.email || 'User'}${currentUser.email ? ` (${currentUser.email})` : ''}`}
+            >
+              <span className="status-dot"></span>
+              <span className="user-avatar-badge w-5 h-5 rounded-full bg-emerald-600 text-white font-bold text-[11px] inline-flex items-center justify-center flex-shrink-0 select-none">
+                {initial}
+              </span>
+              <span className="status-label user-first-name font-semibold truncate max-w-[110px]">
+                {firstName || 'User'}
+              </span>
+            </div>
+          ) : !isBrowserOnline ? (
+            <div
+              className="status-pill status-pill-offline offline inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-500/30 transition-all select-none shadow-2xs"
+              title="Offline · Device has no active network connection"
+            >
+              <span className="status-dot offline"></span>
+              <span className="status-label font-semibold">Offline</span>
+            </div>
+          ) : (
+            <div
+              className="status-pill online inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 select-none shadow-2xs"
+              title="Network connection active"
+            >
+              <span className="status-dot"></span>
+              <span className="status-label font-semibold">Online</span>
+            </div>
+          )}
 
-          {/* Dynamic Auth State: Avatar/Sign Out if logged in, Sign In / Account button if logged out */}
+          {/* Dynamic Auth State: Sign Out button if logged in, Sign In / Get Started buttons if logged out */}
           <div className="header-auth-controls inline-flex items-center gap-1.5" id="header-auth-container">
             {currentUser ? (
-              <>
-                <div
-                  className="user-profile-pill inline-flex items-center gap-1.5 bg-slate-850/90 dark:bg-slate-800/90 border border-slate-700/80 px-2 py-1 rounded-full text-xs shadow-2xs"
-                  title={`Signed in as ${currentUser.name || currentUser.email || 'Tenant User'}${currentUser.email ? ` (${currentUser.email})` : ''}`}
-                >
-                  <span className="user-avatar-badge w-5 h-5 rounded-full bg-emerald-600 text-white font-bold text-[11px] inline-flex items-center justify-center flex-shrink-0 select-none">
-                    {initial}
-                  </span>
-                  <span className="user-first-name text-xs font-semibold text-slate-100 dark:text-white truncate">
-                    {firstName || currentUser?.name || currentUser?.email || 'User'}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  id="header-signout-btn"
-                  onClick={handleSignOut}
-                  title="Sign out and clear local device cache"
-                  aria-label="Sign out"
-                  className="header-signout-btn"
-                >
-                  <svg className="signout-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                    <polyline points="16 17 21 12 16 7"/>
-                    <line x1="21" y1="12" x2="9" y2="12"/>
-                  </svg>
-                  <span className="signout-text">Sign Out</span>
-                </button>
-              </>
+              <button
+                type="button"
+                id="header-signout-btn"
+                onClick={handleSignOut}
+                title="Sign out and clear local device cache"
+                aria-label="Sign out"
+                className="header-signout-btn"
+              >
+                <svg className="signout-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                  <polyline points="16 17 21 12 16 7"/>
+                  <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                <span className="signout-text">Sign Out</span>
+              </button>
             ) : (
               <div className="header-auth-buttons flex items-center gap-2">
                 <button
