@@ -93,10 +93,14 @@ console.log('\n3. AdminIngredientImagesModal.jsx Code Inspection');
     'Thumbnail container must use overflow-hidden, dark background, and centering'
   );
 
-  // Thumbnail scaling: object-cover
+  // Thumbnail scaling: object-contain (never object-cover)
   assert.ok(
-    jsxCode.includes('object-cover'),
-    'Thumbnail image must use object-cover'
+    jsxCode.includes('object-contain'),
+    'Thumbnail image must use object-contain'
+  );
+  assert.ok(
+    !jsxCode.includes('object-cover'),
+    'Thumbnail image must NEVER use object-cover'
   );
 
   // Quick Replace / Upload

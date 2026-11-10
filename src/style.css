@@ -1,4 +1,6 @@
 /* KosherAI - Medical Aesthetic & Responsive Design System */
+@import './styles/admin-ingredient-gallery.css';
+
 :root,
 html.dark {
   --bg-main: #080c14;

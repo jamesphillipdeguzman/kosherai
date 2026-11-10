@@ -2,6 +2,7 @@
 // Main Application Entry & State Controller
 
 import './style.css';
+import './styles/admin-ingredient-gallery.css';
 import { renderHeader } from './components/Header.js';
 import { renderBottomNav } from './components/BottomNav.js';
 import { renderCheckerTab } from './components/CheckerTab.js';

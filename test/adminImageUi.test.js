@@ -141,8 +141,9 @@ console.log('\nTest 5: React AdminIngredientImagesModal.jsx Responsive Grid Gall
   assert.ok(jsxCode.includes('bg-slate-950'), 'Thumbnail container must have dark background');
   assert.ok(jsxCode.includes('flex items-center justify-center'), 'Thumbnail container must center contents');
 
-  // Verify thumbnail image scaling with object-cover and hover scale
-  assert.ok(jsxCode.includes('object-cover'), 'Grid thumbnail must use object-cover');
+  // Verify thumbnail image scaling with object-contain (never object-cover)
+  assert.ok(jsxCode.includes('object-contain'), 'Grid thumbnail must use object-contain');
+  assert.ok(!jsxCode.includes('object-cover'), 'Grid thumbnail must NEVER use object-cover');
 
   // Verify status indicators for mapped and missing
   assert.ok(jsxCode.includes("'✓'") || jsxCode.includes('"✓"'), 'Mapped items must display checkmark badge');
