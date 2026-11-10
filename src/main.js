@@ -3743,6 +3743,17 @@ Cracked black pepper`;
     });
   });
 
+  // Quick Plan for a specific day from empty calendar slot
+  document.querySelectorAll('.quick-plan-day-btn[data-plan-day]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const day = e.currentTarget.getAttribute('data-plan-day');
+      state.mealPlanModalOpen = true;
+      render();
+      const daySelect = document.querySelector('#plan-day');
+      if (daySelect && day) daySelect.value = day;
+    });
+  });
+
   // Inventory Modal Open & Close
   const openInvBtn = document.querySelector('#open-inventory-modal-btn');
   const closeInvBtn = document.querySelector('#close-inventory-modal-btn');

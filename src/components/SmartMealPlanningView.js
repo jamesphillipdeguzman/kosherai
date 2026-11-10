@@ -86,20 +86,22 @@ export function renderSmartMealPlanner(state = {}) {
           </p>
         </div>
 
-        <div class="flex items-center gap-2 flex-wrap">
+        <div class="mealplan-top-actions flex items-center gap-2.5 flex-wrap w-full sm:w-auto">
           <button
             type="button"
             id="open-inventory-modal-btn"
-            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
+            class="btn-inventory-action inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-800/90 dark:hover:bg-slate-700 dark:active:bg-slate-750 text-slate-800 dark:text-slate-100 hover:text-slate-900 dark:hover:text-white border border-slate-300/80 dark:border-slate-700 transition-all cursor-pointer shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
           >
-            <span>📦</span> Add Inventory
+            <span class="text-sm select-none" aria-hidden="true">📦</span>
+            <span>Add Inventory</span>
           </button>
           <button
             type="button"
             id="open-mealplan-modal-btn"
-            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-all cursor-pointer"
+            class="btn-plan-meal-action inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white border border-emerald-600 hover:border-emerald-500 shadow-sm transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
           >
-            <span>➕</span> Plan a Meal
+            <span class="text-sm select-none font-bold" aria-hidden="true">➕</span>
+            <span>Plan a Meal</span>
           </button>
         </div>
       </div>
@@ -242,7 +244,7 @@ export function renderSmartMealPlanner(state = {}) {
           </div>
 
           <!-- Week Selector Pills -->
-          <div class="inline-flex items-center gap-1.5 p-1 bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 rounded-xl shadow-2xs overflow-x-auto max-w-full">
+          <div class="mealplan-week-selector-container inline-flex items-center gap-1.5 sm:gap-2 p-1.5 bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl shadow-2xs overflow-x-auto max-w-full">
             ${[2, 3, 4, 5, 6].map((weekNum) => {
               const isActive = selectedWeek === weekNum;
               const label = weekNum === 2 ? 'Week 2 (Intervene)' : `Week ${weekNum}`;
@@ -250,13 +252,17 @@ export function renderSmartMealPlanner(state = {}) {
                 <button
                   type="button"
                   data-mealplan-week="${weekNum}"
-                  class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                  class="mealplan-week-pill flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
                     isActive
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-white'
+                      ? 'active bg-emerald-600 hover:bg-emerald-500 text-white font-bold border border-emerald-500 shadow-xs'
+                      : 'bg-white dark:bg-slate-800/90 hover:bg-slate-50 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700'
                   }"
+                  title="${label}${isActive ? ' (Currently Selected)' : ''}"
                 >
-                  ${label}
+                  ${isActive ? `
+                    <span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-white/25 text-white text-[9px] font-bold" aria-hidden="true">✓</span>
+                  ` : ''}
+                  <span>${label}</span>
                 </button>
               `;
             }).join('')}
@@ -264,33 +270,73 @@ export function renderSmartMealPlanner(state = {}) {
         </div>
 
         <!-- 7-Day Calendar Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3.5 sm:gap-4">
           ${daysOfWeek.map(day => {
             const dayPlans = plans.filter(p => p.dayOfWeek === day);
+            const hasMeals = dayPlans.length > 0;
             return `
-              <div class="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 flex flex-col gap-2 min-h-[140px]">
-                <div class="text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200/60 dark:border-slate-800 pb-1.5">
-                  ${day.slice(0, 3)}
+              <div class="mealplan-day-column p-3.5 sm:p-4 rounded-2xl ${
+                hasMeals
+                  ? 'bg-white/95 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800'
+                  : 'bg-slate-50/60 dark:bg-slate-900/50 border border-slate-200/70 dark:border-slate-800/80'
+              } shadow-xs flex flex-col gap-3 min-h-[175px] transition-all hover:border-slate-300 dark:hover:border-slate-700">
+                
+                <!-- Day Header Badge -->
+                <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800/90">
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200/70 dark:border-slate-700">
+                    <span class="hidden sm:inline">${day}</span>
+                    <span class="sm:hidden">${day.slice(0, 3)}</span>
+                  </span>
+                  <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    ${hasMeals ? `${dayPlans.length} ${dayPlans.length === 1 ? 'dish' : 'dishes'}` : '0 planned'}
+                  </span>
                 </div>
-                <div class="flex flex-col gap-2 flex-1">
-                  ${dayPlans.length === 0 ? `
-                    <div class="text-[11px] text-slate-400 italic py-4 text-center">Empty</div>
+
+                <!-- Daily Planned Meal Cards or Empty Slot -->
+                <div class="flex flex-col gap-2.5 flex-1">
+                  ${!hasMeals ? `
+                    <div class="empty-day-box p-3.5 rounded-xl border border-dashed border-slate-200/90 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/20 flex flex-col items-center justify-center text-center gap-2 flex-1 min-h-[105px]">
+                      <span class="text-slate-400 dark:text-slate-500 text-xs font-medium">No meals planned</span>
+                      <button
+                        type="button"
+                        class="quick-plan-day-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
+                        data-plan-day="${day}"
+                        title="Plan a meal for ${day}"
+                      >
+                        <span class="font-bold">➕</span> <span>Plan</span>
+                      </button>
+                    </div>
                   ` : `
                     ${dayPlans.map(p => `
-                      <div class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700 shadow-2xs flex flex-col gap-1">
-                        <span class="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-                          ${p.mealType}
-                        </span>
-                        <span class="text-xs font-bold text-slate-800 dark:text-slate-100 leading-tight">
+                      <div class="meal-schedule-card p-3 rounded-xl bg-slate-50/90 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-2xs flex flex-col gap-2 transition-all hover:shadow-xs">
+                        
+                        <div class="flex items-center justify-between gap-1.5 flex-wrap">
+                          <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30">
+                            ${escapeHtml(p.mealType)}
+                          </span>
+                          ${p.lidVerified !== false ? `
+                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20" title="${escapeHtml(dietProfile.name)} Compliant">
+                              ✓ ${escapeHtml(dietProfile.shortName)}
+                            </span>
+                          ` : ''}
+                        </div>
+
+                        <div class="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 leading-snug break-words">
                           ${escapeHtml(p.dishName)}
-                        </span>
-                        <button
-                          type="button"
-                          class="delete-meal-btn text-[10px] font-medium text-rose-500 hover:text-rose-600 self-start mt-1 cursor-pointer"
-                          data-delete-meal="${p.id}"
-                        >
-                          ✕ Remove
-                        </button>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-slate-700/60 mt-auto">
+                          <button
+                            type="button"
+                            class="delete-meal-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-rose-50 hover:bg-rose-100 active:bg-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:active:bg-rose-900/80 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/70 transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/50"
+                            data-delete-meal="${p.id}"
+                            title="Remove this planned meal"
+                          >
+                            <span aria-hidden="true">🗑️</span>
+                            <span>Remove</span>
+                          </button>
+                        </div>
+
                       </div>
                     `).join('')}
                   `}
