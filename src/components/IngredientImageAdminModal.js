@@ -54,7 +54,7 @@ export function renderIngredientImageAdminModal(props = {}) {
 
   return `
     <div class="modal-overlay" id="admin-image-modal-overlay">
-      <div class="modal-content admin-image-modal-box" role="dialog" aria-modal="true" aria-labelledby="admin-image-title">
+      <div class="modal-content admin-image-modal-box relative flex flex-col w-full max-w-lg max-h-[85vh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="admin-image-title">
         
         <!-- Fixed Header -->
         <div class="modal-header shrink-0 flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-900/90 backdrop-blur-md">
@@ -226,21 +226,23 @@ export function renderIngredientImageAdminModal(props = {}) {
                   <label class="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-1.5">
                     Image Preview
                   </label>
-                  <div class="admin-image-preview-container w-full h-48 sm:h-52 flex items-center justify-center bg-slate-950/80 border border-slate-800/80 rounded-xl overflow-hidden p-2 relative shadow-inner">
+                  <div class="admin-image-preview-container relative w-full h-44 sm:h-48 rounded-xl overflow-hidden bg-black/60 flex items-center justify-center shadow-inner">
                     ${uploadPreviewUrl ? `
                       <img 
                         src="${uploadPreviewUrl}" 
                         alt="Upload Preview" 
-                        class="admin-image-preview-img max-h-full max-w-full w-auto h-auto object-contain rounded-lg" 
+                        class="admin-image-preview-img w-full h-full object-contain" 
+                        loading="eager"
                       />
                     ` : (mappingByIngredientId[selectedIngredientId]?.secure_url || getIngredientImageUrl(selectedIngredientId, activeProtocol)) ? `
-                      <div class="flex flex-col items-center justify-center h-full w-full">
+                      <div class="flex flex-col items-center justify-center h-full w-full p-2">
                         <img 
                           src="${mappingByIngredientId[selectedIngredientId]?.secure_url || getIngredientImageUrl(selectedIngredientId, activeProtocol)}" 
                           alt="Current Saved Photograph" 
-                          class="admin-image-preview-img max-h-full max-w-full w-auto h-auto object-contain rounded-lg opacity-60" 
+                          class="admin-image-preview-img w-full h-full object-contain opacity-60" 
+                          loading="eager"
                         />
-                        <span class="text-[11px] text-slate-400 mt-1.5 font-medium">Current saved photo — choose or drop new file above to replace</span>
+                        <span class="text-[11px] text-slate-400 mt-1 font-medium select-none">Current saved photo — choose or drop new file above to replace</span>
                       </div>
                     ` : `
                       <div class="flex flex-col items-center justify-center text-slate-500 text-xs text-center select-none py-3">

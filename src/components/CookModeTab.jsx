@@ -3,24 +3,52 @@ import { DIET_RECIPES } from '../data/dietRecipes.js';
 import { RecipeCard } from './RecipeCard.jsx';
 import { renderCookModeTab } from './CookModeTab.js';
 import { getHouseholdMembers, setHouseholdMembers } from '../services/storage.js';
+import AdminIngredientImagesModal from './AdminIngredientImagesModal.jsx';
 
 export { DIET_RECIPES, renderCookModeTab };
 
 /**
  * React Component for Cook Mode Dishes Catalog with dynamic household portion scaling
  */
-export function CookModeTab({ activeDiet = 'pinoy_keto', onLoadRecipe }) {
+export function CookModeTab({ activeDiet = 'pinoy_keto', onLoadRecipe, isAdmin = false }) {
   const [householdMembers, setMembers] = useState(() => getHouseholdMembers());
+  const [showAdminImageModal, setShowAdminImageModal] = useState(false);
+  const [userIsAdmin, setUserIsAdmin] = useState(() => {
+    if (isAdmin) return true;
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('kosherai_current_user') || localStorage.getItem('kosherai_user_session');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const u = parsed.user || parsed;
+          return Boolean(u && (u.role === 'admin' || u.role === 'administrator'));
+        }
+      } catch (_) {}
+    }
+    return false;
+  });
 
   useEffect(() => {
-    const handler = (e) => {
+    const householdHandler = (e) => {
       if (e.detail?.household_members) {
         setMembers(e.detail.household_members);
       }
     };
-    window.addEventListener('kosherai:household-changed', handler);
-    return () => window.removeEventListener('kosherai:household-changed', handler);
+    const authHandler = (e) => {
+      const u = e.detail?.user || e.detail;
+      setUserIsAdmin(Boolean(u && (u.role === 'admin' || u.role === 'administrator')));
+    };
+
+    window.addEventListener('kosherai:household-changed', householdHandler);
+    window.addEventListener('kosherai:auth-changed', authHandler);
+
+    return () => {
+      window.removeEventListener('kosherai:household-changed', householdHandler);
+      window.removeEventListener('kosherai:auth-changed', authHandler);
+    };
   }, []);
+
+  const effectiveIsAdmin = Boolean(isAdmin || userIsAdmin);
 
   const handleDec = () => {
     if (householdMembers > 1) {
@@ -45,6 +73,20 @@ export function CookModeTab({ activeDiet = 'pinoy_keto', onLoadRecipe }) {
         <div>
           <h2 className="text-2xl font-black text-white">{currentDietData.title}</h2>
           <p className="text-sm text-slate-400 mt-1">{currentDietData.description}</p>
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          {effectiveIsAdmin && (
+            <button
+              type="button"
+              id="open-ingredient-admin-cook-btn"
+              onClick={() => setShowAdminImageModal(true)}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/50 text-indigo-200 text-xs font-bold transition-all shadow-sm cursor-pointer"
+            >
+              <span>🖼️</span>
+              <span>Manage Ingredient Photos</span>
+            </button>
+          )}
         </div>
 
         {/* Dynamic Household Portion Selector */}
@@ -117,6 +159,14 @@ export function CookModeTab({ activeDiet = 'pinoy_keto', onLoadRecipe }) {
           />
         ))}
       </div>
+
+      {showAdminImageModal && (
+        <AdminIngredientImagesModal
+          isOpen={true}
+          onClose={() => setShowAdminImageModal(false)}
+          initialProtocol={activeDiet || 'lid'}
+        />
+      )}
     </div>
   );
 }

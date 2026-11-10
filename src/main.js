@@ -233,6 +233,18 @@ const state = {
   authModalMode: 'signin',
   authModalError: '',
   authModalLoading: false,
+  user: null,
+  isAdmin: (typeof localStorage !== 'undefined' && (() => {
+    try {
+      const stored = localStorage.getItem('kosherai_current_user') || localStorage.getItem('kosherai_user_session');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const u = parsed.user || parsed;
+        return Boolean(u && (u.role === 'admin' || u.role === 'administrator'));
+      }
+    } catch (_) {}
+    return false;
+  })()),
 
   // Manual Header Cloud Sync State
   isSyncing: false,
@@ -855,6 +867,18 @@ function attachEventHandlers() {
   }
 
   // Admin Ingredient Image Management Hub Triggers & Actions
+  const openIngredientAdminCookBtn = document.querySelector('#open-ingredient-admin-cook-btn');
+  if (openIngredientAdminCookBtn) {
+    openIngredientAdminCookBtn.addEventListener('click', async () => {
+      state.adminImageModalOpen = true;
+      state.adminImageProtocol = state.activeDiet || 'lid';
+      state.adminImageStatusMsg = '';
+      render();
+      await loadAdminImageData(state.adminImageProtocol);
+      render();
+    });
+  }
+
   const openIngredientAdminBtn = document.querySelector('#open-ingredient-admin-btn');
   if (openIngredientAdminBtn) {
     openIngredientAdminBtn.addEventListener('click', async () => {
@@ -3828,7 +3852,16 @@ window.addEventListener('kosherai-trips-synced', () => {
 window.addEventListener('kosherai-food-waste-synced', () => {
   render();
 });
-window.addEventListener('kosherai:auth-changed', () => {
+window.addEventListener('kosherai:auth-changed', (e) => {
+  const detail = e?.detail;
+  const u = detail?.user || detail;
+  if (u && typeof u === 'object') {
+    state.user = u;
+    state.isAdmin = Boolean(u.role === 'admin' || u.role === 'administrator');
+  } else {
+    state.user = null;
+    state.isAdmin = false;
+  }
   render();
 });
 window.addEventListener('kosherai-neon-restored', () => {
@@ -4009,37 +4042,42 @@ async function pushThenRestoreFromNeon({ manual = false } = {}) {
 async function initializeAuthSession() {
   if (typeof fetch !== 'function') return;
   try {
-    const activeToken = getClientAuthToken();
-    if (!activeToken) {
-      const res = await fetch('/api/auth/get-session', { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json().catch(() => null);
-        if (data?.session?.token && data?.user) {
-          localStorage.setItem('better-auth.session_token', data.session.token);
-          const userWithToken = { ...data.user, token: data.session.token };
-          localStorage.setItem('kosherai_current_user', JSON.stringify(userWithToken));
-          localStorage.setItem('kosherai_user_session', JSON.stringify({
-            token: data.session.token,
-            session: data.session,
-            user: userWithToken
-          }));
-          handleTenantAccountChange(userWithToken.id);
-          window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: { user: userWithToken } }));
+    const stored = typeof localStorage !== 'undefined' ? (localStorage.getItem('kosherai_current_user') || localStorage.getItem('kosherai_user_session')) : null;
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        const u = parsed.user || parsed;
+        if (u) {
+          state.user = u;
+          state.isAdmin = Boolean(u.role === 'admin' || u.role === 'administrator');
+          if (u.id) handleTenantAccountChange(u.id);
         }
-      }
-    } else {
-      const stored = localStorage.getItem('kosherai_current_user');
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (parsed?.id) handleTenantAccountChange(parsed.id);
-        } catch (_) {}
+      } catch (_) {}
+    }
+
+    const res = await fetch('/api/auth/get-session', { credentials: 'include', headers: getAuthHeaders() }).catch(() => null);
+    if (res && res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data?.session?.token && data?.user) {
+        localStorage.setItem('better-auth.session_token', data.session.token);
+        const userWithToken = { ...data.user, token: data.session.token };
+        localStorage.setItem('kosherai_current_user', JSON.stringify(userWithToken));
+        localStorage.setItem('kosherai_user_session', JSON.stringify({
+          token: data.session.token,
+          session: data.session,
+          user: userWithToken
+        }));
+        state.user = userWithToken;
+        state.isAdmin = Boolean(userWithToken.role === 'admin' || userWithToken.role === 'administrator');
+        handleTenantAccountChange(userWithToken.id);
+        window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: { user: userWithToken } }));
       }
     }
   } catch (_) {}
   state.scanHistory = getLocalScanHistory();
   state.household_members = getHouseholdMembers();
   state.settings = getSettings();
+  render();
 }
 
 (async function bootstrapApp() {

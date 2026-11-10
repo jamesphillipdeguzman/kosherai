@@ -267,8 +267,8 @@ export default function AdminIngredientImagesModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fadeIn" role="dialog" aria-modal="true">
-      {/* Outer Modal Container - Constrained to max-w-2xl and max-h-[85vh] */}
-      <div className="relative flex flex-col w-full max-w-2xl max-h-[85vh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden">
+      {/* Outer Modal Container - Constrained to max-w-lg and max-h-[85vh] */}
+      <div className="relative flex flex-col w-full max-w-lg max-h-[85vh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden">
         
         {/* Fixed Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 shrink-0 bg-slate-900/95 backdrop-blur-md">
@@ -481,26 +481,28 @@ export default function AdminIngredientImagesModal({
                   )}
                 </div>
 
-                {/* Upload Image Preview Container - Bounded h-48 sm:h-52 with object-contain */}
+                {/* Upload Image Preview Container - Bounded h-44 sm:h-48 with object-contain */}
                 <div>
                   <label className="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-1.5">
                     Image Preview
                   </label>
-                  <div className="admin-image-preview-container w-full h-48 sm:h-52 flex items-center justify-center bg-slate-950/80 border border-slate-800/80 rounded-xl overflow-hidden p-2 relative shadow-inner">
+                  <div className="admin-image-preview-container relative w-full h-44 sm:h-48 rounded-xl overflow-hidden bg-black/60 flex items-center justify-center shadow-inner">
                     {uploadPreviewUrl ? (
                       <img
                         src={uploadPreviewUrl}
                         alt="Upload Preview"
-                        className="admin-image-preview-img max-h-full max-w-full w-auto h-auto object-contain rounded-lg"
+                        className="admin-image-preview-img w-full h-full object-contain"
+                        loading="eager"
                       />
                     ) : savedImageUrl ? (
-                      <div className="flex flex-col items-center justify-center h-full w-full">
+                      <div className="flex flex-col items-center justify-center h-full w-full p-2">
                         <img
                           src={savedImageUrl}
                           alt="Current Saved Photograph"
-                          className="admin-image-preview-img max-h-full max-w-full w-auto h-auto object-contain rounded-lg opacity-60"
+                          className="admin-image-preview-img w-full h-full object-contain opacity-60"
+                          loading="eager"
                         />
-                        <span className="text-[11px] text-slate-400 mt-1.5 font-medium">Current saved photo — choose or drop new file above to replace</span>
+                        <span className="text-[11px] text-slate-400 mt-1 font-medium select-none">Current saved photo — choose or drop new file above to replace</span>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center text-slate-500 text-xs py-4 text-center select-none">
@@ -566,13 +568,14 @@ export default function AdminIngredientImagesModal({
                 )}
               </div>
 
-              {/* Bounded Image Container - Fixed responsive height h-48 sm:h-52 with object-contain */}
-              <div className="admin-image-preview-container w-full h-48 sm:h-52 flex items-center justify-center bg-slate-950/80 border border-slate-800/80 rounded-xl overflow-hidden p-2 relative shadow-inner">
+              {/* Bounded Image Container - Fixed responsive height h-44 sm:h-48 with object-contain */}
+              <div className="admin-image-preview-container relative w-full h-44 sm:h-48 rounded-xl overflow-hidden bg-black/60 flex items-center justify-center shadow-inner">
                 {savedImageUrl ? (
                   <img
                     src={savedImageUrl}
                     alt={selectedIngredient?.name || 'Active ingredient photo'}
-                    className="admin-image-preview-img max-h-full max-w-full w-auto h-auto object-contain rounded-lg"
+                    className="admin-image-preview-img w-full h-full object-contain"
+                    loading="eager"
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center text-slate-500 text-xs py-4 text-center select-none">

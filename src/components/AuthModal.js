@@ -42,6 +42,7 @@ export async function authenticateUser(mode, credentials) {
                 userObj.id = sessionData.user.id || userObj.id;
                 userObj.email = sessionData.user.email || userObj.email;
                 userObj.name = sessionData.user.name || userObj.name;
+                userObj.role = sessionData.user.role || userObj.role;
               }
             }
           } catch (_) {}
@@ -78,6 +79,7 @@ export async function authenticateUser(mode, credentials) {
                 userObj.id = sessionData.user.id || userObj.id;
                 userObj.email = sessionData.user.email || userObj.email;
                 userObj.name = sessionData.user.name || userObj.name;
+                userObj.role = sessionData.user.role || userObj.role;
               }
             }
           } catch (_) {}
@@ -138,6 +140,7 @@ export async function authenticateUser(mode, credentials) {
         userObj.id = sessionData.user.id || userObj.id;
         userObj.email = sessionData.user.email || userObj.email;
         userObj.name = sessionData.user.name || userObj.name;
+        userObj.role = sessionData.user.role || userObj.role;
       }
     }
   } catch (_) {}

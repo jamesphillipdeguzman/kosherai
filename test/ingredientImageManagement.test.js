@@ -14,6 +14,7 @@ import {
 import { renderCheckerTab } from '../src/components/CheckerTab.js';
 import { renderItemDetailModal } from '../src/components/ItemDetailModal.js';
 import { renderSettingsModal } from '../src/components/SettingsModal.js';
+import { renderCookModeTab } from '../src/components/CookModeTab.js';
 import { renderIngredientImageAdminModal } from '../src/components/IngredientImageAdminModal.js';
 import publicImagesHandler, { ensureIngredientImagesTable } from '../api/ingredient-images.js';
 import adminImagesHandler from '../api/admin/ingredient-images.js';
@@ -334,9 +335,16 @@ console.log('Test 7: UI Component Rendering & 404 Prevention');
   assert.ok(mappedCheckerHtml.includes('https://res.cloudinary.com/dego6hgcb/image/upload/f_auto,q_auto,w_400,c_limit/kosherai/lid_protocol/ingredients/salt-kosher'), 'CheckerTab must render Cloudinary image URL');
   assert.ok(mappedCheckerHtml.includes('onerror="this.style.display=\'none\''), 'CheckerTab must include resilient onerror fallback');
 
-  // 3. SettingsModal Admin Trigger
+  // 3. SettingsModal: Admin Trigger Removed (moved to Cook Mode)
   const settingsHtml = renderSettingsModal({}, 'dark', true, 'lid');
-  assert.ok(settingsHtml.includes('id="open-ingredient-admin-btn"'), 'SettingsModal must render Manage Photos button');
+  assert.strictEqual(settingsHtml.includes('id="open-ingredient-admin-btn"'), false, 'SettingsModal must NOT render Manage Photos button');
+
+  // 3b. CookModeTab: Admin Action Visibility
+  const cookHtmlAdmin = renderCookModeTab({ isAdmin: true, activeDiet: 'lid' });
+  assert.ok(cookHtmlAdmin.includes('open-ingredient-admin-cook-btn'), 'CookModeTab must render Manage Ingredient Photos button for admin');
+
+  const cookHtmlRegular = renderCookModeTab({ isAdmin: false, activeDiet: 'lid' });
+  assert.strictEqual(cookHtmlRegular.includes('open-ingredient-admin-cook-btn'), false, 'CookModeTab must NOT render Manage Ingredient Photos button for regular user');
 
   // 4. AdminModal Dashboard Stats & Action Controls
   const adminHtml = renderIngredientImageAdminModal({

@@ -132,14 +132,15 @@ console.log('\nTest 5: React AdminIngredientImagesModal.jsx Preview & Active Ima
   const fs = await import('node:fs');
   const jsxCode = fs.readFileSync('src/components/AdminIngredientImagesModal.jsx', 'utf8');
 
-  // Verify bounded image container has h-48 sm:h-52, overflow-hidden, and centered alignment
-  assert.ok(jsxCode.includes('h-48 sm:h-52'), 'Image container must use fixed responsive height h-48 sm:h-52');
+  // Verify bounded image container has h-44 sm:h-48, overflow-hidden, bg-black/60, and centered alignment
+  assert.ok(jsxCode.includes('h-44 sm:h-48') || jsxCode.includes('h-48 sm:h-52'), 'Image container must use fixed responsive height');
   assert.ok(jsxCode.includes('overflow-hidden'), 'Image container must enforce overflow-hidden');
-  assert.ok(jsxCode.includes('bg-slate-950/80'), 'Image container must have dark background');
+  assert.ok(jsxCode.includes('bg-black/60') || jsxCode.includes('bg-slate-950'), 'Image container must have dark background');
   assert.ok(jsxCode.includes('flex items-center justify-center'), 'Image container must center the image');
 
   // Verify image element containment styling (preserving aspect ratio without zooming/clipping)
-  assert.ok(jsxCode.includes('max-h-full max-w-full w-auto h-auto object-contain rounded-lg'), 'Image must use max-h-full max-w-full w-auto h-auto object-contain rounded-lg');
+  assert.ok(jsxCode.includes('object-contain'), 'Image must use object-contain');
+  assert.ok(jsxCode.includes('w-full h-full object-contain') || jsxCode.includes('max-h-full max-w-full w-auto h-auto object-contain'), 'Image must enforce strict containment');
 
   // Verify Active Image Controls are visible below the container
   assert.ok(jsxCode.includes('Active Ingredient Photo'), 'Must render Active Ingredient Photo header');

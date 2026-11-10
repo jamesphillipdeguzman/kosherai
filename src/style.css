@@ -2409,13 +2409,13 @@ html.light .modal-content {
 
 .admin-image-modal-box {
   width: 95vw !important;
-  max-width: 44rem !important; /* ~704px on desktop: ample width without crowding */
+  max-width: 32rem !important; /* max-w-lg (512px) */
   max-height: 85vh !important;
   height: 85vh !important;
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
-  border-radius: 1.25rem !important;
+  border-radius: 1rem !important;
   background: rgba(15, 23, 42, 0.96) !important;
   backdrop-filter: blur(24px) !important;
   -webkit-backdrop-filter: blur(24px) !important;
@@ -2470,31 +2470,32 @@ html.light .modal-content {
 }
 
 .admin-image-preview-container {
-  height: 12rem; /* h-48 (192px) */
-  min-height: 12rem;
-  width: 100%;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(2, 6, 23, 0.8);
-  border: 1px solid rgba(51, 65, 85, 0.7);
-  border-radius: 0.875rem;
+  height: 11rem !important; /* h-44 (176px) */
+  min-height: 11rem !important;
+  width: 100% !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(0, 0, 0, 0.6) !important;
+  border: 1px solid rgba(51, 65, 85, 0.7) !important;
+  border-radius: 0.75rem !important;
+  position: relative !important;
 }
 
 @media (min-width: 640px) {
   .admin-image-preview-container {
-    height: 13rem; /* sm:h-52 (208px) */
-    min-height: 13rem;
+    height: 12rem !important; /* sm:h-48 (192px) */
+    min-height: 12rem !important;
   }
 }
 
 .admin-image-preview-img {
-  max-height: 100%;
-  max-width: 100%;
-  width: auto;
-  height: auto;
-  object-fit: contain;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: contain !important;
   border-radius: 0.5rem;
 }
 
@@ -2518,15 +2519,15 @@ html.light .modal-content {
     padding: 1rem !important;
   }
   .admin-image-preview-container {
-    height: 12rem; /* h-48 */
-    min-height: 12rem;
+    height: 11rem !important; /* h-44 (176px) */
+    min-height: 11rem !important;
   }
   .admin-image-preview-img {
-    max-height: 100%;
-    max-width: 100%;
-    width: auto;
-    height: auto;
-    object-fit: contain;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    max-width: 100% !important;
+    object-fit: contain !important;
   }
 }
 

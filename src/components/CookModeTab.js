@@ -13,15 +13,33 @@ export { DIET_RECIPES, lidRecipes, scaleRecipe };
 
 const CATEGORIES = ['All', 'Breakfast', 'Mains', 'Soups & Stews', 'Snacks & Sides'];
 
-export function renderCookModeTab(state) {
+export function renderCookModeTab(state = {}) {
   const { 
     checklistState = {}, 
     recipeAnalysis = null, 
     recipeText = '',
     recipeCategoryFilter = 'ALL',
     activeDiet = 'lid',
-    household_members = 4
+    household_members = 4,
+    isAdmin = false
   } = state;
+
+  const isUserAdmin = Boolean(
+    isAdmin ||
+    state.isAdmin ||
+    (state.user && (state.user.role === 'admin' || state.user.role === 'administrator')) ||
+    (typeof window !== 'undefined' && (() => {
+      try {
+        const stored = localStorage.getItem('kosherai_current_user') || localStorage.getItem('kosherai_user_session');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const u = parsed.user || parsed;
+          return u.role === 'admin' || u.role === 'administrator';
+        }
+      } catch (_) {}
+      return false;
+    })())
+  );
 
   const householdMembers = Math.max(1, Math.min(20, Math.round(Number(household_members || state.settings?.household_members || 4))));
 
@@ -154,7 +172,7 @@ export function renderCookModeTab(state) {
 
       <!-- Dynamic Curated Pinoy Meals Section -->
       <section class="practical-recipes-section">
-        <div class="practical-recipes-header">
+        <div class="practical-recipes-header flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 class="practical-recipes-title">
               <span>🍳</span> ${escapeHtml(currentDietData.title)}
@@ -163,9 +181,22 @@ export function renderCookModeTab(state) {
               ${escapeHtml(currentDietData.description)}
             </p>
           </div>
-          <span class="recipe-count-badge px-2.5 py-0.5 rounded-full text-xs font-bold border border-teal-600/40 dark:border-teal-400/40 bg-teal-500/10 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300">
-            ${filteredRecipes.length} ${filteredRecipes.length === 1 ? 'Dish' : 'Dishes'}
-          </span>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            ${isUserAdmin ? `
+              <button 
+                type="button" 
+                id="open-ingredient-admin-cook-btn" 
+                class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/50 text-indigo-200 text-xs font-bold transition-all shadow-sm cursor-pointer"
+                title="Manage Ingredient Photos"
+              >
+                <span>🖼️</span>
+                <span>Manage Ingredient Photos</span>
+              </button>
+            ` : ''}
+            <span class="recipe-count-badge px-2.5 py-0.5 rounded-full text-xs font-bold border border-teal-600/40 dark:border-teal-400/40 bg-teal-500/10 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300">
+              ${filteredRecipes.length} ${filteredRecipes.length === 1 ? 'Dish' : 'Dishes'}
+            </span>
+          </div>
         </div>
 
         <!-- Household Portion Scaling Selector -->
