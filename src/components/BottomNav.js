@@ -1,6 +1,12 @@
 // Mobile-First Bottom Navigation Bar Component
 
-export function renderBottomNav(activeTab = 'checker', appMode = 'diet') {
+export function renderBottomNav(activeTab = 'checker', appMode = 'diet', isAdmin = false) {
+  const manageTab = {
+    id: 'manage',
+    label: 'Manage',
+    icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`
+  };
+
   const dietTabs = [
     {
       id: 'checker',
@@ -26,7 +32,8 @@ export function renderBottomNav(activeTab = 'checker', appMode = 'diet') {
       id: 'cook',
       label: 'Cook Mode',
       icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"></path><line x1="6" y1="17" x2="18" y2="17"></line></svg>`
-    }
+    },
+    ...(isAdmin ? [manageTab] : [])
   ];
 
   const courseTabs = [
@@ -54,7 +61,8 @@ export function renderBottomNav(activeTab = 'checker', appMode = 'diet') {
       id: 'mealplan',
       label: 'Meal Plan',
       icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>`
-    }
+    },
+    ...(isAdmin ? [manageTab] : [])
   ];
 
   const tabs = appMode === 'course' ? courseTabs : dietTabs;

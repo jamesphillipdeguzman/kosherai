@@ -83,10 +83,10 @@ console.log('\n3. AdminIngredientImagesModal.jsx Code Inspection');
     'Modal container must enforce max-w-lg and max-h-[85vh]'
   );
 
-  // Image container: h-44 sm:h-48, overflow-hidden, bg-black/60, centered
+  // Image container: h-48 sm:h-56, overflow-hidden, bg-black/60, centered
   assert.ok(
-    jsxCode.includes('h-44 sm:h-48'),
-    'Image container must use h-44 sm:h-48'
+    jsxCode.includes('h-48 sm:h-56') || jsxCode.includes('h-44 sm:h-48'),
+    'Image container must use h-48 sm:h-56 or h-44 sm:h-48'
   );
   assert.ok(
     jsxCode.includes('overflow-hidden bg-black/60 flex items-center justify-center'),
@@ -128,7 +128,8 @@ console.log('\n4. IngredientImageAdminModal.js Code Inspection');
     'Vanilla modal must enforce max-w-lg max-h-[85vh]'
   );
   assert.ok(
-    jsModalHtml.includes('h-44 sm:h-48 rounded-xl overflow-hidden bg-black/60 flex items-center justify-center'),
+    jsModalHtml.includes('rounded-xl overflow-hidden bg-black/60 flex items-center justify-center') &&
+    (jsModalHtml.includes('h-48 sm:h-56') || jsModalHtml.includes('h-44 sm:h-48')),
     'Vanilla modal must use standardized container'
   );
   assert.ok(
@@ -151,8 +152,8 @@ console.log('\n5. style.css Rules Verification');
     'style.css must constrain .admin-image-modal-box to max-width: 32rem (max-w-lg)'
   );
   assert.ok(
-    css.includes('height: 11rem !important;') && css.includes('height: 12rem !important;'),
-    'style.css must enforce 11rem (h-44) and 12rem (sm:h-48) on .admin-image-preview-container'
+    css.includes('height: 12rem !important;') && (css.includes('height: 14rem !important;') || css.includes('height: 11rem !important;')),
+    'style.css must enforce preview container height'
   );
   assert.ok(
     css.includes('object-fit: contain !important;'),

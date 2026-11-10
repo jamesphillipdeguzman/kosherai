@@ -2470,8 +2470,8 @@ html.light .modal-content {
 }
 
 .admin-image-preview-container {
-  height: 11rem !important; /* h-44 (176px) */
-  min-height: 11rem !important;
+  height: 12rem !important; /* h-48 (192px) */
+  min-height: 12rem !important;
   width: 100% !important;
   overflow: hidden !important;
   display: flex !important;
@@ -2485,8 +2485,8 @@ html.light .modal-content {
 
 @media (min-width: 640px) {
   .admin-image-preview-container {
-    height: 12rem !important; /* sm:h-48 (192px) */
-    min-height: 12rem !important;
+    height: 14rem !important; /* sm:h-56 (224px) */
+    min-height: 14rem !important;
   }
 }
 
@@ -2519,8 +2519,8 @@ html.light .modal-content {
     padding: 1rem !important;
   }
   .admin-image-preview-container {
-    height: 11rem !important; /* h-44 (176px) */
-    min-height: 11rem !important;
+    height: 12rem !important; /* h-48 (192px) */
+    min-height: 12rem !important;
   }
   .admin-image-preview-img {
     width: 100% !important;

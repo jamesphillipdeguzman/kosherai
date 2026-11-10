@@ -3,7 +3,7 @@ import { toNodeHandler } from "better-auth/node";
 
 const authHandler = toNodeHandler(auth);
 
-export default async function handler(req: any, res: any) {
+export default async function handler(req, res) {
   setCorsHeaders(req, res);
 
   if (req.method === "OPTIONS") {
@@ -13,3 +13,4 @@ export default async function handler(req: any, res: any) {
 
   return authHandler(req, res);
 }
+

@@ -25,7 +25,8 @@ function formatBytes(bytes) {
 export default function AdminIngredientImagesModal({
   isOpen = false,
   onClose,
-  initialProtocol = 'lid'
+  initialProtocol = 'lid',
+  embedded = false
 }) {
   const [activeProtocol, setActiveProtocol] = useState(initialProtocol);
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,12 +44,12 @@ export default function AdminIngredientImagesModal({
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
-  // Load existing mappings on open
+  // Load existing mappings on open or when embedded
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen || embedded) {
       loadMappings();
     }
-  }, [isOpen, activeProtocol]);
+  }, [isOpen, embedded, activeProtocol]);
 
   // Clean up object URL when component unmounts or preview changes
   useEffect(() => {
@@ -77,7 +78,7 @@ export default function AdminIngredientImagesModal({
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen && !embedded) return null;
 
   // Build mapping lookup dictionary
   const mappingByIngredientId = {};
@@ -265,42 +266,10 @@ export default function AdminIngredientImagesModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fadeIn" role="dialog" aria-modal="true">
-      {/* Outer Modal Container - Constrained to max-w-lg and max-h-[85vh] */}
-      <div className="relative flex flex-col w-full max-w-lg max-h-[85vh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden">
-        
-        {/* Fixed Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 shrink-0 bg-slate-900/95 backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">🖼️</span>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-slate-100">
-                  Ingredient Image Management
-                </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 uppercase tracking-wide">
-                  Admin Hub
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">Cloudinary synchronization, drag-and-drop upload & ingredient photo mappings.</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
-            aria-label="Close modal"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Independently Scrollable Content Area */}
-        <div className="admin-image-modal-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-5 space-y-4">
-          
-          {/* Metrics Overview Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center text-xs">
+  const bodyContent = (
+    <>
+      {/* Metrics Overview Bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center text-xs">
             <div className="bg-slate-900/80 border border-slate-800/80 rounded-xl p-3 shadow-sm">
               <span className="block text-[10px] sm:text-[11px] text-slate-400 uppercase font-bold tracking-wider">Total</span>
               <span className="text-lg sm:text-xl font-bold text-white mt-0.5 block">{totalIngredients}</span>
@@ -481,12 +450,12 @@ export default function AdminIngredientImagesModal({
                   )}
                 </div>
 
-                {/* Upload Image Preview Container - Bounded h-44 sm:h-48 with object-contain */}
+                {/* Upload Image Preview Container - Bounded h-48 sm:h-56 with object-contain */}
                 <div>
                   <label className="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-1.5">
                     Image Preview
                   </label>
-                  <div className="admin-image-preview-container relative w-full h-44 sm:h-48 rounded-xl overflow-hidden bg-black/60 flex items-center justify-center shadow-inner">
+                  <div className="admin-image-preview-container relative w-full h-48 sm:h-56 rounded-xl overflow-hidden bg-black/60 flex items-center justify-center shadow-inner">
                     {uploadPreviewUrl ? (
                       <img
                         src={uploadPreviewUrl}
@@ -568,8 +537,8 @@ export default function AdminIngredientImagesModal({
                 )}
               </div>
 
-              {/* Bounded Image Container - Fixed responsive height h-44 sm:h-48 with object-contain */}
-              <div className="admin-image-preview-container relative w-full h-44 sm:h-48 rounded-xl overflow-hidden bg-black/60 flex items-center justify-center shadow-inner">
+              {/* Bounded Image Container - Fixed responsive height h-48 sm:h-56 with object-contain */}
+              <div className="admin-image-preview-container relative w-full h-48 sm:h-56 rounded-xl overflow-hidden bg-black/60 flex items-center justify-center shadow-inner">
                 {savedImageUrl ? (
                   <img
                     src={savedImageUrl}
@@ -839,6 +808,69 @@ export default function AdminIngredientImagesModal({
               </div>
             )}
           </div>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="admin-manage-page-container max-w-4xl mx-auto px-4 py-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">🖼️</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl sm:text-2xl font-bold text-slate-100">
+                  Ingredient Image Management
+                </h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 uppercase tracking-wide">
+                  Admin Hub
+                </span>
+              </div>
+              <p className="text-sm text-slate-400 mt-1">Manage, upload, replace, and review Cloudinary ingredient images.</p>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-4">
+          {bodyContent}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fadeIn" role="dialog" aria-modal="true">
+      {/* Outer Modal Container - Constrained to max-w-lg and max-h-[85vh] */}
+      <div className="relative flex flex-col w-full max-w-lg max-h-[85vh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden">
+        
+        {/* Fixed Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 shrink-0 bg-slate-900/95 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🖼️</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-bold text-slate-100">
+                  Ingredient Image Management
+                </h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 uppercase tracking-wide">
+                  Admin Hub
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">Cloudinary synchronization, drag-and-drop upload & ingredient photo mappings.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            aria-label="Close modal"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Independently Scrollable Content Area */}
+        <div className="admin-image-modal-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-5 space-y-4">
+          {bodyContent}
         </div>
 
         {/* Fixed Footer */}

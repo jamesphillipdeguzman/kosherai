@@ -2,7 +2,7 @@
 import assert from 'node:assert';
 import { neon } from '@neondatabase/serverless';
 import 'dotenv/config';
-import { auth, getAuthenticatedUser } from '../lib/auth.ts';
+import { auth, getAuthenticatedUser } from '../lib/auth.js';
 import { getSafeTestDatabaseUrl } from '../lib/databaseSafety.js';
 import tripsApiHandler from '../api/trips.js';
 import scansApiHandler from '../api/scans.js';

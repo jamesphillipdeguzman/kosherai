@@ -307,7 +307,26 @@ function render() {
 
   let activeContentHtml = '';
   if (state.appMode === 'course') {
-    activeContentHtml = renderCourseProjectView(state);
+    if (state.courseSubTab === 'manage' && state.isAdmin) {
+      activeContentHtml = renderIngredientImageAdminModal({
+        activeProtocol: state.adminImageProtocol || state.activeDiet || 'lid',
+        stats: state.adminImageStats,
+        mappings: state.adminImageMappings,
+        searchQuery: state.adminImageSearchQuery,
+        statusFilter: state.adminImageStatusFilter,
+        statusMessage: state.adminImageStatusMsg,
+        uploadFormOpen: state.adminImageUploadFormOpen,
+        selectedIngredientId: state.adminImageSelectedIngredientId,
+        uploadPreviewUrl: state.adminImageUploadPreviewUrl,
+        selectedFileName: state.adminImageSelectedFile?.name || null,
+        selectedFileSize: state.adminImageSelectedFile?.size || null,
+        isUploading: state.adminImageUploading,
+        isDiscovering: state.adminImageDiscovering,
+        embedded: true
+      });
+    } else {
+      activeContentHtml = renderCourseProjectView(state);
+    }
   } else {
     switch (state.activeTab) {
       case 'checker':
@@ -324,6 +343,24 @@ function render() {
         break;
       case 'cook':
         activeContentHtml = renderCookModeTab(state);
+        break;
+      case 'manage':
+        activeContentHtml = state.isAdmin ? renderIngredientImageAdminModal({
+          activeProtocol: state.adminImageProtocol || state.activeDiet || 'lid',
+          stats: state.adminImageStats,
+          mappings: state.adminImageMappings,
+          searchQuery: state.adminImageSearchQuery,
+          statusFilter: state.adminImageStatusFilter,
+          statusMessage: state.adminImageStatusMsg,
+          uploadFormOpen: state.adminImageUploadFormOpen,
+          selectedIngredientId: state.adminImageSelectedIngredientId,
+          uploadPreviewUrl: state.adminImageUploadPreviewUrl,
+          selectedFileName: state.adminImageSelectedFile?.name || null,
+          selectedFileSize: state.adminImageSelectedFile?.size || null,
+          isUploading: state.adminImageUploading,
+          isDiscovering: state.adminImageDiscovering,
+          embedded: true
+        }) : renderCheckerTab(state);
         break;
       default:
         activeContentHtml = renderCheckerTab(state);
@@ -348,7 +385,7 @@ function render() {
       ${activeContentHtml}
     </main>
 
-    ${renderBottomNav(currentNavTab, state.appMode)}
+    ${renderBottomNav(currentNavTab, state.appMode, state.isAdmin)}
 
     ${state.selectedItem ? renderItemDetailModal(state.selectedItem, state.activeDiet) : ''}
     ${state.settingsOpen ? renderSettingsModal(state.settings, state.theme, state.showProjectTab, state.activeDiet, state.scannerEnabled) : ''}
@@ -436,12 +473,17 @@ function attachEventHandlers() {
         state.courseSubTab = tab;
         window.scrollTo({ top: 0, behavior: 'smooth' });
         render();
+        if (tab === 'manage') {
+          loadAdminImageData(state.adminImageProtocol || state.activeDiet || 'lid');
+        }
       } else if (tab) {
         state.activeTab = tab;
         window.scrollTo({ top: 0, behavior: 'smooth' });
         render();
         if (tab === 'scanner') {
           refreshScanHistory();
+        } else if (tab === 'manage') {
+          loadAdminImageData(state.adminImageProtocol || state.activeDiet || 'lid');
         }
       }
     });

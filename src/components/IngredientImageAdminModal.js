@@ -20,7 +20,8 @@ export function renderIngredientImageAdminModal(props = {}) {
     selectedFileName = null,
     selectedFileSize = null,
     isUploading = false,
-    isDiscovering = false
+    isDiscovering = false,
+    embedded = false
   } = props;
 
   // Map of currently mapped images for O(1) lookup
@@ -52,30 +53,7 @@ export function renderIngredientImageAdminModal(props = {}) {
     });
   }
 
-  return `
-    <div class="modal-overlay" id="admin-image-modal-overlay">
-      <div class="modal-content admin-image-modal-box relative flex flex-col w-full max-w-lg max-h-[85vh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="admin-image-title">
-        
-        <!-- Fixed Header -->
-        <div class="modal-header shrink-0 flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-900/90 backdrop-blur-md">
-          <div class="flex items-center gap-3">
-            <span class="text-2xl">🖼️</span>
-            <div>
-              <div class="flex items-center gap-2">
-                <h2 id="admin-image-title" class="font-bold text-base sm:text-lg text-slate-100">Ingredient Image Management</h2>
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 tracking-wide uppercase">Admin Hub</span>
-              </div>
-              <p class="text-xs text-slate-400 mt-0.5">
-                Cloudinary synchronization, drag-and-drop upload & ingredient photo mappings.
-              </p>
-            </div>
-          </div>
-          <button class="btn-icon text-slate-400 hover:text-white hover:bg-slate-800 p-2 rounded-xl transition" id="admin-image-close-btn" aria-label="Close Image Manager">✕</button>
-        </div>
-
-        <!-- Independently Scrollable Content Area -->
-        <div class="admin-image-modal-body space-y-4">
-
+  const bodyContent = `
           <!-- Protocol & Status Metrics Bar -->
           <div class="admin-image-metrics-bar grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div class="metric-card bg-slate-900/80 border border-slate-800/80 rounded-xl p-3 text-center shadow-sm">
@@ -226,7 +204,7 @@ export function renderIngredientImageAdminModal(props = {}) {
                   <label class="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-1.5">
                     Image Preview
                   </label>
-                  <div class="admin-image-preview-container relative w-full h-44 sm:h-48 rounded-xl overflow-hidden bg-black/60 flex items-center justify-center shadow-inner">
+                  <div class="admin-image-preview-container relative w-full h-48 sm:h-56 rounded-xl overflow-hidden bg-black/60 flex items-center justify-center shadow-inner">
                     ${uploadPreviewUrl ? `
                       <img 
                         src="${uploadPreviewUrl}" 
@@ -422,8 +400,59 @@ export function renderIngredientImageAdminModal(props = {}) {
               </div>
             `}
           </div>
+  `;
 
-        </div> <!-- End admin-image-modal-body -->
+  if (embedded) {
+    return `
+      <div class="admin-manage-page-container max-w-4xl mx-auto px-4 py-6 space-y-6">
+        <!-- Embedded Page Header -->
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-800">
+          <div class="flex items-center gap-3">
+            <span class="text-3xl">🖼️</span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="font-bold text-xl sm:text-2xl text-slate-100">Ingredient Image Management</h2>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 tracking-wide uppercase">Admin Hub</span>
+              </div>
+              <p class="text-sm text-slate-400 mt-1">
+                Manage, upload, replace, and review Cloudinary ingredient images.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          ${bodyContent}
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="modal-overlay" id="admin-image-modal-overlay">
+      <div class="modal-content admin-image-modal-box relative flex flex-col w-full max-w-lg max-h-[85vh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="admin-image-title">
+        
+        <!-- Fixed Header -->
+        <div class="modal-header shrink-0 flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-900/90 backdrop-blur-md">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">🖼️</span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 id="admin-image-title" class="font-bold text-base sm:text-lg text-slate-100">Ingredient Image Management</h2>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 tracking-wide uppercase">Admin Hub</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-0.5">
+                Cloudinary synchronization, drag-and-drop upload & ingredient photo mappings.
+              </p>
+            </div>
+          </div>
+          <button class="btn-icon text-slate-400 hover:text-white hover:bg-slate-800 p-2 rounded-xl transition" id="admin-image-close-btn" aria-label="Close Image Manager">✕</button>
+        </div>
+
+        <!-- Independently Scrollable Content Area -->
+        <div class="admin-image-modal-body space-y-4">
+          ${bodyContent}
+        </div>
 
         <!-- Fixed Footer -->
         <div class="modal-footer shrink-0 flex items-center justify-between px-5 py-3.5 border-t border-slate-800 bg-slate-900/95 backdrop-blur-md text-xs text-slate-500">
