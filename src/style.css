@@ -5465,6 +5465,7 @@ html.dark .dark\:text-white, :root:not(.light) .dark\:text-white { color: #fffff
 .bg-amber-600 { background-color: #d97706 !important; }
 
 /* SAFE Card Styles (Light Mode) */
+html.light .bg-emerald-50,
 .bg-emerald-50 { background-color: #ecfdf5 !important; }
 .border-emerald-200 { border-color: #a7f3d0 !important; }
 .text-emerald-950 { color: #022c22 !important; }
@@ -5472,6 +5473,7 @@ html.dark .dark\:text-white, :root:not(.light) .dark\:text-white { color: #fffff
 .text-emerald-900\/90 { color: rgba(6, 78, 59, 0.9) !important; }
 
 /* AVOID Card Styles (Light Mode) */
+html.light .bg-rose-50,
 .bg-rose-50 { background-color: #fff1f2 !important; }
 .border-rose-200 { border-color: #fecdd3 !important; }
 .text-rose-950 { color: #4c0519 !important; }
@@ -5479,12 +5481,29 @@ html.dark .dark\:text-white, :root:not(.light) .dark\:text-white { color: #fffff
 .text-rose-900\/90 { color: rgba(136, 19, 55, 0.9) !important; }
 
 /* CAUTION & Pinoy Smart Swap Styles (Light Mode) */
+html.light .bg-amber-50,
 .bg-amber-50 { background-color: #fffbeb !important; }
 .border-amber-200 { border-color: #fde68a !important; }
 .border-amber-300 { border-color: #fcd34d !important; }
 .text-amber-900 { color: #78350f !important; }
 .text-amber-950 { color: #451a03 !important; }
 .bg-amber-100\/80 { background-color: rgba(254, 243, 199, 0.8) !important; }
+
+/* Scoped Dark Mode Overrides for Colored Status Cards */
+html.dark .bg-emerald-50,
+:root:not(.light) .bg-emerald-50 { background-color: rgba(6, 78, 59, 0.35) !important; }
+html.dark .border-emerald-200,
+:root:not(.light) .border-emerald-200 { border-color: rgba(6, 95, 70, 0.6) !important; }
+
+html.dark .bg-rose-50,
+:root:not(.light) .bg-rose-50 { background-color: rgba(76, 5, 25, 0.35) !important; }
+html.dark .border-rose-200,
+:root:not(.light) .border-rose-200 { border-color: rgba(159, 18, 57, 0.6) !important; }
+
+html.dark .bg-amber-50,
+:root:not(.light) .bg-amber-50 { background-color: rgba(69, 26, 3, 0.35) !important; }
+html.dark .border-amber-200,
+:root:not(.light) .border-amber-200 { border-color: rgba(180, 83, 9, 0.5) !important; }
 
 /* Dark Mode Overrides for Audited Line Items */
 html.dark .dark\:bg-emerald-950\/40, :root:not(.light) .dark\:bg-emerald-950\/40 { background-color: rgba(6, 78, 59, 0.4) !important; }
@@ -6291,4 +6310,217 @@ html.dark .header-signout-btn:focus-visible,
     padding: 0 !important;
     border-radius: var(--radius-md, 12px) !important;
   }
+}
+
+/* =========================================================================
+   HOUSEHOLD SUSTAINABILITY DASHBOARD: DESKTOP EXPANSION & CONTRAST
+   ========================================================================= */
+
+/* 1. Desktop Width Expansion & Centering */
+.course-mode-container,
+main.app-container:has(.course-project-container),
+main.app-container:has(.household-insights-container),
+main.app-container.course-mode-container {
+  max-width: 80rem !important; /* max-w-7xl = 1280px */
+  width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  box-sizing: border-box !important;
+}
+
+.course-project-container,
+.household-insights-container {
+  width: 100% !important;
+  max-width: 80rem !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  box-sizing: border-box !important;
+}
+
+.dashboard-grid,
+.insights-main-card,
+.insight-collapsible-card {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+@media (min-width: 1024px) {
+  .course-mode-container,
+  main.app-container:has(.course-project-container),
+  main.app-container:has(.household-insights-container) {
+    padding-left: 1.5rem !important; /* px-6 */
+    padding-right: 1.5rem !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .course-mode-container,
+  main.app-container:has(.course-project-container),
+  main.app-container:has(.household-insights-container) {
+    padding-left: 0.75rem !important; /* px-3 */
+    padding-right: 0.75rem !important;
+  }
+}
+
+/* 2. Light Mode Card & Contrast Styling */
+html.light .insights-main-card {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+html.light .insight-collapsible-card {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+html.light .insight-section-toggle-btn {
+  background-color: #ffffff;
+}
+
+html.light .insight-section-toggle-btn:hover {
+  background-color: #f8fafc;
+}
+
+html.light .insight-section-toggle-btn h3 {
+  color: #0f172a !important;
+}
+
+html.light .insight-section-toggle-btn p {
+  color: #475569 !important;
+}
+
+html.light .insight-section-content {
+  border-top-color: #f1f5f9 !important;
+}
+
+/* 3. Dark Mode Card & High-Contrast Typography */
+html.dark .insights-main-card,
+:root:not(.light) .insights-main-card {
+  background-color: rgba(15, 23, 42, 0.95) !important;
+  border-color: rgba(51, 65, 85, 0.6) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+html.dark .insight-collapsible-card,
+:root:not(.light) .insight-collapsible-card {
+  background-color: rgba(15, 23, 42, 0.95) !important;
+  border-color: rgba(51, 65, 85, 0.6) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+html.dark .insight-section-toggle-btn,
+:root:not(.light) .insight-section-toggle-btn {
+  background-color: transparent !important;
+}
+
+html.dark .insight-section-toggle-btn:hover,
+:root:not(.light) .insight-section-toggle-btn:hover {
+  background-color: rgba(30, 41, 59, 0.5) !important;
+}
+
+html.dark .insight-section-toggle-btn h3,
+:root:not(.light) .insight-section-toggle-btn h3 {
+  color: #ffffff !important;
+}
+
+html.dark .insight-section-toggle-btn p,
+:root:not(.light) .insight-section-toggle-btn p {
+  color: #94a3b8 !important;
+}
+
+html.dark .insight-section-content,
+:root:not(.light) .insight-section-content {
+  border-top-color: rgba(51, 65, 85, 0.6) !important;
+}
+
+/* 4. Dark Mode Sub-cards, Containers & Tables within Insight Cards */
+html.dark .insight-collapsible-card .bg-slate-50,
+:root:not(.light) .insight-collapsible-card .bg-slate-50,
+html.dark .insights-main-card .bg-slate-50,
+:root:not(.light) .insights-main-card .bg-slate-50 {
+  background-color: rgba(30, 41, 59, 0.55) !important;
+  border-color: rgba(51, 65, 85, 0.6) !important;
+}
+
+html.dark .insight-collapsible-card .bg-white,
+:root:not(.light) .insight-collapsible-card .bg-white,
+html.dark .insights-main-card .bg-white,
+:root:not(.light) .insights-main-card .bg-white {
+  background-color: rgba(15, 23, 42, 0.75) !important;
+  border-color: rgba(51, 65, 85, 0.6) !important;
+}
+
+/* Ensure headings, numbers and labels inside dark insight cards are light and crisp */
+html.dark .insight-collapsible-card h4,
+:root:not(.light) .insight-collapsible-card h4,
+html.dark .insight-collapsible-card h3,
+:root:not(.light) .insight-collapsible-card h3 {
+  color: #ffffff !important;
+}
+
+html.dark .insight-collapsible-card .text-slate-800,
+:root:not(.light) .insight-collapsible-card .text-slate-800,
+html.dark .insight-collapsible-card .text-slate-900,
+:root:not(.light) .insight-collapsible-card .text-slate-900 {
+  color: #f8fafc !important;
+}
+
+html.dark .insight-collapsible-card .text-slate-700,
+:root:not(.light) .insight-collapsible-card .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+
+html.dark .insight-collapsible-card .text-slate-600,
+:root:not(.light) .insight-collapsible-card .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .insight-collapsible-card .text-slate-500,
+:root:not(.light) .insight-collapsible-card .text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+/* Dark Mode Colored Metrics and Badges */
+html.dark .insight-collapsible-card .text-rose-900,
+:root:not(.light) .insight-collapsible-card .text-rose-900,
+html.dark .insight-collapsible-card .text-rose-700,
+:root:not(.light) .insight-collapsible-card .text-rose-700 {
+  color: #fecdd3 !important;
+}
+
+html.dark .insight-collapsible-card .text-emerald-900,
+:root:not(.light) .insight-collapsible-card .text-emerald-900,
+html.dark .insight-collapsible-card .text-emerald-700,
+:root:not(.light) .insight-collapsible-card .text-emerald-700 {
+  color: #a7f3d0 !important;
+}
+
+html.dark .insight-collapsible-card .text-amber-900,
+:root:not(.light) .insight-collapsible-card .text-amber-900,
+html.dark .insight-collapsible-card .text-amber-700,
+:root:not(.light) .insight-collapsible-card .text-amber-700 {
+  color: #fde68a !important;
+}
+
+/* Dark Mode Progress Bar Tracks */
+html.dark .insight-collapsible-card .bg-slate-200,
+:root:not(.light) .insight-collapsible-card .bg-slate-200 {
+  background-color: #334155 !important;
+}
+
+/* Uncompiled Tailwind dark: utility fallbacks for insight cards */
+html.dark .dark\:bg-slate-900\/80,
+:root:not(.light) .dark\:bg-slate-900\/80,
+html.dark .dark\:bg-slate-900\/90,
+:root:not(.light) .dark\:bg-slate-900\/90 {
+  background-color: rgba(15, 23, 42, 0.9) !important;
+}
+
+html.dark .dark\:border-slate-800,
+:root:not(.light) .dark\:border-slate-800,
+html.dark .dark\:border-slate-800\/80,
+:root:not(.light) .dark\:border-slate-800\/80 {
+  border-color: rgba(51, 65, 85, 0.6) !important;
 }

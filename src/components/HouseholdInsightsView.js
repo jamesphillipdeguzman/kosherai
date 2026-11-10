@@ -132,7 +132,7 @@ function renderInsightSectionCard({
   contentHtml
 }) {
   return `
-    <div class="insight-collapsible-card bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm overflow-hidden transition-all duration-200">
+    <div class="insight-collapsible-card w-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm overflow-hidden transition-all duration-200">
       <button
         type="button"
         class="insight-section-toggle-btn w-full flex items-center justify-between p-4 sm:p-5 text-left hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors cursor-pointer select-none"
@@ -150,22 +150,22 @@ function renderInsightSectionCard({
                 ${escapeHtml(title)}
               </h3>
               ${badgeText ? `
-                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeColor || 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'}">
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeColor || 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'}">
                   ${badgeText}
                 </span>
               ` : ''}
             </div>
-            <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
+            <p class="text-xs text-slate-600 dark:text-slate-400 truncate">
               ${escapeHtml(subtitle)}
             </p>
           </div>
         </div>
 
         <div class="flex items-center gap-2.5 shrink-0 ml-2">
-          <span class="text-xs font-medium text-slate-400 dark:text-slate-500 hidden sm:inline select-none">
+          <span class="text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:inline select-none">
             ${isExpanded ? 'Collapse' : 'Expand'}
           </span>
-          <div class="p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 transition-transform duration-200 ${
+          <div class="p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-transform duration-200 ${
             isExpanded ? 'rotate-180' : 'rotate-0'
           }">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -736,10 +736,10 @@ export function renderHouseholdInsightsDashboard(state = {}) {
   `;
 
   return `
-    <div class="household-insights-container flex flex-col gap-6 w-full mb-8">
+    <div class="household-insights-container flex flex-col gap-6 w-full max-w-7xl mx-auto mb-8">
       
       <!-- MAIN FOOD COST & SPOILAGE INTELLIGENCE CONTAINER -->
-      <div class="insights-main-card rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 shadow-sm p-4 sm:p-6 flex flex-col gap-5">
+      <div class="insights-main-card rounded-2xl w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 shadow-sm p-4 sm:p-6 flex flex-col gap-5">
         
         <!-- Header with Confidence Pill & Expand/Collapse All Buttons -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
@@ -944,7 +944,7 @@ export function renderHouseholdInsightsDashboard(state = {}) {
       </div>
 
       <!-- 5 INDEPENDENTLY COLLAPSIBLE INSIGHT SECTION CARDS -->
-      <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-4 w-full">
 
         <!-- 1. Household Sustainability Scorecard -->
         ${renderInsightSectionCard({

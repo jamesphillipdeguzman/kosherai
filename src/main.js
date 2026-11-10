@@ -419,7 +419,7 @@ function render() {
 
     ${renderHeader(state.isOnline, state.appMode, state.showProjectTab, state.activeDiet, state.theme, null, state.isSyncing, state.justSynced)}
     
-    <main class="app-container pt-24">
+    <main class="app-container pt-24 ${state.appMode === 'course' ? 'course-mode-container w-full max-w-7xl mx-auto px-3 sm:px-5 lg:px-6' : ''}">
       ${activeContentHtml}
     </main>
 

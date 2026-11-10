@@ -29,7 +29,7 @@ function InsightSectionCard({
   children
 }) {
   return (
-    <div className="insight-collapsible-card bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm overflow-hidden transition-all duration-200">
+    <div className="insight-collapsible-card w-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-sm overflow-hidden transition-all duration-200">
       <button
         type="button"
         onClick={() => onToggle(id)}
@@ -48,19 +48,19 @@ function InsightSectionCard({
                 {title}
               </h3>
               {badgeText && (
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeColor || 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeColor || 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}>
                   {badgeText}
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+            <p className="text-xs text-slate-600 dark:text-slate-400 truncate">
               {subtitle}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0 ml-2">
-          <span className="text-xs font-medium text-slate-400 dark:text-slate-500 hidden sm:inline select-none">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:inline select-none">
             {isExpanded ? 'Collapse' : 'Expand'}
           </span>
           <div className={`p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 transition-transform duration-200 ${
@@ -138,9 +138,9 @@ export default function HouseholdInsightsView({
   const scorecard = report.scorecard;
 
   return (
-    <div className="household-insights-container flex flex-col gap-6 w-full mb-8">
+    <div className="household-insights-container flex flex-col gap-6 w-full max-w-7xl mx-auto mb-8">
       {/* MAIN CONTAINER */}
-      <div className="insights-main-card rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 shadow-sm p-4 sm:p-6 flex flex-col gap-5">
+      <div className="insights-main-card rounded-2xl w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 shadow-sm p-4 sm:p-6 flex flex-col gap-5">
         
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
@@ -295,7 +295,7 @@ export default function HouseholdInsightsView({
       </div>
 
       {/* 5 INDEPENDENTLY COLLAPSIBLE SECTION CARDS */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 w-full">
         {/* 1. Household Sustainability Scorecard */}
         <InsightSectionCard
           id="scorecard"
