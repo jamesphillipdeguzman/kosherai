@@ -385,21 +385,32 @@ export default async function handler(req, res) {
 
         const canonicalItem = LID_DATABASE.find(item =>
           item.id === cleanId ||
+          item.id.toLowerCase() === cleanId.toLowerCase() ||
           item.name.toLowerCase() === cleanId.toLowerCase() ||
           (cleanName && item.name.toLowerCase() === cleanName.toLowerCase()) ||
           normalizeToken(item.id) === normalizeToken(cleanId) ||
-          (cleanName && normalizeToken(item.name) === normalizeToken(cleanName))
+          (cleanName && normalizeToken(item.name) === normalizeToken(cleanName)) ||
+          (Array.isArray(item.aliases) && item.aliases.some(a =>
+            a.toLowerCase() === cleanId.toLowerCase() ||
+            normalizeToken(a) === normalizeToken(cleanId) ||
+            (cleanName && (a.toLowerCase() === cleanName.toLowerCase() || normalizeToken(a) === normalizeToken(cleanName)))
+          ))
         );
 
         const targetIngredientId = canonicalItem ? canonicalItem.id : cleanId;
 
-        // 2. Query Neon to check if an image mapping already exists for this ingredient across ALL protocols
+        // 2. Query Neon to check if an image mapping already exists for this ingredient across ALL candidate IDs
+        const candidateIds = Array.from(new Set([
+          targetIngredientId.toLowerCase(),
+          cleanId.toLowerCase(),
+          ...(canonicalItem?.aliases || []).map(a => a.toLowerCase())
+        ]));
+
         const existingRows = await sql`
-          SELECT id, protocol_id, ingredient_id, public_id, secure_url, status
+          SELECT id, protocol_id, ingredient_id, public_id, secure_url, status, original_filename
           FROM ingredient_images
-          WHERE LOWER(ingredient_id) = LOWER(${targetIngredientId})
-          ORDER BY updated_at DESC
-          LIMIT 1;
+          WHERE LOWER(ingredient_id) = ANY(${candidateIds})
+          ORDER BY updated_at DESC;
         `;
 
         let resultRow;
@@ -409,6 +420,7 @@ export default async function handler(req, res) {
           const updateResult = await sql`
             UPDATE ingredient_images
             SET 
+              ingredient_id = ${targetIngredientId},
               public_id = ${public_id},
               secure_url = ${resolvedSecureUrl},
               asset_version = ${asset_version ? String(asset_version) : null},
@@ -420,6 +432,15 @@ export default async function handler(req, res) {
             RETURNING *;
           `;
           resultRow = updateResult[0];
+
+          // If there were multiple matching alias rows in Neon, clean up redundant duplicates
+          if (existingRows.length > 1) {
+            const redundantIds = existingRows.slice(1).map(r => r.id);
+            await sql`
+              DELETE FROM ingredient_images
+              WHERE id = ANY(${redundantIds});
+            `;
+          }
         } else {
           // No record exists yet: insert a new global image mapping
           const newProtocol = 'global';
@@ -499,8 +520,18 @@ export default async function handler(req, res) {
             DELETE FROM ingredient_images WHERE id = ${id};
           `;
         } else if (ingredient_id) {
+          const canonical = LID_DATABASE.find(item =>
+            item.id === ingredient_id ||
+            item.id.toLowerCase() === ingredient_id.toLowerCase() ||
+            item.name.toLowerCase() === ingredient_id.toLowerCase() ||
+            (Array.isArray(item.aliases) && item.aliases.some(a => a.toLowerCase() === ingredient_id.toLowerCase()))
+          );
+          const targetIds = Array.from(new Set([
+            ingredient_id.toLowerCase(),
+            ...(canonical ? [canonical.id.toLowerCase(), ...(canonical.aliases || []).map(a => a.toLowerCase())] : [])
+          ]));
           await sql`
-            DELETE FROM ingredient_images WHERE LOWER(ingredient_id) = LOWER(${ingredient_id});
+            DELETE FROM ingredient_images WHERE LOWER(ingredient_id) = ANY(${targetIds});
           `;
         }
 

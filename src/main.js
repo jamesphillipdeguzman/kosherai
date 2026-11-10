@@ -1172,14 +1172,22 @@ function attachEventHandlers() {
       render();
 
       try {
-        await uploadIngredientImage({
+        const newMapping = await uploadIngredientImage({
           file,
           protocolId: state.adminImageProtocol || 'lid',
           ingredientId,
           status: 'active'
         });
         state.adminImageStatusMsg = `Successfully uploaded photograph for ${ingredientId}!`;
-        await loadAdminImageData(state.adminImageProtocol || 'lid');
+        if (newMapping) {
+          const idx = state.adminImageMappings.findIndex(m => m.ingredient_id === newMapping.ingredient_id || m.ingredient_id === ingredientId);
+          if (idx >= 0) {
+            state.adminImageMappings[idx] = newMapping;
+          } else {
+            state.adminImageMappings.unshift(newMapping);
+          }
+        }
+        await loadAdminImageData(state.adminImageProtocol || 'lid', true);
       } catch (err) {
         state.adminImageStatusMsg = `Upload error: ${err.message}`;
       } finally {
@@ -1278,7 +1286,7 @@ function attachEventHandlers() {
       render();
 
       try {
-        await uploadIngredientImage({
+        const newMapping = await uploadIngredientImage({
           file,
           protocolId: state.adminImageProtocol,
           ingredientId,
@@ -1288,7 +1296,15 @@ function attachEventHandlers() {
         state.adminImageUploadFormOpen = false;
         state.adminImageSelectedFile = null;
         state.adminImageUploadPreviewUrl = null;
-        await loadAdminImageData(state.adminImageProtocol);
+        if (newMapping) {
+          const idx = state.adminImageMappings.findIndex(m => m.ingredient_id === newMapping.ingredient_id || m.ingredient_id === ingredientId);
+          if (idx >= 0) {
+            state.adminImageMappings[idx] = newMapping;
+          } else {
+            state.adminImageMappings.unshift(newMapping);
+          }
+        }
+        await loadAdminImageData(state.adminImageProtocol, true);
       } catch (err) {
         state.adminImageStatusMsg = `Upload error: ${err.message}`;
       } finally {

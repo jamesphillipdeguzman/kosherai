@@ -325,6 +325,104 @@ console.log('\nTest 6: User-Facing Search & Detail Views Across Protocols');
   console.log('  ✅ User-facing Search and Detail views render identical shared photos while maintaining protocol-specific dietary assessments.');
 }
 
+// ============================================================================
+// TEST 7: Full Replacement Workflow & Cloudinary Public ID Persistence (Toyomansi)
+// ============================================================================
+console.log('\nTest 7: Toyomansi Image Replacement & Public ID Persistence');
+{
+  function createMockRes() {
+    let responseData = null;
+    let responseStatus = 200;
+    return {
+      setHeader: () => {},
+      statusCode: 200,
+      status: function(code) { this.statusCode = code; responseStatus = code; return this; },
+      json: function(data) { responseData = data; return this; },
+      end: function() {},
+      getData: () => responseData,
+      getStatus: () => responseStatus
+    };
+  }
+
+  // 1. Verify filename normalization logic
+  const testFileName = 'toyomansi-soy-sauce-with-calamansi.webp';
+  const leafName = testFileName.replace(/\.[^/.]+$/, '');
+  const sanitizedLeaf = leafName.toLowerCase().trim().replace(/[^a-z0-9_-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  assert.strictEqual(sanitizedLeaf, 'toyomansi-soy-sauce-with-calamansi', 'Leaf public ID must match expected sanitized filename');
+
+  const expectedNewPublicId = 'kosherai/all_ingredients/toyomansi-soy-sauce-with-calamansi';
+  const expectedNewSecureUrl = 'https://res.cloudinary.com/dego6hgcb/image/upload/v1794300999/kosherai/all_ingredients/toyomansi-soy-sauce-with-calamansi.webp';
+
+  // 2. Perform replacement save via admin API (matching via alias 'toyomansi')
+  const replaceReq = {
+    method: 'POST',
+    url: '/api/admin/ingredient-images',
+    headers: {
+      'x-admin-key': process.env.INTERNAL_SERVICE_KEY || 'kosherai_admin'
+    },
+    body: {
+      action: 'save',
+      protocol_id: 'global',
+      ingredient_id: 'toyomansi', // Passed via alias or slug
+      public_id: expectedNewPublicId,
+      secure_url: expectedNewSecureUrl,
+      asset_version: '1794300999',
+      format: 'webp',
+      original_filename: testFileName,
+      status: 'active'
+    }
+  };
+
+  const replaceRes = createMockRes();
+  await adminImagesHandler(replaceReq, replaceRes);
+  assert.strictEqual(replaceRes.getStatus(), 200, 'POST replacement must succeed');
+  const replaceData = replaceRes.getData();
+  assert.strictEqual(replaceData.success, true);
+  assert.strictEqual(replaceData.mapping.id, 'img_global_toyomansi-condiment', 'Must preserve existing ID img_global_toyomansi-condiment');
+  assert.strictEqual(replaceData.mapping.ingredient_id, 'toyomansi-condiment', 'Must map to canonical targetIngredientId');
+  assert.strictEqual(replaceData.mapping.public_id, expectedNewPublicId, 'Must update to new Cloudinary public ID');
+  assert.strictEqual(replaceData.mapping.secure_url, expectedNewSecureUrl, 'Must update to new secure URL');
+
+  // 3. Verify Neon DB record
+  const { neon } = await import('@neondatabase/serverless');
+  const sql = neon(process.env.DATABASE_URL);
+  const rows = await sql`
+    SELECT id, protocol_id, ingredient_id, public_id, secure_url, status
+    FROM ingredient_images
+    WHERE LOWER(ingredient_id) IN ('toyomansi', 'toyomansi-condiment');
+  `;
+  assert.strictEqual(rows.length, 1, 'Only one canonical record must exist for Toyomansi in Neon');
+  assert.strictEqual(rows[0].public_id, expectedNewPublicId);
+  assert.strictEqual(rows[0].secure_url, expectedNewSecureUrl);
+
+  // 4. Verify Cache and Public Resolver
+  saveAdminImageCache('global', { mappings: rows });
+  const protoList = ['lid', 'low_purine', 'diabetic', 'low_sodium', 'pinoy_keto'];
+  for (const proto of protoList) {
+    // Resolver by canonical ID
+    const urlByCanonical = getIngredientImageUrl('toyomansi-condiment', proto);
+    assert.strictEqual(urlByCanonical, expectedNewSecureUrl, `Canonical lookup under ${proto} must return new URL`);
+
+    // Resolver by alias
+    const urlByAlias = getIngredientImageUrl('toyomansi', proto);
+    assert.strictEqual(urlByAlias, expectedNewSecureUrl, `Alias lookup under ${proto} must return new URL`);
+  }
+
+  // 5. Verify Manage Gallery UI Rendering
+  const galleryHtml = renderIngredientImageAdminModal({
+    activeProtocol: 'lid',
+    mappings: rows,
+    searchQuery: 'Toyomansi',
+    statusFilter: 'all',
+    isLoading: false,
+    embedded: true
+  });
+  assert.ok(galleryHtml.includes(expectedNewSecureUrl), 'Gallery must render the new three-bottle image URL for Toyomansi');
+  assert.ok(galleryHtml.includes(expectedNewPublicId), 'Gallery must render the new public ID for Toyomansi');
+
+  console.log('  ✅ Toyomansi replacement workflow successfully updated Cloudinary public ID, Neon DB, and Gallery UI.');
+}
+
 console.log('\n======================================================================');
-console.log('🎉 ALL GLOBAL INGREDIENT IMAGE LIBRARY TESTS (1 THROUGH 6) PASSED!');
+console.log('🎉 ALL GLOBAL INGREDIENT IMAGE LIBRARY TESTS (1 THROUGH 7) PASSED!');
 console.log('======================================================================\n');

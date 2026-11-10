@@ -293,7 +293,16 @@ export const LID_DATABASE = [
     name: 'Toyomansi & Commercial Seasoning Liquids',
     category: LID_CATEGORIES.CONDIMENTS,
     status: STATUS.AVOID,
-    aliases: ['toyomansi', 'silver swan toyomansi', 'datu puti toyomansi', 'maggi savor', 'knorr liquid seasoning'],
+    aliases: [
+      'toyomansi',
+      'toyomansi soy sauce with calamansi',
+      'toyomansi soy sauce',
+      'toyomansi with calamansi',
+      'silver swan toyomansi',
+      'datu puti toyomansi',
+      'maggi savor',
+      'knorr liquid seasoning'
+    ],
     iodineContent: 'Very High (Iodized salt + hydrolyzed soy protein + preservatives)',
     description: 'Blended soy sauce, calamansi flavor, MSG, and preservatives. Heavy sodium and soy isoflavones.',
     substitutes: ['Fresh squeezed calamansi juice mixed with garlic and pure vinegar', 'Fresh lemon juice with chili'],

@@ -153,10 +153,10 @@ export function saveAdminImageCache(protocolId = 'global', summaryData) {
 
   // Synchronize global image cache so public/checker/search lookups across all protocols benefit immediately
   if (Array.isArray(summaryData.mappings)) {
-    const imagesMap = {};
+    const imagesMap = { ...(inMemoryCache['global'] || {}) };
     for (const m of summaryData.mappings) {
-      if (m.status === 'active' && (m.secure_url || m.url)) {
-        imagesMap[m.ingredient_id] = {
+      if ((!m.status || m.status === 'active') && (m.secure_url || m.url)) {
+        const rec = {
           id: m.id,
           protocol_id: m.protocol_id || 'global',
           ingredient_id: m.ingredient_id,
@@ -164,9 +164,29 @@ export function saveAdminImageCache(protocolId = 'global', summaryData) {
           secure_url: m.secure_url || m.url,
           status: m.status
         };
-        // Also index lowercase
+        imagesMap[m.ingredient_id] = rec;
         if (m.ingredient_id) {
-          imagesMap[m.ingredient_id.toLowerCase()] = imagesMap[m.ingredient_id];
+          imagesMap[m.ingredient_id.toLowerCase()] = rec;
+        }
+
+        // Also index under canonical item and all aliases
+        const canonical = LID_DATABASE.find(item =>
+          item.id === m.ingredient_id ||
+          item.id.toLowerCase() === (m.ingredient_id || '').toLowerCase() ||
+          item.name.toLowerCase() === (m.ingredient_id || '').toLowerCase() ||
+          (Array.isArray(item.aliases) && item.aliases.some(a => a.toLowerCase() === (m.ingredient_id || '').toLowerCase()))
+        );
+        if (canonical) {
+          imagesMap[canonical.id] = rec;
+          imagesMap[canonical.id.toLowerCase()] = rec;
+          imagesMap[canonical.name] = rec;
+          imagesMap[canonical.name.toLowerCase()] = rec;
+          if (Array.isArray(canonical.aliases)) {
+            for (const alias of canonical.aliases) {
+              imagesMap[alias] = rec;
+              imagesMap[alias.toLowerCase()] = rec;
+            }
+          }
         }
       }
     }
@@ -310,8 +330,8 @@ export function getIngredientImageUrl(imageOrItem, protocolId = 'lid', fallback 
     // 3a. Check cached database mapping for this ingredient ID in protocol or global library
     const cachedProto = inMemoryCache[normProto];
     const cachedGlobal = inMemoryCache['global'] || initIngredientImageCache(normProto);
-    const cached = (cachedProto && (cachedProto[trimmed] || cachedProto[trimmed.toLowerCase()])) ? cachedProto : cachedGlobal;
-    let entry = cached ? (cached[trimmed] || cached[trimmed.toLowerCase()]) : null;
+    let entry = (cachedProto && (cachedProto[trimmed] || cachedProto[trimmed.toLowerCase()])) ||
+                (cachedGlobal && (cachedGlobal[trimmed] || cachedGlobal[trimmed.toLowerCase()]));
 
     // If not found directly, check canonical match across standard ingredient database
     if (!entry) {
@@ -321,8 +341,9 @@ export function getIngredientImageUrl(imageOrItem, protocolId = 'lid', fallback 
         item.name.toLowerCase() === trimmed.toLowerCase() ||
         (Array.isArray(item.aliases) && item.aliases.some(a => a.toLowerCase() === trimmed.toLowerCase()))
       );
-      if (match && cached) {
-        entry = cached[match.id] || cached[match.id.toLowerCase()] || cached[match.name] || cached[match.name.toLowerCase()];
+      if (match) {
+        entry = (cachedProto && (cachedProto[match.id] || cachedProto[match.id.toLowerCase()] || cachedProto[match.name] || cachedProto[match.name.toLowerCase()])) ||
+                (cachedGlobal && (cachedGlobal[match.id] || cachedGlobal[match.id.toLowerCase()] || cachedGlobal[match.name] || cachedGlobal[match.name.toLowerCase()]));
       }
     }
 
@@ -427,9 +448,34 @@ export async function uploadIngredientImage({ file, protocolId = 'global', ingre
   const uploadPreset = UPLOAD_PRESET;
   const folder = 'kosherai/all_ingredients';
 
+  // 0. Resolve canonical identity from LID_DATABASE
+  const canonicalItem = LID_DATABASE.find(item =>
+    item.id === ingredientId ||
+    item.id.toLowerCase() === ingredientId.toLowerCase() ||
+    item.name.toLowerCase() === ingredientId.toLowerCase() ||
+    (Array.isArray(item.aliases) && item.aliases.some(a => a.toLowerCase() === ingredientId.toLowerCase()))
+  );
+  const targetIngredientId = canonicalItem ? canonicalItem.id : ingredientId;
+
+  // Extract raw filename and derive clean public ID leaf
+  let rawFilename = '';
+  if (file && typeof file === 'object') {
+    rawFilename = file.name || file.original_filename || '';
+  } else if (typeof file === 'string' && !file.startsWith('data:')) {
+    rawFilename = file.split('/').pop() || '';
+  }
+
+  const leafName = rawFilename ? rawFilename.replace(/\.[^/.]+$/, '') : '';
+  const sanitizedLeaf = leafName
+    ? leafName.toLowerCase().trim().replace(/[^a-z0-9_-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    : '';
+
+  // Authoritative leaf public ID: use the sanitized filename if provided, else fall back to targetIngredientId
+  const leafPublicId = sanitizedLeaf || targetIngredientId;
+
   const formData = new FormData();
   if (typeof Blob !== 'undefined' && file instanceof Blob) {
-    const fileName = file.name || `${ingredientId}.webp`;
+    const fileName = file.name || `${leafPublicId}.webp`;
     formData.append('file', file, fileName);
   } else if (typeof file === 'string') {
     formData.append('file', file);
@@ -439,7 +485,7 @@ export async function uploadIngredientImage({ file, protocolId = 'global', ingre
 
   formData.append('upload_preset', uploadPreset);
   formData.append('folder', folder);
-  formData.append('public_id', `${ingredientId}`);
+  formData.append('public_id', leafPublicId);
 
   // 1. Upload to Cloudinary via unsigned preset into kosherai/all_ingredients
   const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/image/upload`, {
@@ -470,12 +516,13 @@ export async function uploadIngredientImage({ file, protocolId = 'global', ingre
     body: JSON.stringify({
       action: 'save',
       protocol_id: 'global',
-      ingredient_id: ingredientId,
+      ingredient_id: targetIngredientId,
+      ingredient_name: canonicalItem ? canonicalItem.name : undefined,
       public_id: publicId,
       secure_url: secureUrl,
       asset_version: cloudData.version ? String(cloudData.version) : null,
       format: cloudData.format || 'webp',
-      original_filename: cloudData.original_filename || `${ingredientId}.webp`,
+      original_filename: cloudData.original_filename || rawFilename || `${leafPublicId}.webp`,
       status
     })
   });
@@ -487,19 +534,40 @@ export async function uploadIngredientImage({ file, protocolId = 'global', ingre
 
   const saveData = await saveRes.json();
   const mapping = saveData.mapping || {
-    id: `img_global_${ingredientId}`,
+    id: `img_global_${targetIngredientId}`,
     protocol_id: 'global',
-    ingredient_id: ingredientId,
+    ingredient_id: targetIngredientId,
     public_id: publicId,
     secure_url: secureUrl,
+    asset_version: cloudData.version ? String(cloudData.version) : null,
+    format: cloudData.format || 'webp',
+    original_filename: cloudData.original_filename || rawFilename || `${leafPublicId}.webp`,
     status
   };
 
-  // 3. Update global local cache immediately
+  // 3. Update global local cache immediately across all keys (canonical, alias, names)
   if (!inMemoryCache['global']) inMemoryCache['global'] = {};
-  inMemoryCache['global'][ingredientId] = mapping;
   if (!inMemoryCache[normProto]) inMemoryCache[normProto] = {};
-  inMemoryCache[normProto][ingredientId] = mapping;
+
+  const keysToUpdate = new Set([
+    ingredientId,
+    ingredientId.toLowerCase(),
+    targetIngredientId,
+    targetIngredientId.toLowerCase(),
+    ...(canonicalItem ? [
+      canonicalItem.id,
+      canonicalItem.id.toLowerCase(),
+      canonicalItem.name,
+      canonicalItem.name.toLowerCase(),
+      ...(canonicalItem.aliases || []).map(a => a),
+      ...(canonicalItem.aliases || []).map(a => a.toLowerCase())
+    ] : [])
+  ]);
+
+  for (const k of keysToUpdate) {
+    inMemoryCache['global'][k] = mapping;
+    inMemoryCache[normProto][k] = mapping;
+  }
 
   if (typeof localStorage !== 'undefined') {
     try {
@@ -507,9 +575,13 @@ export async function uploadIngredientImage({ file, protocolId = 'global', ingre
       localStorage.setItem(getStorageKey(normProto), JSON.stringify(inMemoryCache['global']));
 
       // Synchronize cached admin summary
-      const adminSummary = getCachedAdminSummary('global');
+      const adminSummary = getCachedAdminSummary('global') || getCachedAdminSummary(normProto);
       if (adminSummary && Array.isArray(adminSummary.mappings)) {
-        const existingIdx = adminSummary.mappings.findIndex(m => m.ingredient_id === ingredientId);
+        const existingIdx = adminSummary.mappings.findIndex(m =>
+          m.ingredient_id === ingredientId ||
+          m.ingredient_id === targetIngredientId ||
+          (m.ingredient_id && keysToUpdate.has(m.ingredient_id.toLowerCase()))
+        );
         if (existingIdx >= 0) {
           adminSummary.mappings[existingIdx] = mapping;
         } else {
@@ -520,13 +592,14 @@ export async function uploadIngredientImage({ file, protocolId = 'global', ingre
           }
         }
         saveAdminImageCache('global', adminSummary);
+        saveAdminImageCache(normProto, adminSummary);
       }
     } catch (_) {}
   }
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('kosherai:ingredient-images-updated', {
-      detail: { protocol: 'global', images: inMemoryCache['global'] }
+      detail: { protocol: 'global', images: inMemoryCache['global'], mapping }
     }));
   }
 
@@ -641,8 +714,29 @@ export async function deleteIngredientMapping(id, protocol = 'lid', ingredientId
 
   const normProto = (protocol || 'global').toLowerCase();
   if (ingredientId) {
-    if (inMemoryCache['global']) delete inMemoryCache['global'][ingredientId];
-    if (inMemoryCache[normProto]) delete inMemoryCache[normProto][ingredientId];
+    const canonical = LID_DATABASE.find(item =>
+      item.id === ingredientId ||
+      item.id.toLowerCase() === ingredientId.toLowerCase() ||
+      item.name.toLowerCase() === ingredientId.toLowerCase() ||
+      (Array.isArray(item.aliases) && item.aliases.some(a => a.toLowerCase() === ingredientId.toLowerCase()))
+    );
+    const keysToDelete = new Set([
+      ingredientId,
+      ingredientId.toLowerCase(),
+      ...(canonical ? [
+        canonical.id,
+        canonical.id.toLowerCase(),
+        canonical.name,
+        canonical.name.toLowerCase(),
+        ...(canonical.aliases || []).map(a => a),
+        ...(canonical.aliases || []).map(a => a.toLowerCase())
+      ] : [])
+    ]);
+
+    for (const k of keysToDelete) {
+      if (inMemoryCache['global']) delete inMemoryCache['global'][k];
+      if (inMemoryCache[normProto]) delete inMemoryCache[normProto][k];
+    }
     if (typeof localStorage !== 'undefined') {
       try {
         localStorage.setItem(GLOBAL_MAPPINGS_KEY, JSON.stringify(inMemoryCache['global'] || {}));

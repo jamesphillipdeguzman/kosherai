@@ -36,6 +36,25 @@ export function renderIngredientImageAdminModal(props = {}) {
       mappingByIngredientId[m.ingredient_name] = m;
       mappingByIngredientId[m.ingredient_name.toLowerCase()] = m;
     }
+    // Also index under matched canonical item and its aliases
+    const matchedCanonical = LID_DATABASE.find(item =>
+      item.id === m.ingredient_id ||
+      item.id.toLowerCase() === (m.ingredient_id || '').toLowerCase() ||
+      item.name.toLowerCase() === (m.ingredient_name || m.ingredient_id || '').toLowerCase() ||
+      (Array.isArray(item.aliases) && item.aliases.some(a => a.toLowerCase() === (m.ingredient_id || '').toLowerCase()))
+    );
+    if (matchedCanonical) {
+      mappingByIngredientId[matchedCanonical.id] = m;
+      mappingByIngredientId[matchedCanonical.id.toLowerCase()] = m;
+      mappingByIngredientId[matchedCanonical.name] = m;
+      mappingByIngredientId[matchedCanonical.name.toLowerCase()] = m;
+      if (Array.isArray(matchedCanonical.aliases)) {
+        for (const alias of matchedCanonical.aliases) {
+          mappingByIngredientId[alias] = m;
+          mappingByIngredientId[alias.toLowerCase()] = m;
+        }
+      }
+    }
   }
 
   // Pre-seed any cached global mappings that might not be in the passed mappings array yet
