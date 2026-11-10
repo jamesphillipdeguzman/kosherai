@@ -128,4 +128,38 @@ console.log('\nTest 4: Verification of Circular Imports Elimination');
   console.log('  ✅ Authentication circular dependencies eliminated.');
 }
 
+// ============================================================================
+// TEST 5: Object Signature Flexibility & Role Propagation Safeguards
+// ============================================================================
+console.log('\nTest 5: Object Signature Flexibility & Role Propagation Safeguards');
+{
+  // 5a: Object Signature - Admin
+  const objNavAdmin = renderBottomNav({ activeTab: 'cook', appMode: 'diet', isAdmin: true });
+  assert.ok(objNavAdmin.includes('data-tab="manage"'), 'renderBottomNav({ isAdmin: true }) must display Manage tab');
+
+  // 5b: Object Signature - Regular User
+  const objNavUser = renderBottomNav({ activeTab: 'cook', appMode: 'diet', isAdmin: false });
+  assert.ok(!objNavUser.includes('data-tab="manage"'), 'renderBottomNav({ isAdmin: false }) must NOT display Manage tab');
+
+  // 5c: Minimal Object Signature
+  const objNavMinimal = renderBottomNav({ isAdmin: true });
+  assert.ok(objNavMinimal.includes('data-tab="manage"'), 'renderBottomNav({ isAdmin: true }) minimal must display Manage tab');
+
+  // 5d: vite.config.js must import canonical lib/auth.js, NOT lib/auth.ts
+  const viteConfig = fs.readFileSync(path.join(rootDir, 'vite.config.js'), 'utf-8');
+  assert.ok(!viteConfig.includes("lib/auth.ts"), 'vite.config.js must not reference deleted lib/auth.ts');
+  assert.ok(viteConfig.includes("lib/auth.js"), 'vite.config.js must import canonical lib/auth.js');
+
+  // 5e: CourseProjectView.js subnav and content support for manage
+  const courseViewCode = fs.readFileSync(path.join(rootDir, 'src', 'components', 'CourseProjectView.js'), 'utf-8');
+  assert.ok(courseViewCode.includes('data-subtab="manage"'), 'CourseProjectView must support data-subtab="manage"');
+  assert.ok(courseViewCode.includes("case 'manage':"), 'CourseProjectView must handle case "manage" in subtab content');
+
+  // 5f: src/main.js session payload retains role and computes state.isAdmin
+  const mainJsCode = fs.readFileSync(path.join(rootDir, 'src', 'main.js'), 'utf-8');
+  assert.ok(mainJsCode.includes("role: userRole") || mainJsCode.includes("resolvedRole"), 'src/main.js must persist role in sessionPayload.user');
+
+  console.log('  ✅ Object signature flexibility, role propagation, and course subnav verified.');
+}
+
 console.log('\n🎉 ALL ADMIN MANAGE TAB & IMAGE MANAGEMENT VERIFICATION TESTS PASSED SUCCESSFULLY!\n');

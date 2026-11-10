@@ -570,6 +570,11 @@ function attachEventHandlers() {
         try { localStorage.removeItem(k); } catch (_) {}
       });
       sessionStorage.clear();
+      state.user = null;
+      state.isAdmin = false;
+      if (state.activeTab === 'manage') state.activeTab = 'checker';
+      if (state.courseSubTab === 'manage') state.courseSubTab = 'dashboard';
+      render();
       try {
         await fetch('/api/auth/sign-out', {
           method: 'POST',
@@ -708,11 +713,13 @@ function attachEventHandlers() {
             name
           });
 
+          const userRole = userRecord.role || 'user';
           const sessionPayload = {
             user: {
               id: userRecord.id || userRecord.userId || 'usr_' + Date.now(),
               email,
               name: userRecord.name || (state.authModalMode === 'signup' ? name : email.split('@')[0]),
+              role: userRole,
               ...(userRecord.token ? { token: userRecord.token } : {})
             },
             token: userRecord.token || null,
@@ -731,6 +738,8 @@ function attachEventHandlers() {
           // Enforce tenant account isolation (purges old user's local cache only if account actually switched)
           handleTenantAccountChange(sessionPayload.user.id);
 
+          state.user = sessionPayload.user;
+          state.isAdmin = Boolean(userRole === 'admin' || userRole === 'administrator');
           state.authModalOpen = false;
           state.authModalLoading = false;
           state.authModalError = '';
@@ -1927,6 +1936,9 @@ Cracked black pepper`;
         state.courseSubTab = sub;
         window.scrollTo({ top: 0, behavior: 'smooth' });
         render();
+        if (sub === 'manage') {
+          loadAdminImageData(state.adminImageProtocol || state.activeDiet || 'lid');
+        }
       }
     });
   });
@@ -4100,13 +4112,16 @@ async function initializeAuthSession() {
     const res = await fetch('/api/auth/get-session', { credentials: 'include', headers: getAuthHeaders() }).catch(() => null);
     if (res && res.ok) {
       const data = await res.json().catch(() => null);
-      if (data?.session?.token && data?.user) {
-        localStorage.setItem('better-auth.session_token', data.session.token);
-        const userWithToken = { ...data.user, token: data.session.token };
+      if (data?.user) {
+        const token = data.session?.token || data.token || (typeof localStorage !== 'undefined' ? localStorage.getItem('better-auth.session_token') : null) || '';
+        if (token) {
+          localStorage.setItem('better-auth.session_token', token);
+        }
+        const userWithToken = { ...data.user, ...(token ? { token } : {}) };
         localStorage.setItem('kosherai_current_user', JSON.stringify(userWithToken));
         localStorage.setItem('kosherai_user_session', JSON.stringify({
-          token: data.session.token,
-          session: data.session,
+          token: token,
+          session: data.session || { token },
           user: userWithToken
         }));
         state.user = userWithToken;
@@ -4114,6 +4129,14 @@ async function initializeAuthSession() {
         handleTenantAccountChange(userWithToken.id);
         window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: { user: userWithToken } }));
       }
+    } else if (res && res.status === 401) {
+      state.user = null;
+      state.isAdmin = false;
+      try {
+        localStorage.removeItem('kosherai_current_user');
+        localStorage.removeItem('kosherai_user_session');
+        localStorage.removeItem('better-auth.session_token');
+      } catch (_) {}
     }
   } catch (_) {}
   state.scanHistory = getLocalScanHistory();

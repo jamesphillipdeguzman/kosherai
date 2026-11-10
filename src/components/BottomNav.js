@@ -1,6 +1,19 @@
 // Mobile-First Bottom Navigation Bar Component
 
-export function renderBottomNav(activeTab = 'checker', appMode = 'diet', isAdmin = false) {
+export function renderBottomNav(activeTabOrOptions = 'checker', maybeAppMode = 'diet', maybeIsAdmin = false) {
+  let activeTab = 'checker';
+  let appMode = 'diet';
+  let isAdmin = false;
+
+  if (activeTabOrOptions && typeof activeTabOrOptions === 'object') {
+    activeTab = activeTabOrOptions.activeTab || activeTabOrOptions.tab || 'checker';
+    appMode = activeTabOrOptions.appMode || activeTabOrOptions.mode || 'diet';
+    isAdmin = Boolean(activeTabOrOptions.isAdmin);
+  } else {
+    activeTab = activeTabOrOptions || 'checker';
+    appMode = maybeAppMode || 'diet';
+    isAdmin = Boolean(maybeIsAdmin);
+  }
   const manageTab = {
     id: 'manage',
     label: 'Manage',

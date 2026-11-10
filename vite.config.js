@@ -26,7 +26,7 @@ export default defineConfig({
           if (url.pathname.startsWith('/api/auth')) {
             try {
               const { toNodeHandler } = await import('better-auth/node');
-              const { auth } = await import('./lib/auth.ts');
+              const { auth } = await import('./lib/auth.js');
               return toNodeHandler(auth)(req, res);
             } catch (err) {
               console.error('[Vite Better Auth API Error]:', err);

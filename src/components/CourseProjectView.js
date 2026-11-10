@@ -37,6 +37,7 @@ import { getHouseholdMembers, isOcrScanEnabled } from '../services/storage.js';
 import { detectOverBuying, renderOverBuyingAlertsHtml } from '../services/overBuyingDetector.js';
 import { renderHouseholdInsightsDashboard } from './HouseholdInsightsView.js';
 import { renderSmartMealPlanner, renderInventoryModal } from './SmartMealPlanningView.js';
+import { renderIngredientImageAdminModal } from './IngredientImageAdminModal.js';
 
 export function handleDownloadClick(e, exportFn) {
   if (e && typeof e.stopPropagation === 'function') {
@@ -161,6 +162,11 @@ export function renderCourseProjectView(state = {}) {
           <button class="${getSubNavClasses('export')}" data-subtab="export">
             <span class="nav-icon text-sm select-none">📁</span> CSV Export & Report
           </button>
+          ${state.isAdmin ? `
+            <button class="${getSubNavClasses('manage')}" data-subtab="manage">
+              <span class="nav-icon text-sm select-none">🖼️</span> Manage Photos
+            </button>
+          ` : ''}
         </div>
       </div>
 
@@ -197,6 +203,23 @@ function renderSubTabContent(subTab, state, comparison, config) {
       return renderMealPlanTab(state);
     case 'export':
       return renderExportTab(comparison, config);
+    case 'manage':
+      return state.isAdmin ? renderIngredientImageAdminModal({
+        activeProtocol: state.adminImageProtocol || state.activeDiet || 'lid',
+        stats: state.adminImageStats,
+        mappings: state.adminImageMappings,
+        searchQuery: state.adminImageSearchQuery,
+        statusFilter: state.adminImageStatusFilter,
+        statusMessage: state.adminImageStatusMsg,
+        uploadFormOpen: state.adminImageUploadFormOpen,
+        selectedIngredientId: state.adminImageSelectedIngredientId,
+        uploadPreviewUrl: state.adminImageUploadPreviewUrl,
+        selectedFileName: state.adminImageSelectedFile?.name || null,
+        selectedFileSize: state.adminImageSelectedFile?.size || null,
+        isUploading: state.adminImageUploading,
+        isDiscovering: state.adminImageDiscovering,
+        embedded: true
+      }) : renderDashboardTab(comparison, config, state);
     default:
       return renderDashboardTab(comparison, config, state);
   }
