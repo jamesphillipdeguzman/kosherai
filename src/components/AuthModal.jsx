@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { handleTenantAccountChange } from '../services/courseProjectStorage.js';
+import { cleanAuthUrlIfAuthenticated } from '../services/authNavigation.js';
 export { renderAuthModalHtml, authenticateUser, isValidEmail } from './AuthModal.js';
 
 /**
@@ -140,6 +141,7 @@ export default function AuthModal({ isOpen, initialMode = 'signin', onClose, onA
       }
 
       if (typeof window !== 'undefined') {
+        cleanAuthUrlIfAuthenticated(fullUser);
         window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: sessionPayload }));
         window.dispatchEvent(new CustomEvent('kosherai:sync-data'));
       }

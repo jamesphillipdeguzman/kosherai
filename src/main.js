@@ -29,6 +29,13 @@ import { renderCourseProjectView, createReceiptItemRowHtml } from './components/
 import { normalizeWeek } from './utils/weekNormalization.js';
 import { parseQuantityAndUnit, createManualItemRowHtml } from './components/ManualTripModal.js';
 import { renderAuthModalHtml, authenticateUser, isValidEmail } from './components/AuthModal.jsx';
+import {
+  isAuthPathname,
+  getAuthModeFromPathname,
+  cleanAuthUrlIfAuthenticated,
+  setAuthUrl,
+  clearAuthUrlIfOnAuthPath
+} from './services/authNavigation.js';
 import { getAuthHeaders, getClientAuthToken } from './services/authHeaders.js';
 import {
   toggleRecipeLike,
@@ -635,6 +642,7 @@ function attachEventHandlers() {
       state.authModalMode = 'signin';
       state.authModalError = '';
       state.authModalLoading = false;
+      setAuthUrl('signin');
       render();
     });
   }
@@ -647,6 +655,7 @@ function attachEventHandlers() {
       state.authModalMode = 'signup';
       state.authModalError = '';
       state.authModalLoading = false;
+      setAuthUrl('signup');
       render();
     });
   }
@@ -689,6 +698,7 @@ function attachEventHandlers() {
       authCloseBtn.addEventListener('click', () => {
         state.authModalOpen = false;
         state.authModalError = '';
+        clearAuthUrlIfOnAuthPath();
         render();
       });
     }
@@ -699,6 +709,7 @@ function attachEventHandlers() {
         if (e.target === authOverlay && !state.authModalLoading) {
           state.authModalOpen = false;
           state.authModalError = '';
+          clearAuthUrlIfOnAuthPath();
           render();
         }
       });
@@ -711,6 +722,7 @@ function attachEventHandlers() {
         btn.addEventListener('click', () => {
           state.authModalMode = 'signin';
           state.authModalError = '';
+          setAuthUrl('signin');
           render();
         });
       }
@@ -723,6 +735,7 @@ function attachEventHandlers() {
         btn.addEventListener('click', () => {
           state.authModalMode = 'signup';
           state.authModalError = '';
+          setAuthUrl('signup');
           render();
         });
       }
@@ -838,6 +851,10 @@ function attachEventHandlers() {
           state.authModalLoading = false;
           state.authModalError = '';
           state.authModalValues = {};
+
+          // Automatically clean up auth URLs (/login, /sign-up) to '/'
+          cleanAuthUrlIfAuthenticated(sessionPayload.user);
+
           render();
 
           // Trigger refresh of user's trips and scans
@@ -4090,6 +4107,8 @@ window.addEventListener('kosherai:auth-changed', (e) => {
   if (u && typeof u === 'object') {
     state.user = u;
     state.isAdmin = Boolean(u.role === 'admin' || u.role === 'administrator');
+    state.authModalOpen = false;
+    cleanAuthUrlIfAuthenticated(u);
     if (state.isAdmin && (state.activeTab === 'manage' || state.courseSubTab === 'manage' || state.adminImageModalOpen)) {
       loadAdminImageData(state.adminImageProtocol || state.activeDiet || 'lid');
     }
@@ -4137,6 +4156,7 @@ document.addEventListener('click', (e) => {
     state.authModalMode = 'signin';
     state.authModalError = '';
     state.authModalLoading = false;
+    setAuthUrl('signin');
     render();
     return;
   }
@@ -4148,6 +4168,7 @@ document.addEventListener('click', (e) => {
     state.authModalMode = 'signup';
     state.authModalError = '';
     state.authModalLoading = false;
+    setAuthUrl('signup');
     render();
     return;
   }
@@ -4156,6 +4177,7 @@ document.addEventListener('click', (e) => {
   if (authOverlay && e.target === authOverlay && !state.authModalLoading) {
     state.authModalOpen = false;
     state.authModalError = '';
+    clearAuthUrlIfOnAuthPath();
     render();
     return;
   }
@@ -4167,6 +4189,7 @@ window.addEventListener('keydown', (e) => {
     if (state.authModalOpen) {
       state.authModalOpen = false;
       state.authModalError = '';
+      clearAuthUrlIfOnAuthPath();
       render();
     } else if (state.scannedReceiptAudit) {
       state.scannedReceiptAudit = null;
@@ -4308,6 +4331,12 @@ async function initializeAuthSession() {
         state.user = userWithToken;
         state.isAdmin = Boolean(userWithToken.role === 'admin' || userWithToken.role === 'administrator');
         handleTenantAccountChange(userWithToken.id);
+
+        // Authoritative Better Auth session verified:
+        // Close modal and replace auth URLs (/login, /sign-up) with '/' without reload
+        state.authModalOpen = false;
+        cleanAuthUrlIfAuthenticated(userWithToken);
+
         window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: { user: userWithToken } }));
       }
     } else if (res && res.status === 401) {
@@ -4318,6 +4347,13 @@ async function initializeAuthSession() {
         localStorage.removeItem('kosherai_user_session');
         localStorage.removeItem('better-auth.session_token');
       } catch (_) {}
+
+      // Verified signed out: if on an auth pathname, ensure modal is open in appropriate mode
+      const authMode = getAuthModeFromPathname();
+      if (authMode) {
+        state.authModalOpen = true;
+        state.authModalMode = authMode;
+      }
     }
   } catch (_) {}
   state.scanHistory = getLocalScanHistory();
@@ -4327,6 +4363,11 @@ async function initializeAuthSession() {
 }
 
 (async function bootstrapApp() {
+  const initialAuthMode = getAuthModeFromPathname();
+  if (initialAuthMode && !state.user) {
+    state.authModalOpen = true;
+    state.authModalMode = initialAuthMode;
+  }
   render();
   try {
     initIngredientImageCache(state.activeDiet);
@@ -4345,6 +4386,21 @@ async function initializeAuthSession() {
 })();
 
 if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', () => {
+    const authMode = getAuthModeFromPathname();
+    if (authMode) {
+      if (!state.user) {
+        state.authModalOpen = true;
+        state.authModalMode = authMode;
+        render();
+      } else {
+        cleanAuthUrlIfAuthenticated(state.user);
+      }
+    } else if (state.authModalOpen) {
+      state.authModalOpen = false;
+      render();
+    }
+  });
   window.addEventListener('kosherai:ingredient-images-updated', () => {
     if (state.activeTab === 'checker' || state.activeTab === 'manage' || state.courseSubTab === 'manage' || state.adminImageModalOpen) {
       if (state.activeTab === 'manage' || state.courseSubTab === 'manage' || state.adminImageModalOpen) {
