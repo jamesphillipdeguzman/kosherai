@@ -450,17 +450,18 @@ export default function AdminIngredientImagesModal({
                   )}
                 </div>
 
-                {/* Upload Image Preview Container - Bounded h-48 sm:h-56 with object-contain */}
+                {/* Upload Image Preview Container - Bounded h-72 sm:h-80 with object-contain */}
                 <div>
                   <label className="block text-xs font-bold text-slate-300 uppercase tracking-wide mb-1.5">
                     Image Preview
                   </label>
-                  <div className="admin-image-preview-container relative w-full h-48 sm:h-56 rounded-xl overflow-hidden bg-black/60 flex items-center justify-center shadow-inner">
+                  <div className="admin-image-preview-container relative w-full h-72 sm:h-80 min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 flex items-center justify-center p-3 shadow-inner">
                     {uploadPreviewUrl ? (
                       <img
                         src={uploadPreviewUrl}
                         alt="Upload Preview"
-                        className="admin-image-preview-img w-full h-full object-contain"
+                        className="admin-preview-bounded-img block w-auto h-auto max-w-full max-h-full object-contain rounded-xl"
+                        style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                         loading="eager"
                       />
                     ) : savedImageUrl ? (
@@ -468,10 +469,11 @@ export default function AdminIngredientImagesModal({
                         <img
                           src={savedImageUrl}
                           alt="Current Saved Photograph"
-                          className="admin-image-preview-img w-full h-full object-contain opacity-60"
+                          className="admin-preview-bounded-img block w-auto h-auto max-w-full max-h-full object-contain rounded-xl opacity-75"
+                          style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                           loading="eager"
                         />
-                        <span className="text-[11px] text-slate-400 mt-1 font-medium select-none">Current saved photo — choose or drop new file above to replace</span>
+                        <span className="text-[11px] text-slate-400 mt-2 font-medium select-none">Current saved photo — choose or drop new file above to replace</span>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center text-slate-500 text-xs py-4 text-center select-none">
@@ -537,13 +539,14 @@ export default function AdminIngredientImagesModal({
                 )}
               </div>
 
-              {/* Bounded Image Container - Fixed responsive height h-48 sm:h-56 with object-contain */}
-              <div className="admin-image-preview-container relative w-full h-48 sm:h-56 rounded-xl overflow-hidden bg-black/60 flex items-center justify-center shadow-inner">
+              {/* Bounded Image Container - Fixed responsive height h-72 sm:h-80 with object-contain */}
+              <div className="admin-image-preview-container relative w-full h-72 sm:h-80 min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 flex items-center justify-center p-3 shadow-inner">
                 {savedImageUrl ? (
                   <img
                     src={savedImageUrl}
                     alt={selectedIngredient?.name || 'Active ingredient photo'}
-                    className="admin-image-preview-img w-full h-full object-contain"
+                    className="admin-preview-bounded-img admin-image-preview-img block w-auto h-auto max-w-full max-h-full object-contain rounded-xl"
+                    style={{ width: 'auto', height: 'auto', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                     loading="eager"
                   />
                 ) : (

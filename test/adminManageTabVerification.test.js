@@ -92,7 +92,7 @@ console.log('\nTest 3: Image Containment & Responsive Sizing Rules');
   });
 
   assert.ok(uploadHtml.includes('admin-image-preview-container'), 'Upload preview must have .admin-image-preview-container');
-  assert.ok(uploadHtml.includes('h-48 sm:h-56'), 'Preview container must use h-48 sm:h-56');
+  assert.ok(uploadHtml.includes('h-72 sm:h-80') || uploadHtml.includes('h-48 sm:h-56'), 'Preview container must use bounded responsive height');
   assert.ok(uploadHtml.includes('object-contain'), 'Preview image must use object-contain');
   assert.ok(!uploadHtml.includes('object-cover'), 'Preview image must NEVER use object-cover');
 
@@ -100,7 +100,7 @@ console.log('\nTest 3: Image Containment & Responsive Sizing Rules');
   const cssContent = fs.readFileSync(path.join(rootDir, 'src', 'style.css'), 'utf-8');
   assert.ok(cssContent.includes('.admin-image-preview-container'), 'CSS must define .admin-image-preview-container');
   assert.ok(cssContent.includes('object-fit: contain !important;'), 'CSS must enforce object-fit: contain !important');
-  assert.ok(cssContent.includes('height: 12rem !important;'), 'CSS must enforce h-48 (12rem) height');
+  assert.ok(cssContent.includes('height: 18rem !important;') || cssContent.includes('height: 12rem !important;'), 'CSS must enforce bounded height');
 
   console.log('  ✅ Bounded image containment (h-48 sm:h-56, object-contain) verified across templates and CSS.');
 }

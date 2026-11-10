@@ -1040,6 +1040,33 @@ function attachEventHandlers() {
     });
   }
 
+  // Admin Ingredient Card Selection (Click list card to select and view preview)
+  document.querySelectorAll('.admin-ingredient-card[data-select-ingredient]').forEach(card => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      const ingId = card.getAttribute('data-select-ingredient');
+      if (ingId) {
+        state.adminImageSelectedIngredientId = ingId;
+        state.adminImageUploadPreviewUrl = null;
+        state.adminImageSelectedFile = null;
+        render();
+      }
+    });
+  });
+
+  const uploadIngSelect = document.querySelector('#upload-ingredient-select');
+  if (uploadIngSelect) {
+    uploadIngSelect.addEventListener('change', (e) => {
+      const ingId = e.target.value;
+      if (ingId) {
+        state.adminImageSelectedIngredientId = ingId;
+        state.adminImageUploadPreviewUrl = null;
+        state.adminImageSelectedFile = null;
+        render();
+      }
+    });
+  }
+
   document.querySelectorAll('.admin-upload-for-item-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const ingId = e.currentTarget.getAttribute('data-ingredient-id');
