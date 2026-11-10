@@ -125,36 +125,39 @@ console.log('\nTest 4: Gallery Card Presentation, Action Alignment & Metadata');
 }
 
 // ============================================================================
-// TEST 5: React AdminIngredientImagesModal.jsx Consistent Image Containment
+// TEST 5: React AdminIngredientImagesView / Modal Responsive Grid Gallery
 // ============================================================================
-console.log('\nTest 5: React AdminIngredientImagesModal.jsx Preview & Active Image Containment');
+console.log('\nTest 5: React AdminIngredientImagesModal.jsx Responsive Grid Gallery & Card Sizing');
 {
   const fs = await import('node:fs');
   const jsxCode = fs.readFileSync('src/components/AdminIngredientImagesModal.jsx', 'utf8');
 
-  // Verify bounded image container has h-44 sm:h-48, overflow-hidden, bg-black/60, and centered alignment
-  assert.ok(jsxCode.includes('h-44 sm:h-48') || jsxCode.includes('h-48 sm:h-52'), 'Image container must use fixed responsive height');
-  assert.ok(jsxCode.includes('overflow-hidden'), 'Image container must enforce overflow-hidden');
-  assert.ok(jsxCode.includes('bg-black/60') || jsxCode.includes('bg-slate-950'), 'Image container must have dark background');
-  assert.ok(jsxCode.includes('flex items-center justify-center'), 'Image container must center the image');
+  // Verify responsive grid columns across breakpoints
+  assert.ok(jsxCode.includes('grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3'), 'Must render responsive grid (grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3)');
 
-  // Verify image element containment styling (preserving aspect ratio without zooming/clipping)
-  assert.ok(jsxCode.includes('object-contain'), 'Image must use object-contain');
-  assert.ok(jsxCode.includes('w-full h-full object-contain') || jsxCode.includes('max-h-full max-w-full w-auto h-auto object-contain'), 'Image must enforce strict containment');
+  // Verify thumbnail container sizing (~96px to 110px: h-24 sm:h-28)
+  assert.ok(jsxCode.includes('h-24 sm:h-28'), 'Thumbnail container must use compact responsive height (h-24 sm:h-28)');
+  assert.ok(jsxCode.includes('overflow-hidden'), 'Thumbnail container must enforce overflow-hidden');
+  assert.ok(jsxCode.includes('bg-slate-950'), 'Thumbnail container must have dark background');
+  assert.ok(jsxCode.includes('flex items-center justify-center'), 'Thumbnail container must center contents');
 
-  // Verify Active Image Controls are visible below the container
-  assert.ok(jsxCode.includes('Active Ingredient Photo'), 'Must render Active Ingredient Photo header');
-  assert.ok(jsxCode.includes('Replace Photo') || jsxCode.includes('Upload Photo'), 'Must display Replace/Upload Photo button below image');
-  assert.ok(jsxCode.includes('selectedIngredient?.id') || jsxCode.includes('activeIngredientId'), 'Must display ingredient ID');
-  assert.ok(jsxCode.includes('selectedMapping?.public_id'), 'Must display Cloudinary public ID when mapped');
+  // Verify thumbnail image scaling with object-cover and hover scale
+  assert.ok(jsxCode.includes('object-cover'), 'Grid thumbnail must use object-cover');
 
-  // Verify thumbnail containment in list
-  assert.ok(jsxCode.includes('max-h-full max-w-full w-auto h-auto object-contain rounded-md'), 'List thumbnails must use object-contain rounded-md (preventing zoom/crop)');
+  // Verify status indicators for mapped and missing
+  assert.ok(jsxCode.includes("'✓'") || jsxCode.includes('"✓"'), 'Mapped items must display checkmark badge');
+  assert.ok(jsxCode.includes("'Missing'") || jsxCode.includes('"Missing"'), 'Missing items must display Missing badge');
 
-  // Verify no object-cover is used on the active or preview images
-  assert.ok(!jsxCode.includes('object-cover'), 'Must not use object-cover which crops and zooms images');
+  // Verify quick Replace / Upload action
+  assert.ok(jsxCode.includes('Replace') && jsxCode.includes('+ Upload'), 'Card must provide quick Replace / + Upload triggers');
 
-  console.log('  ✅ React AdminIngredientImagesModal preview and active image containment verified.');
+  // Verify bottom clearance for bottom navigation
+  assert.ok(jsxCode.includes('pb-32') || jsxCode.includes('pb-28'), 'Container must have bottom clearance (pb-32 or pb-28)');
+
+  // Verify centered inspection modal
+  assert.ok(jsxCode.includes('fixed inset-0') && jsxCode.includes('backdrop-blur-sm'), 'Must support clean centered inspection modal');
+
+  console.log('  ✅ React AdminIngredientImagesView compact responsive grid gallery verified.');
 }
 
 console.log('\n======================================================================');

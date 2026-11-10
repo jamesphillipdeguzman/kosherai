@@ -77,39 +77,35 @@ console.log('\n3. AdminIngredientImagesModal.jsx Code Inspection');
 {
   const jsxCode = fs.readFileSync('src/components/AdminIngredientImagesModal.jsx', 'utf8');
 
-  // Modal constraints: max-w-lg and max-h-[85vh]
+  // Grid Gallery constraints: responsive grid columns
   assert.ok(
-    jsxCode.includes('max-w-lg max-h-[85vh]'),
-    'Modal container must enforce max-w-lg and max-h-[85vh]'
+    jsxCode.includes('grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3'),
+    'Must render responsive grid (grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3)'
   );
 
-  // Image container: h-72 sm:h-80 or h-48 sm:h-56, overflow-hidden, dark bg, centered
+  // Thumbnail container: h-24 sm:h-28, overflow-hidden, dark bg, centered
   assert.ok(
-    jsxCode.includes('h-72 sm:h-80') || jsxCode.includes('h-48 sm:h-56') || jsxCode.includes('h-44 sm:h-48'),
-    'Image container must use h-72 sm:h-80 or h-48 sm:h-56'
+    jsxCode.includes('h-24 sm:h-28'),
+    'Thumbnail container must use h-24 sm:h-28'
   );
   assert.ok(
-    jsxCode.includes('overflow-hidden') && (jsxCode.includes('bg-black/60') || jsxCode.includes('bg-slate-950')) && jsxCode.includes('flex items-center justify-center'),
-    'Image container must use overflow-hidden, dark background, and centering'
-  );
-
-  // Image scaling: object-contain, loading="eager"
-  assert.ok(
-    jsxCode.includes('object-contain'),
-    'Image element must enforce object-contain'
-  );
-  assert.ok(
-    jsxCode.includes('loading="eager"'),
-    'Image element must specify loading="eager"'
+    jsxCode.includes('overflow-hidden') && jsxCode.includes('bg-slate-950') && jsxCode.includes('flex items-center justify-center'),
+    'Thumbnail container must use overflow-hidden, dark background, and centering'
   );
 
-  // No object-cover
+  // Thumbnail scaling: object-cover
   assert.ok(
-    !jsxCode.includes('object-cover'),
-    'Admin modal must NOT use object-cover (which causes zoom and crop)'
+    jsxCode.includes('object-cover'),
+    'Thumbnail image must use object-cover'
   );
 
-  console.log('  ✅ React AdminIngredientImagesModal constraints verified.');
+  // Quick Replace / Upload
+  assert.ok(
+    jsxCode.includes('Replace') && jsxCode.includes('+ Upload'),
+    'Card must provide quick Replace / + Upload'
+  );
+
+  console.log('  ✅ React AdminIngredientImagesModal Grid Gallery verified.');
 }
 
 // ----------------------------------------------------------------------------

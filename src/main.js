@@ -1040,15 +1040,56 @@ function attachEventHandlers() {
     });
   }
 
-  // Admin Ingredient Card Selection (Click list card to select and view preview)
+  const adminImageCancelUploadBtnSecondary = document.querySelector('#admin-image-cancel-upload-btn-secondary');
+  if (adminImageCancelUploadBtnSecondary) {
+    adminImageCancelUploadBtnSecondary.addEventListener('click', () => {
+      state.adminImageUploadFormOpen = false;
+      state.adminImageUploadPreviewUrl = null;
+      state.adminImageSelectedFile = null;
+      render();
+    });
+  }
+
+  // Admin Ingredient Card Selection (Click card to inspect or trigger upload modal)
   document.querySelectorAll('.admin-ingredient-card[data-select-ingredient]').forEach(card => {
     card.addEventListener('click', (e) => {
-      if (e.target.closest('button')) return;
+      if (e.target.closest('button') || e.target.closest('label') || e.target.closest('input')) return;
       const ingId = card.getAttribute('data-select-ingredient');
       if (ingId) {
         state.adminImageSelectedIngredientId = ingId;
+        state.adminImageUploadFormOpen = true;
         state.adminImageUploadPreviewUrl = null;
         state.adminImageSelectedFile = null;
+        render();
+      }
+    });
+  });
+
+  // Quick file input on grid gallery card
+  document.querySelectorAll('.admin-grid-card-file-input').forEach(input => {
+    input.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      const ingredientId = e.target.getAttribute('data-ingredient-id');
+      if (!file || !ingredientId) return;
+
+      state.adminImageSelectedIngredientId = ingredientId;
+      state.adminImageUploading = true;
+      state.adminImageStatusMsg = `Uploading photograph for ${ingredientId} to Cloudinary...`;
+      render();
+
+      try {
+        await uploadIngredientImage({
+          file,
+          protocolId: state.adminImageProtocol || 'lid',
+          ingredientId,
+          status: 'active'
+        });
+        state.adminImageStatusMsg = `Successfully uploaded photograph for ${ingredientId}!`;
+        await loadAdminImageData(state.adminImageProtocol || 'lid');
+      } catch (err) {
+        state.adminImageStatusMsg = `Upload error: ${err.message}`;
+      } finally {
+        state.adminImageUploading = false;
         render();
       }
     });
