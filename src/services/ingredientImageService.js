@@ -16,6 +16,10 @@ function getStorageKey(protocolId = 'lid') {
   return `kosherai_ingredient_images_${protocolId.toLowerCase()}`;
 }
 
+function getAdminStorageKey(protocolId = 'lid') {
+  return `kosherai_admin_image_summary_${protocolId.toLowerCase()}`;
+}
+
 /**
  * Loads cached mappings from localStorage into inMemoryCache
  */
@@ -36,6 +40,153 @@ export function initIngredientImageCache(protocolId = 'lid', reload = false) {
     }
   }
   return inMemoryCache[normProto];
+}
+
+/**
+ * Retrieves valid cached admin summary and mappings for a protocol, if available.
+ * Returns null if no cache exists.
+ */
+export function getCachedAdminSummary(protocolId = 'lid') {
+  const normProto = (protocolId || 'lid').toLowerCase();
+  if (typeof localStorage === 'undefined') return null;
+
+  // 1. Direct admin summary cache
+  try {
+    const raw = localStorage.getItem(getAdminStorageKey(normProto));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.mappings) && parsed.mappings.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (_) {}
+
+  // 2. Fallback: Reconstruct from standard ingredient images cache
+  try {
+    const cachedImages = initIngredientImageCache(normProto);
+    if (cachedImages && typeof cachedImages === 'object') {
+      const mappings = [];
+      for (const [key, val] of Object.entries(cachedImages)) {
+        if (!val) continue;
+        if (typeof val === 'string') {
+          mappings.push({
+            id: `cache_${normProto}_${key}`,
+            protocol_id: normProto,
+            ingredient_id: key,
+            secure_url: val,
+            public_id: val.split('/upload/')[1] || key,
+            status: 'active'
+          });
+        } else if (typeof val === 'object' && (val.secure_url || val.url || val.public_id)) {
+          mappings.push({
+            id: val.id || `cache_${normProto}_${val.ingredient_id || key}`,
+            protocol_id: val.protocol_id || normProto,
+            ingredient_id: val.ingredient_id || key,
+            secure_url: val.secure_url || val.url || (val.public_id ? buildCloudinaryUrl(val.public_id) : ''),
+            public_id: val.public_id || key,
+            status: val.status || 'active'
+          });
+        }
+      }
+
+      if (mappings.length > 0) {
+        return {
+          success: true,
+          protocol: normProto,
+          mappings,
+          stats: {
+            totalIngredients: 36,
+            withImage: mappings.length,
+            missingImage: Math.max(0, 36 - mappings.length),
+            pendingReview: 0
+          }
+        };
+      }
+    }
+  } catch (_) {}
+
+  return null;
+}
+
+/**
+ * Persists refreshed admin summary and mappings into localStorage,
+ * and updates inMemoryCache for instant O(1) synchronous lookups.
+ */
+export function saveAdminImageCache(protocolId = 'lid', summaryData) {
+  if (!summaryData || typeof localStorage === 'undefined') return;
+  const normProto = (protocolId || 'lid').toLowerCase();
+
+  try {
+    localStorage.setItem(getAdminStorageKey(normProto), JSON.stringify(summaryData));
+  } catch (_) {}
+
+  // Synchronize standard image cache so public/checker lookups also benefit immediately
+  if (Array.isArray(summaryData.mappings)) {
+    const imagesMap = {};
+    for (const m of summaryData.mappings) {
+      if (m.status === 'active' && (m.secure_url || m.url)) {
+        imagesMap[m.ingredient_id] = {
+          id: m.id,
+          protocol_id: m.protocol_id || normProto,
+          ingredient_id: m.ingredient_id,
+          public_id: m.public_id,
+          secure_url: m.secure_url || m.url,
+          status: m.status
+        };
+      }
+    }
+    inMemoryCache[normProto] = imagesMap;
+    try {
+      localStorage.setItem(getStorageKey(normProto), JSON.stringify(imagesMap));
+    } catch (_) {}
+  }
+}
+
+/**
+ * Standardized single helper for resolving ingredient gallery images across
+ * gallery thumbnails, inspection dialog, and upload/replacement states.
+ */
+export function resolveGalleryIngredientImage(item, mapping, protocolId = 'lid') {
+  const normProto = (protocolId || 'lid').toLowerCase();
+
+  // 1. Direct mapping from database / API
+  if (mapping) {
+    const secureUrl = mapping.secure_url || mapping.url || (mapping.public_id ? buildCloudinaryUrl(mapping.public_id, mapping.version || mapping.asset_version) : null);
+    if (secureUrl && /^https?:\/\//i.test(secureUrl)) {
+      return {
+        url: secureUrl,
+        isMapped: mapping.status !== 'inactive',
+        isPending: mapping.status === 'pending_review',
+        publicId: mapping.public_id || null,
+        status: mapping.status || 'active',
+        mapping
+      };
+    }
+  }
+
+  // 2. Lookup in cache by item id / name / slug
+  const itemId = typeof item === 'object' ? item.id : item;
+  const itemUrl = typeof item === 'object' ? item.imageUrl : null;
+  const cachedUrl = getIngredientImageUrl(itemId, normProto, itemUrl);
+  if (cachedUrl && /^https?:\/\//i.test(cachedUrl)) {
+    return {
+      url: cachedUrl,
+      isMapped: true,
+      isPending: false,
+      publicId: cachedUrl.split('/upload/')[1] || itemId,
+      status: 'active',
+      mapping: null
+    };
+  }
+
+  return {
+    url: null,
+    isMapped: false,
+    isPending: false,
+    publicId: null,
+    status: 'missing',
+    mapping: null
+  };
 }
 
 /**
@@ -360,7 +511,11 @@ export async function fetchAdminImageSummary(protocol = 'all', status = 'all', s
     throw new Error(err.message || `Admin summary failed with status ${res.status}`);
   }
 
-  return await res.json();
+  const data = await res.json();
+  if (data && data.success) {
+    saveAdminImageCache(protocol, data);
+  }
+  return data;
 }
 
 /**
@@ -419,11 +574,33 @@ export async function deleteIngredientMapping(id, protocol = 'lid', ingredientId
     }
   }
 
+  // Also remove from admin summary cache if present
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const summaryKey = getAdminStorageKey(normProto);
+      const raw = localStorage.getItem(summaryKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.mappings)) {
+          parsed.mappings = parsed.mappings.filter(m => m.id !== id && m.ingredient_id !== ingredientId);
+          if (parsed.stats && typeof parsed.stats.withImage === 'number') {
+            parsed.stats.withImage = Math.max(0, parsed.stats.withImage - 1);
+            parsed.stats.missingImage = Math.min(parsed.stats.totalIngredients || 36, (parsed.stats.missingImage || 0) + 1);
+          }
+          localStorage.setItem(summaryKey, JSON.stringify(parsed));
+        }
+      }
+    } catch (_) {}
+  }
+
   return await res.json();
 }
 
 export default {
   initIngredientImageCache,
+  getCachedAdminSummary,
+  saveAdminImageCache,
+  resolveGalleryIngredientImage,
   buildCloudinaryUrl,
   getIngredientImageUrl,
   fetchIngredientImages,

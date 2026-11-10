@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import '../styles/admin-ingredient-gallery.css';
 import { LID_DATABASE } from '../data/lidDatabase.js';
+import { resolveGalleryIngredientImage } from '../services/ingredientImageService.js';
 
 export default function AdminIngredientImagesView({
   ingredients = LID_DATABASE,
@@ -17,15 +18,17 @@ export default function AdminIngredientImagesView({
   // Compute metrics
   const mappedList = useMemo(() => {
     return ingredients.filter((item) => {
-      const mapping = imageMappings[item.name] || imageMappings[item.id] || item.imageUrl;
-      return Boolean(mapping);
+      const mapping = imageMappings[item.name] || imageMappings[item.id];
+      const resolved = resolveGalleryIngredientImage(item, mapping, selectedProtocol);
+      return Boolean(resolved.isMapped);
     });
-  }, [ingredients, imageMappings]);
+  }, [ingredients, imageMappings, selectedProtocol]);
 
   const filteredItems = useMemo(() => {
     return ingredients.filter((item) => {
-      const mapping = imageMappings[item.name] || imageMappings[item.id] || item.imageUrl;
-      const isMapped = Boolean(mapping);
+      const mapping = imageMappings[item.name] || imageMappings[item.id];
+      const resolved = resolveGalleryIngredientImage(item, mapping, selectedProtocol);
+      const isMapped = Boolean(resolved.isMapped);
 
       if (filterStatus === 'mapped' && !isMapped) return false;
       if (filterStatus === 'missing' && isMapped) return false;
@@ -141,8 +144,10 @@ export default function AdminIngredientImagesView({
       {/* 3. Compact Responsive Grid Gallery */}
       <div className="ingredient-gallery grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
         {filteredItems.map((item) => {
-          const imageUrl = imageMappings[item.name] || imageMappings[item.id] || item.imageUrl;
-          const isMapped = Boolean(imageUrl);
+          const mapping = imageMappings[item.name] || imageMappings[item.id];
+          const resolved = resolveGalleryIngredientImage(item, mapping, selectedProtocol);
+          const imageUrl = resolved.url;
+          const isMapped = Boolean(resolved.isMapped && imageUrl);
           const isUploading = uploadingId === (item.id || item.name);
 
           return (

@@ -15,6 +15,9 @@ import { renderItemDetailModal } from './components/ItemDetailModal.js';
 import { renderIngredientImageAdminModal } from './components/IngredientImageAdminModal.js';
 import {
   initIngredientImageCache,
+  getCachedAdminSummary,
+  saveAdminImageCache,
+  resolveGalleryIngredientImage,
   fetchIngredientImages,
   uploadIngredientImage,
   discoverAndMatchCloudinaryAssets,
@@ -264,8 +267,20 @@ const state = {
   adminImageUploadPreviewUrl: null,
   adminImageSelectedFile: null,
   adminImageUploading: false,
-  adminImageDiscovering: false
+  adminImageDiscovering: false,
+  adminImageLoading: false
 };
+
+// Pre-seed admin state from cache immediately on script evaluation
+(() => {
+  try {
+    const cached = getCachedAdminSummary('lid');
+    if (cached && Array.isArray(cached.mappings) && cached.mappings.length > 0) {
+      state.adminImageMappings = cached.mappings;
+      if (cached.stats) state.adminImageStats = cached.stats;
+    }
+  } catch (_) {}
+})();
 
 // Main DOM Render Function
 function render() {
@@ -315,6 +330,7 @@ function render() {
         mappings: state.adminImageMappings,
         searchQuery: state.adminImageSearchQuery,
         statusFilter: state.adminImageStatusFilter,
+        isLoading: state.adminImageLoading,
         statusMessage: state.adminImageStatusMsg,
         uploadFormOpen: state.adminImageUploadFormOpen,
         selectedIngredientId: state.adminImageSelectedIngredientId,
@@ -352,6 +368,7 @@ function render() {
           mappings: state.adminImageMappings,
           searchQuery: state.adminImageSearchQuery,
           statusFilter: state.adminImageStatusFilter,
+          isLoading: state.adminImageLoading,
           statusMessage: state.adminImageStatusMsg,
           uploadFormOpen: state.adminImageUploadFormOpen,
           selectedIngredientId: state.adminImageSelectedIngredientId,
@@ -366,6 +383,18 @@ function render() {
       default:
         activeContentHtml = renderCheckerTab(state);
     }
+  }
+
+  // Automatic Lifecycle Check: Trigger authoritative fetch if Manage is active and uninitialized
+  const isManageActive = Boolean(
+    state.isAdmin && (
+      (state.appMode === 'course' && state.courseSubTab === 'manage') ||
+      (state.appMode !== 'course' && state.activeTab === 'manage') ||
+      state.adminImageModalOpen
+    )
+  );
+  if (isManageActive && state.adminImageMappings.length === 0 && !adminImageActivePromise) {
+    loadAdminImageData(state.adminImageProtocol || state.activeDiet || 'lid');
   }
 
   const currentNavTab = state.appMode === 'course' ? state.courseSubTab : state.activeTab;
@@ -396,6 +425,7 @@ function render() {
       mappings: state.adminImageMappings,
       searchQuery: state.adminImageSearchQuery,
       statusFilter: state.adminImageStatusFilter,
+      isLoading: state.adminImageLoading,
       statusMessage: state.adminImageStatusMsg,
       uploadFormOpen: state.adminImageUploadFormOpen,
       selectedIngredientId: state.adminImageSelectedIngredientId,
@@ -411,18 +441,78 @@ function render() {
   attachEventHandlers();
 }
 
-async function loadAdminImageData(protocol = 'lid') {
-  try {
-    const summary = await fetchAdminImageSummary(protocol, 'all');
-    if (summary && summary.success) {
-      state.adminImageStats = summary.stats || state.adminImageStats;
-      state.adminImageMappings = summary.mappings || [];
-      state.adminImageProtocol = protocol;
+let adminImageLoadToken = 0;
+let adminImageActivePromise = null;
+let adminImageActiveProtocol = null;
+
+async function loadAdminImageData(protocol = 'lid', force = false) {
+  const normProto = (protocol || state.adminImageProtocol || state.activeDiet || 'lid').toLowerCase();
+
+  // 1. Immediately apply cached data if state is unpopulated or protocol changed
+  if (state.adminImageProtocol !== normProto || state.adminImageMappings.length === 0 || force) {
+    const cached = getCachedAdminSummary(normProto);
+    if (cached && Array.isArray(cached.mappings) && cached.mappings.length > 0) {
+      state.adminImageStats = cached.stats || {
+        totalIngredients: 36,
+        withImage: cached.mappings.length,
+        missingImage: Math.max(0, 36 - cached.mappings.length),
+        pendingReview: 0
+      };
+      state.adminImageMappings = cached.mappings;
+      state.adminImageProtocol = normProto;
+      state.adminImageLoading = false;
+      render();
+    } else {
+      state.adminImageProtocol = normProto;
+      state.adminImageLoading = true;
+      render();
     }
-  } catch (err) {
-    console.warn('[AdminImage] Load error:', err);
-    state.adminImageStatusMsg = err.message || 'Failed to load image administration data.';
   }
+
+  // 2. Prevent duplicate concurrent fetches for the same protocol
+  if (adminImageActivePromise && adminImageActiveProtocol === normProto && !force) {
+    return adminImageActivePromise;
+  }
+
+  const thisToken = ++adminImageLoadToken;
+  adminImageActiveProtocol = normProto;
+
+  adminImageActivePromise = (async () => {
+    try {
+      const summary = await fetchAdminImageSummary(normProto, 'all');
+
+      // Check for stale response if protocol switched during flight
+      if (thisToken !== adminImageLoadToken) return;
+
+      if (summary && summary.success) {
+        state.adminImageStats = summary.stats || state.adminImageStats;
+        state.adminImageMappings = summary.mappings || [];
+        state.adminImageProtocol = normProto;
+        state.adminImageLoading = false;
+        state.adminImageStatusMsg = '';
+        saveAdminImageCache(normProto, summary);
+        render(); // <------ GUARANTEE RE-RENDER WITH LIVE AUTHORITATIVE BACKEND DATA!
+      }
+    } catch (err) {
+      if (thisToken !== adminImageLoadToken) return;
+      console.warn('[AdminImage] Load error:', err);
+      state.adminImageLoading = false;
+      // Retain valid cached mappings if available; do not falsely report 0 images
+      if (state.adminImageMappings.length === 0) {
+        state.adminImageStatusMsg = err.message || 'Failed to load image administration data.';
+      } else {
+        state.adminImageStatusMsg = 'Offline mode: displaying cached image mappings.';
+      }
+      render();
+    } finally {
+      if (thisToken === adminImageLoadToken) {
+        adminImageActivePromise = null;
+        adminImageActiveProtocol = null;
+      }
+    }
+  })();
+
+  return adminImageActivePromise;
 }
 
 // Event Delegation & Handler Attachments
@@ -3981,6 +4071,9 @@ window.addEventListener('kosherai:auth-changed', (e) => {
   if (u && typeof u === 'object') {
     state.user = u;
     state.isAdmin = Boolean(u.role === 'admin' || u.role === 'administrator');
+    if (state.isAdmin && (state.activeTab === 'manage' || state.courseSubTab === 'manage' || state.adminImageModalOpen)) {
+      loadAdminImageData(state.adminImageProtocol || state.activeDiet || 'lid');
+    }
   } else {
     state.user = null;
     state.isAdmin = false;
@@ -4234,8 +4327,12 @@ async function initializeAuthSession() {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('kosherai:ingredient-images-updated', () => {
-    if (state.activeTab === 'checker' || state.adminImageModalOpen) {
-      render();
+    if (state.activeTab === 'checker' || state.activeTab === 'manage' || state.courseSubTab === 'manage' || state.adminImageModalOpen) {
+      if (state.activeTab === 'manage' || state.courseSubTab === 'manage' || state.adminImageModalOpen) {
+        loadAdminImageData(state.adminImageProtocol || state.activeDiet || 'lid');
+      } else {
+        render();
+      }
     }
   });
 }

@@ -4,7 +4,7 @@
 
 import { LID_DATABASE, getCategoryIcon } from '../data/lidDatabase.js';
 import { DIET_PROFILES } from '../data/dietProfiles.js';
-import { getIngredientImageUrl } from '../services/ingredientImageService.js';
+import { getIngredientImageUrl, resolveGalleryIngredientImage } from '../services/ingredientImageService.js';
 
 export function renderIngredientImageAdminModal(props = {}) {
   const {
@@ -36,6 +36,35 @@ export function renderIngredientImageAdminModal(props = {}) {
     }
   }
 
+  // Pre-seed any cached mappings that might not be in the passed mappings array yet
+  for (const item of LID_DATABASE) {
+    if (!mappingByIngredientId[item.id]) {
+      const resolved = resolveGalleryIngredientImage(item, null, activeProtocol);
+      if (resolved.isMapped && resolved.url) {
+        mappingByIngredientId[item.id] = {
+          id: `cached_${activeProtocol}_${item.id}`,
+          protocol_id: activeProtocol,
+          ingredient_id: item.id,
+          secure_url: resolved.url,
+          public_id: resolved.publicId || item.id,
+          status: 'active'
+        };
+      }
+    }
+  }
+
+  // Calculate live authoritative stats ensuring accurate counters on initial load
+  const mappedCount = Object.keys(mappingByIngredientId).filter(k => mappingByIngredientId[k]?.status === 'active').length;
+  const reviewCount = Object.keys(mappingByIngredientId).filter(k => mappingByIngredientId[k]?.status === 'pending_review').length;
+  const effectiveStats = {
+    totalIngredients: stats.totalIngredients || LID_DATABASE.length,
+    withImage: (stats.withImage && stats.withImage > 0) ? stats.withImage : mappedCount,
+    missingImage: (stats.withImage && stats.withImage > 0 && stats.missingImage !== undefined) 
+      ? stats.missingImage 
+      : Math.max(0, (stats.totalIngredients || LID_DATABASE.length) - mappedCount),
+    pendingReview: (stats.pendingReview && stats.pendingReview > 0) ? stats.pendingReview : reviewCount
+  };
+
   // Filter items in the database for the active protocol
   let displayedItems = LID_DATABASE;
   if (searchQuery) {
@@ -61,11 +90,10 @@ export function renderIngredientImageAdminModal(props = {}) {
   const activeSelectedId = selectedIngredientId || (displayedItems[0] ? displayedItems[0].id : 'salt-kosher');
   const selectedItem = LID_DATABASE.find(item => item.id === activeSelectedId) || displayedItems[0] || null;
   const selectedMapping = selectedItem ? (mappingByIngredientId[selectedItem.id] || mappingByIngredientId[selectedItem.name]) : null;
+  const selectedResolved = selectedItem ? resolveGalleryIngredientImage(selectedItem, selectedMapping, activeProtocol) : null;
   const isSelectedPending = selectedMapping && selectedMapping.status === 'pending_review';
-  const isSelectedActive = selectedMapping && selectedMapping.status === 'active';
-  const selectedItemImageUrl = selectedItem
-    ? (selectedMapping?.secure_url || getIngredientImageUrl(selectedItem.id, activeProtocol, selectedItem.imageUrl))
-    : null;
+  const isSelectedActive = selectedResolved?.isMapped;
+  const selectedItemImageUrl = selectedResolved?.url || null;
 
   // Render the core gallery workspace content
   const workspaceContent = `
@@ -86,19 +114,19 @@ export function renderIngredientImageAdminModal(props = {}) {
       <div class="admin-stats-grid admin-image-metrics-bar">
         <div class="admin-stat-card metric-card">
           <span class="admin-stat-label">Total Items</span>
-          <span class="admin-stat-value">${stats.totalIngredients || LID_DATABASE.length}</span>
+          <span class="admin-stat-value">${effectiveStats.totalIngredients || LID_DATABASE.length}</span>
         </div>
         <div class="admin-stat-card stat-mapped metric-card">
           <span class="admin-stat-label">🟢 Mapped Photos</span>
-          <span class="admin-stat-value">${stats.withImage || 0}</span>
+          <span class="admin-stat-value">${isLoading && effectiveStats.withImage === 0 ? '<span class="admin-pulse">...</span>' : effectiveStats.withImage}</span>
         </div>
         <div class="admin-stat-card stat-review metric-card">
           <span class="admin-stat-label">🟡 Needs Review</span>
-          <span class="admin-stat-value">${stats.pendingReview || 0}</span>
+          <span class="admin-stat-value">${isLoading && effectiveStats.pendingReview === 0 ? '<span class="admin-pulse">...</span>' : effectiveStats.pendingReview}</span>
         </div>
         <div class="admin-stat-card stat-missing metric-card">
           <span class="admin-stat-label">⚪ Missing</span>
-          <span class="admin-stat-value">${stats.missingImage !== undefined ? stats.missingImage : (LID_DATABASE.length - (stats.withImage || 0))}</span>
+          <span class="admin-stat-value">${isLoading && effectiveStats.withImage === 0 ? '<span class="admin-pulse">...</span>' : effectiveStats.missingImage}</span>
         </div>
       </div>
     </div>
@@ -185,14 +213,22 @@ export function renderIngredientImageAdminModal(props = {}) {
     ` : ''}
 
     <!-- 3. Responsive Ingredient Photo Gallery Grid -->
+    ${isLoading ? `
+      <div class="admin-loading-banner">
+        <span class="admin-pulse">🔄</span> Fetching authoritative Cloudinary image mappings...
+      </div>
+    ` : ''}
+
     <div class="ingredient-gallery grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
       ${displayedItems.map((item) => {
       const mapping = mappingByIngredientId[item.id] || mappingByIngredientId[item.name];
-      const isMapped = Boolean(mapping && mapping.secure_url);
-      const isPending = mapping && mapping.status === 'pending_review';
-      const thumbUrl = mapping?.secure_url || getIngredientImageUrl(item.id, activeProtocol, item.imageUrl);
+      const resolved = resolveGalleryIngredientImage(item, mapping, activeProtocol);
+      const isMapped = resolved.isMapped;
+      const isPending = resolved.isPending;
+      const thumbUrl = resolved.url;
       const isItemUploading = isUploading && selectedIngredientId === item.id;
       const isSelected = selectedItem && selectedItem.id === item.id;
+      const publicId = resolved.publicId || mapping?.public_id || item.id;
 
       return `
           <div
@@ -202,7 +238,7 @@ export function renderIngredientImageAdminModal(props = {}) {
           >
             <!-- Bounded Thumbnail Box with object-fit: contain -->
             <div class="ingredient-card__image">
-              ${isMapped ? `
+              ${isMapped && thumbUrl ? `
                 <img
                   src="${escapeHtml(thumbUrl)}"
                   alt="${escapeHtml(item.name)}"
