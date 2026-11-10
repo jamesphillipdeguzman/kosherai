@@ -1967,25 +1967,31 @@ html.dark .ingredient-token.token-safe,
   gap: 12px;
 }
 
-@media (max-width: 600px) {
+.substitutes-container {
+  padding-bottom: max(calc(var(--nav-height, 68px) + 24px), 92px);
+}
+
+@media (max-width: 640px) {
+  .substitutes-grid {
+    gap: 12px;
+  }
+  .substitute-card {
+    padding: 14px 12px !important;
+    gap: 10px;
+  }
   .substitute-comparison {
     grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .compare-box {
+    padding: 10px 12px !important;
   }
 }
 
 .compare-box {
   padding: 14px;
   border-radius: var(--radius-md);
-}
-
-.compare-avoid {
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid var(--avoid-border);
-}
-
-.compare-safe {
-  background: rgba(16, 185, 129, 0.08);
-  border: 1px solid var(--safe-border);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .compare-label {
@@ -1998,34 +2004,116 @@ html.dark .ingredient-token.token-safe,
   align-items: center;
   gap: 5px;
 }
-.compare-avoid .compare-label { color: var(--avoid-red); }
-.compare-safe .compare-label { color: var(--safe-green); }
 
 .compare-name {
   font-size: 1.05rem;
   font-weight: 700;
-  color: var(--text-primary);
   margin-bottom: 4px;
 }
 
 .compare-risk {
   font-size: 0.78rem;
-  color: var(--text-secondary);
 }
 
+/* ==================== SWAPS THEMING: LIGHT & DARK ==================== */
+/* Safe Replacement Card - Light Mode */
+html.light .compare-safe {
+  background-color: #ecfdf5 !important;
+  border: 1px solid #a7f3d0 !important;
+}
+html.light .compare-safe .compare-label {
+  color: #047857 !important;
+}
+html.light .compare-safe .compare-name {
+  color: #064e3b !important; /* dark emerald on pale green background */
+}
+html.light .compare-safe .compare-risk {
+  color: #059669 !important;
+}
+
+/* Safe Replacement Card - Dark Mode (Default) */
+html.dark .compare-safe,
+:root:not(.light) .compare-safe {
+  background-color: rgba(6, 78, 59, 0.42) !important; /* subtle dark emerald tint */
+  border: 1px solid rgba(16, 185, 129, 0.45) !important; /* visible emerald border */
+}
+html.dark .compare-safe .compare-label,
+:root:not(.light) .compare-safe .compare-label {
+  color: #34d399 !important; /* clear emerald */
+}
+html.dark .compare-safe .compare-name,
+:root:not(.light) .compare-safe .compare-name {
+  color: #f0fdf4 !important; /* crisp light emerald-white for high contrast */
+}
+html.dark .compare-safe .compare-risk,
+:root:not(.light) .compare-safe .compare-risk {
+  color: #6ee7b7 !important; /* readable emerald */
+}
+
+/* Avoid Card - Light Mode */
+html.light .compare-avoid {
+  background-color: #fff1f2 !important;
+  border: 1px solid #fecdd3 !important;
+}
+html.light .compare-avoid .compare-label {
+  color: #dc2626 !important;
+}
+html.light .compare-avoid .compare-name {
+  color: #881337 !important;
+}
+html.light .compare-avoid .compare-risk {
+  color: #475569 !important;
+}
+
+/* Avoid Card - Dark Mode (Default) */
+html.dark .compare-avoid,
+:root:not(.light) .compare-avoid {
+  background-color: rgba(69, 10, 10, 0.4) !important;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+}
+html.dark .compare-avoid .compare-label,
+:root:not(.light) .compare-avoid .compare-label {
+  color: #f87171 !important;
+}
+html.dark .compare-avoid .compare-name,
+:root:not(.light) .compare-avoid .compare-name {
+  color: #ffffff !important;
+}
+html.dark .compare-avoid .compare-risk,
+:root:not(.light) .compare-avoid .compare-risk {
+  color: #cbd5e1 !important;
+}
+
+/* Culinary Tip Box */
 .culinary-tip-box {
-  background: var(--bg-card-subtle);
-  border-left: 3px solid var(--safe-green);
   padding: 12px 16px;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-radius: var(--radius-sm);
   font-size: 0.84rem;
-  color: var(--text-secondary);
   line-height: 1.45;
+  transition: background-color 0.2s ease;
 }
 
-.culinary-tip-title {
+html.light .culinary-tip-box {
+  background-color: #f8fafc !important;
+  border-left: 3px solid #10b981 !important;
+  color: #334155 !important;
+}
+html.light .culinary-tip-title {
+  color: #047857 !important;
   font-weight: 700;
-  color: #34d399;
+  margin-bottom: 2px;
+}
+
+html.dark .culinary-tip-box,
+:root:not(.light) .culinary-tip-box {
+  background-color: rgba(30, 41, 59, 0.55) !important;
+  border-left: 3px solid #10b981 !important;
+  color: #cbd5e1 !important;
+}
+html.dark .culinary-tip-title,
+:root:not(.light) .culinary-tip-title {
+  color: #34d399 !important;
+  font-weight: 700;
   margin-bottom: 2px;
 }
 
@@ -6040,18 +6128,167 @@ html.dark .venue-toggle-btn:hover {
 html.light #header-signin-btn { background: #f1f5f9; border-color: #cbd5e1; color: #334155; }
 html.light #header-signin-btn:hover { background: #e2e8f0; color: #0f172a; }
 
-/* Keep header auth buttons reachable on narrow phones (prevents horizontal overflow) */
+/* ==================== MODERN SIGN OUT BUTTON ==================== */
+.header-signout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  min-height: 36px;
+  border-radius: 9999px;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.header-signout-btn .signout-icon {
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* Light Mode */
+html.light .header-signout-btn {
+  background-color: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #be123c;
+}
+
+html.light .header-signout-btn:hover {
+  background-color: #ffe4e6;
+  border-color: #fda4af;
+  color: #9f1239;
+  transform: translateY(-0.5px);
+  box-shadow: 0 2px 5px rgba(225, 29, 72, 0.12);
+}
+
+html.light .header-signout-btn:active {
+  background-color: #fecdd3;
+  transform: translateY(0.5px) scale(0.98);
+}
+
+html.light .header-signout-btn:focus-visible {
+  outline: 2px solid #f43f5e;
+  outline-offset: 2px;
+}
+
+/* Dark Mode (Default) */
+html.dark .header-signout-btn,
+:root:not(.light) .header-signout-btn {
+  background-color: rgba(244, 63, 94, 0.14);
+  border: 1px solid rgba(244, 63, 94, 0.38);
+  color: #fda4af;
+}
+
+html.dark .header-signout-btn:hover,
+:root:not(.light) .header-signout-btn:hover {
+  background-color: rgba(244, 63, 94, 0.25);
+  border-color: rgba(244, 63, 94, 0.6);
+  color: #ffffff;
+  transform: translateY(-0.5px);
+  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.2);
+}
+
+html.dark .header-signout-btn:active,
+:root:not(.light) .header-signout-btn:active {
+  background-color: rgba(244, 63, 94, 0.32);
+  transform: translateY(0.5px) scale(0.98);
+}
+
+html.dark .header-signout-btn:focus-visible,
+:root:not(.light) .header-signout-btn:focus-visible {
+  outline: 2px solid rgba(244, 63, 94, 0.7);
+  outline-offset: 2px;
+}
+
+/* Fixed Non-Shrinking Touch Target for Settings & Theme buttons */
+#settings-open-btn,
+.app-header .btn-icon#settings-open-btn {
+  min-width: 40px !important;
+  min-height: 40px !important;
+  width: 40px !important;
+  height: 40px !important;
+  flex-shrink: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: var(--radius-md, 12px) !important;
+}
+
+#header-theme-toggle-btn,
+.app-header #header-theme-toggle-btn {
+  min-width: 40px !important;
+  min-height: 40px !important;
+  width: 40px !important;
+  height: 40px !important;
+  flex-shrink: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: var(--radius-md, 12px) !important;
+}
+
+.user-avatar-badge {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background-color: #059669;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.user-profile-pill {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.user-first-name {
+  max-width: 110px;
+}
+
+/* ==================== RESPONSIVE HEADER ERGONOMICS ==================== */
+/* Keep header auth buttons and controls reachable on phones */
 @media (max-width: 520px) {
   .app-header .status-pill,
-  .app-header .brand-badge { display: none; }
+  .app-header .brand-badge { display: none !important; }
   .header-auth-buttons { gap: 6px; }
   #header-signin-btn,
-  #header-signup-btn { padding: 6px 10px; font-size: 11.5px; min-height: 30px; }
-  .app-header { padding: 8px 10px; gap: 6px; }
-  .app-header .brand-wrapper { padding: 2px 6px; gap: 6px; min-width: 0; }
-  .app-header .brand-icon { width: 26px; height: 26px; }
-  .app-header .brand-title { font-size: 1rem; }
-  .app-header .header-actions { gap: 4px; }
-  #header-theme-toggle-btn,
-  .app-header .btn-icon { padding: 6px; min-width: 0; min-height: 0; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; }
+  #header-signup-btn { padding: 6px 10px; font-size: 11.5px; min-height: 32px; }
+  .app-header { padding: 8px 10px; gap: 6px; box-sizing: border-box; }
+  .app-header .brand-wrapper { padding: 2px 6px; gap: 6px; min-width: 0; flex-shrink: 1; }
+  .app-header .brand-icon { width: 26px; height: 26px; flex-shrink: 0; }
+  .app-header .brand-title { font-size: 1rem; white-space: nowrap; }
+  .app-header .header-actions { gap: 4px; flex-shrink: 0; min-width: 0; }
+  .user-first-name { max-width: 70px; }
+}
+
+@media (max-width: 440px) {
+  .user-first-name { display: none !important; }
+  .user-profile-pill { padding: 4px !important; }
+  .header-signout-btn { padding: 6px 9px; min-height: 36px; }
+}
+
+@media (max-width: 360px) {
+  .user-profile-pill { display: none !important; }
+  .signout-text { display: none !important; }
+  .header-signout-btn {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
+    padding: 0 !important;
+    border-radius: var(--radius-md, 12px) !important;
+  }
 }

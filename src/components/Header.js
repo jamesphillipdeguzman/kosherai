@@ -40,6 +40,7 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
   const firstName = rawName
     ? rawName.split(' ')[0]
     : (currentUser?.email ? currentUser.email.split('@')[0] : 'User');
+  const initial = (firstName || currentUser?.name || currentUser?.email || 'U')[0].toUpperCase();
 
   return `
     <header class="app-header">
@@ -72,23 +73,28 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
         <!-- Dynamic Auth State: Avatar/Sign Out if logged in, Sign In/Get Started if logged out -->
         <div class="header-auth-controls inline-flex items-center gap-1.5" id="header-auth-container">
           ${currentUser ? `
-            <div class="user-profile-pill flex items-center gap-2 bg-slate-850/90 dark:bg-slate-800/90 backdrop-blur-xs border border-slate-700/80 dark:border-slate-700/80 px-2.5 py-1 rounded-full text-xs shadow-2xs" title="Signed in as ${escapeAttr(currentUser.name || currentUser.email || 'Tenant User')}${currentUser.email ? ` (${escapeAttr(currentUser.email)})` : ''}">
-              <span class="inline-flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-xs flex-shrink-0" title="Online session"></span>
-                <span class="user-first-name text-xs font-semibold text-slate-100 dark:text-white drop-shadow-xs">
-                  ${escapeHtml(firstName || currentUser?.name || currentUser?.email || 'User')}
-                </span>
+            <div class="user-profile-pill inline-flex items-center gap-1.5 bg-slate-850/90 dark:bg-slate-800/90 border border-slate-700/80 px-2 py-1 rounded-full text-xs shadow-2xs" title="Signed in as ${escapeAttr(currentUser.name || currentUser.email || 'Tenant User')}${currentUser.email ? ` (${escapeAttr(currentUser.email)})` : ''}">
+              <span class="user-avatar-badge w-5 h-5 rounded-full bg-emerald-600 text-white font-bold text-[11px] inline-flex items-center justify-center flex-shrink-0 select-none">
+                ${escapeHtml(initial)}
               </span>
-              <span class="text-slate-500 select-none">|</span>
-              <button
-                type="button"
-                id="header-signout-btn"
-                title="Sign out of your session"
-                class="text-xs font-medium text-slate-300 hover:text-white dark:text-slate-300 dark:hover:text-white transition-colors cursor-pointer"
-              >
-                Sign Out
-              </button>
+              <span class="user-first-name text-xs font-semibold text-slate-100 dark:text-white truncate">
+                ${escapeHtml(firstName || currentUser?.name || currentUser?.email || 'User')}
+              </span>
             </div>
+            <button
+              type="button"
+              id="header-signout-btn"
+              title="Sign out of your session"
+              aria-label="Sign out"
+              class="header-signout-btn"
+            >
+              <svg class="signout-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              <span class="signout-text">Sign Out</span>
+            </button>
           ` : `
             <div class="header-auth-buttons flex items-center gap-2">
               <button

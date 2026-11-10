@@ -67,22 +67,22 @@ export function renderSubstitutesTab(state) {
           <div class="substitute-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-2xl p-5">
             <div class="substitute-comparison">
               <!-- Prohibited -->
-              <div class="compare-box compare-avoid rounded-xl p-3.5 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50">
-                <span class="compare-label font-bold text-red-600 dark:text-red-400 text-xs">🔴 ${escapeHtml(avoidLabel)}</span>
-                <div class="compare-name text-slate-900 dark:text-white font-bold text-base mt-1">${escapeHtml(item.forbidden)}</div>
-                <div class="compare-risk text-slate-700 dark:text-slate-200 text-xs mt-1 leading-relaxed">${escapeHtml(item.risk || item.iodineRisk)}</div>
+              <div class="compare-box compare-avoid rounded-xl p-3.5">
+                <span class="compare-label font-bold text-xs">🔴 ${escapeHtml(avoidLabel)}</span>
+                <div class="compare-name font-bold text-base mt-1">${escapeHtml(item.forbidden)}</div>
+                <div class="compare-risk text-xs mt-1 leading-relaxed">${escapeHtml(item.risk || item.iodineRisk)}</div>
               </div>
 
               <!-- Safe Replacement -->
-              <div class="compare-box compare-safe rounded-xl p-3.5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50">
-                <span class="compare-label font-bold text-emerald-600 dark:text-emerald-400 text-xs">🟢 SAFE REPLACEMENT</span>
-                <div class="compare-name text-slate-900 dark:text-white font-bold text-base mt-1">${escapeHtml(item.substitute)}</div>
-                <div class="compare-risk text-emerald-700 dark:text-emerald-300 font-semibold text-xs mt-1">${escapeHtml(currentProfile.shortName)} Compliant</div>
+              <div class="compare-box compare-safe rounded-xl p-3.5">
+                <span class="compare-label font-bold text-xs">🟢 SAFE REPLACEMENT</span>
+                <div class="compare-name font-bold text-base mt-1">${escapeHtml(item.substitute)}</div>
+                <div class="compare-risk font-semibold text-xs mt-1">${escapeHtml(currentProfile.shortName)} Compliant</div>
               </div>
             </div>
 
-            <div class="culinary-tip-box rounded-xl p-3.5 bg-slate-50 dark:bg-slate-800/60 border-l-4 border-emerald-500 text-slate-700 dark:text-slate-200 text-xs leading-relaxed mt-2">
-              <div class="culinary-tip-title font-bold text-emerald-600 dark:text-emerald-400 mb-1">👨‍🍳 Kitchen & Cooking Guide:</div>
+            <div class="culinary-tip-box rounded-xl p-3.5 mt-2">
+              <div class="culinary-tip-title font-bold mb-1">👨‍🍳 Kitchen & Cooking Guide:</div>
               <div>${escapeHtml(item.culinaryTip)}</div>
             </div>
           </div>

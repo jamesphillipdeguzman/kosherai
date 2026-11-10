@@ -156,6 +156,7 @@ export function Header({
   const firstName = rawName
     ? rawName.split(' ')[0]
     : (currentUser?.email ? currentUser.email.split('@')[0] : 'User');
+  const initial = (firstName || currentUser?.name || currentUser?.email || 'U')[0].toUpperCase();
 
   const handleLogoClick = async (e) => {
     e.preventDefault();
@@ -225,24 +226,34 @@ export function Header({
           {/* Dynamic Auth State: Avatar/Sign Out if logged in, Sign In / Account button if logged out */}
           <div className="header-auth-controls inline-flex items-center gap-1.5" id="header-auth-container">
             {currentUser ? (
-              <div
-                className="user-profile-pill flex items-center gap-2 bg-slate-850/90 dark:bg-slate-800/90 backdrop-blur-xs border border-slate-700/80 dark:border-slate-700/80 px-2.5 py-1 rounded-full text-xs shadow-2xs"
-                title={`Signed in as ${currentUser.name || currentUser.email || 'Tenant User'}${currentUser.email ? ` (${currentUser.email})` : ''}`}
-              >
-                <span className="text-xs font-semibold text-slate-100 drop-shadow-xs">
-                  {firstName || currentUser?.name || currentUser?.email || 'User'}
-                </span>
-                <span className="text-slate-500">|</span>
+              <>
+                <div
+                  className="user-profile-pill inline-flex items-center gap-1.5 bg-slate-850/90 dark:bg-slate-800/90 border border-slate-700/80 px-2 py-1 rounded-full text-xs shadow-2xs"
+                  title={`Signed in as ${currentUser.name || currentUser.email || 'Tenant User'}${currentUser.email ? ` (${currentUser.email})` : ''}`}
+                >
+                  <span className="user-avatar-badge w-5 h-5 rounded-full bg-emerald-600 text-white font-bold text-[11px] inline-flex items-center justify-center flex-shrink-0 select-none">
+                    {initial}
+                  </span>
+                  <span className="user-first-name text-xs font-semibold text-slate-100 dark:text-white truncate">
+                    {firstName || currentUser?.name || currentUser?.email || 'User'}
+                  </span>
+                </div>
                 <button
                   type="button"
                   id="header-signout-btn"
                   onClick={handleSignOut}
                   title="Sign out and clear local device cache"
-                  className="text-xs font-medium text-slate-300 hover:text-white dark:text-slate-300 dark:hover:text-white transition-colors cursor-pointer"
+                  aria-label="Sign out"
+                  className="header-signout-btn"
                 >
-                  Sign Out
+                  <svg className="signout-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                  </svg>
+                  <span className="signout-text">Sign Out</span>
                 </button>
-              </div>
+              </>
             ) : (
               <div className="header-auth-buttons flex items-center gap-2">
                 <button
@@ -282,6 +293,7 @@ export function Header({
           </button>
 
           <button
+            id="settings-open-btn"
             className="btn-icon"
             onClick={onOpenSettings}
             title="App & API Settings"
