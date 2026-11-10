@@ -5,54 +5,84 @@
 import { CLOUD_NAME, UPLOAD_PRESET } from '../utils/cloudinary.js';
 import generatedImages from '../data/generatedImages.json' with { type: 'json' };
 import { getAuthHeaders } from './authHeaders.js';
+import { LID_DATABASE } from '../data/lidDatabase.js';
 
 // In-memory runtime cache for O(1) synchronous lookup
 const inMemoryCache = {};
 
-/**
- * Gets storage key for a protocol
- */
-function getStorageKey(protocolId = 'lid') {
-  return `kosherai_ingredient_images_${protocolId.toLowerCase()}`;
-}
-
-function getAdminStorageKey(protocolId = 'lid') {
-  return `kosherai_admin_image_summary_${protocolId.toLowerCase()}`;
-}
+// Unified Global Storage Keys (Images are shared across ALL dietary protocols)
+export const GLOBAL_MAPPINGS_KEY = 'kosherai_global_ingredient_image_mappings';
+export const GLOBAL_ADMIN_STORAGE_KEY = 'kosherai_global_admin_image_summary';
 
 /**
- * Loads cached mappings from localStorage into inMemoryCache
+ * Gets storage key for a protocol (maintains backwards compatibility)
  */
-export function initIngredientImageCache(protocolId = 'lid', reload = false) {
-  const normProto = (protocolId || 'lid').toLowerCase();
+function getStorageKey(protocolId = 'global') {
+  const norm = (protocolId || 'global').toLowerCase();
+  if (norm === 'global' || norm === 'all') return GLOBAL_MAPPINGS_KEY;
+  return `kosherai_ingredient_images_${norm}`;
+}
+
+function getAdminStorageKey(protocolId = 'global') {
+  const norm = (protocolId || 'global').toLowerCase();
+  if (norm === 'global' || norm === 'all') return GLOBAL_ADMIN_STORAGE_KEY;
+  return `kosherai_admin_image_summary_${norm}`;
+}
+
+/**
+ * Loads cached mappings from localStorage into inMemoryCache.
+ * Image mappings are globally shared across all protocols.
+ */
+export function initIngredientImageCache(protocolId = 'global', reload = false) {
+  const normProto = (protocolId || 'global').toLowerCase();
+
   if (!inMemoryCache[normProto] || reload) {
     inMemoryCache[normProto] = {};
     if (typeof localStorage !== 'undefined') {
       try {
-        const stored = localStorage.getItem(getStorageKey(normProto));
+        let stored = null;
+        // 1. Check protocol-specific key if specific protocol requested
+        if (normProto !== 'global' && normProto !== 'all') {
+          stored = localStorage.getItem(getStorageKey(normProto));
+        }
+        // 2. Fall back to global mappings key
+        if (!stored) {
+          stored = localStorage.getItem(GLOBAL_MAPPINGS_KEY) || localStorage.getItem('kosherai_ingredient_images_lid');
+        }
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed && typeof parsed === 'object') {
             inMemoryCache[normProto] = parsed;
+            inMemoryCache['global'] = { ...(inMemoryCache['global'] || {}), ...parsed };
           }
         }
       } catch (_) {}
     }
   }
-  return inMemoryCache[normProto];
+
+  if (!inMemoryCache['global']) {
+    inMemoryCache['global'] = inMemoryCache[normProto] || {};
+  }
+  return inMemoryCache[normProto] || inMemoryCache['global'];
 }
 
 /**
- * Retrieves valid cached admin summary and mappings for a protocol, if available.
+ * Retrieves valid cached admin summary and mappings, globally available.
  * Returns null if no cache exists.
  */
-export function getCachedAdminSummary(protocolId = 'lid') {
-  const normProto = (protocolId || 'lid').toLowerCase();
+export function getCachedAdminSummary(protocolId = 'global') {
+  const normProto = (protocolId || 'global').toLowerCase();
   if (typeof localStorage === 'undefined') return null;
 
-  // 1. Direct admin summary cache
+  // 1. Direct global admin summary cache
   try {
-    const raw = localStorage.getItem(getAdminStorageKey(normProto));
+    let raw = localStorage.getItem(GLOBAL_ADMIN_STORAGE_KEY);
+    if (!raw) {
+      raw = localStorage.getItem(getAdminStorageKey(normProto)) || localStorage.getItem('kosherai_admin_image_summary_lid');
+      if (raw) {
+        localStorage.setItem(GLOBAL_ADMIN_STORAGE_KEY, raw);
+      }
+    }
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.mappings) && parsed.mappings.length > 0) {
@@ -61,17 +91,17 @@ export function getCachedAdminSummary(protocolId = 'lid') {
     }
   } catch (_) {}
 
-  // 2. Fallback: Reconstruct from standard ingredient images cache
+  // 2. Fallback: Reconstruct from standard global ingredient images cache
   try {
-    const cachedImages = initIngredientImageCache(normProto);
+    const cachedImages = initIngredientImageCache('global');
     if (cachedImages && typeof cachedImages === 'object') {
       const mappings = [];
       for (const [key, val] of Object.entries(cachedImages)) {
         if (!val) continue;
         if (typeof val === 'string') {
           mappings.push({
-            id: `cache_${normProto}_${key}`,
-            protocol_id: normProto,
+            id: `cache_global_${key}`,
+            protocol_id: 'global',
             ingredient_id: key,
             secure_url: val,
             public_id: val.split('/upload/')[1] || key,
@@ -79,8 +109,8 @@ export function getCachedAdminSummary(protocolId = 'lid') {
           });
         } else if (typeof val === 'object' && (val.secure_url || val.url || val.public_id)) {
           mappings.push({
-            id: val.id || `cache_${normProto}_${val.ingredient_id || key}`,
-            protocol_id: val.protocol_id || normProto,
+            id: val.id || `cache_global_${val.ingredient_id || key}`,
+            protocol_id: val.protocol_id || 'global',
             ingredient_id: val.ingredient_id || key,
             secure_url: val.secure_url || val.url || (val.public_id ? buildCloudinaryUrl(val.public_id) : ''),
             public_id: val.public_id || key,
@@ -109,34 +139,41 @@ export function getCachedAdminSummary(protocolId = 'lid') {
 }
 
 /**
- * Persists refreshed admin summary and mappings into localStorage,
- * and updates inMemoryCache for instant O(1) synchronous lookups.
+ * Persists refreshed admin summary and mappings into global localStorage,
+ * and updates inMemoryCache for instant O(1) synchronous lookups across all protocols.
  */
-export function saveAdminImageCache(protocolId = 'lid', summaryData) {
+export function saveAdminImageCache(protocolId = 'global', summaryData) {
   if (!summaryData || typeof localStorage === 'undefined') return;
-  const normProto = (protocolId || 'lid').toLowerCase();
+  const normProto = (protocolId || 'global').toLowerCase();
 
   try {
+    localStorage.setItem(GLOBAL_ADMIN_STORAGE_KEY, JSON.stringify(summaryData));
     localStorage.setItem(getAdminStorageKey(normProto), JSON.stringify(summaryData));
   } catch (_) {}
 
-  // Synchronize standard image cache so public/checker lookups also benefit immediately
+  // Synchronize global image cache so public/checker/search lookups across all protocols benefit immediately
   if (Array.isArray(summaryData.mappings)) {
     const imagesMap = {};
     for (const m of summaryData.mappings) {
       if (m.status === 'active' && (m.secure_url || m.url)) {
         imagesMap[m.ingredient_id] = {
           id: m.id,
-          protocol_id: m.protocol_id || normProto,
+          protocol_id: m.protocol_id || 'global',
           ingredient_id: m.ingredient_id,
           public_id: m.public_id,
           secure_url: m.secure_url || m.url,
           status: m.status
         };
+        // Also index lowercase
+        if (m.ingredient_id) {
+          imagesMap[m.ingredient_id.toLowerCase()] = imagesMap[m.ingredient_id];
+        }
       }
     }
+    inMemoryCache['global'] = imagesMap;
     inMemoryCache[normProto] = imagesMap;
     try {
+      localStorage.setItem(GLOBAL_MAPPINGS_KEY, JSON.stringify(imagesMap));
       localStorage.setItem(getStorageKey(normProto), JSON.stringify(imagesMap));
     } catch (_) {}
   }
@@ -270,10 +307,26 @@ export function getIngredientImageUrl(imageOrItem, protocolId = 'lid', fallback 
     const trimmed = imageOrItem.trim();
     if (!trimmed) return fallback || null;
 
-    // 3a. Check cached database mapping for this ingredient ID under protocol
-    const cached = inMemoryCache[normProto] || initIngredientImageCache(normProto);
-    if (cached && cached[trimmed]) {
-      const entry = cached[trimmed];
+    // 3a. Check cached database mapping for this ingredient ID in protocol or global library
+    const cachedProto = inMemoryCache[normProto];
+    const cachedGlobal = inMemoryCache['global'] || initIngredientImageCache(normProto);
+    const cached = (cachedProto && (cachedProto[trimmed] || cachedProto[trimmed.toLowerCase()])) ? cachedProto : cachedGlobal;
+    let entry = cached ? (cached[trimmed] || cached[trimmed.toLowerCase()]) : null;
+
+    // If not found directly, check canonical match across standard ingredient database
+    if (!entry) {
+      const match = LID_DATABASE.find(item => 
+        item.id === trimmed ||
+        item.id.toLowerCase() === trimmed.toLowerCase() ||
+        item.name.toLowerCase() === trimmed.toLowerCase() ||
+        (Array.isArray(item.aliases) && item.aliases.some(a => a.toLowerCase() === trimmed.toLowerCase()))
+      );
+      if (match && cached) {
+        entry = cached[match.id] || cached[match.id.toLowerCase()] || cached[match.name] || cached[match.name.toLowerCase()];
+      }
+    }
+
+    if (entry) {
       if (typeof entry === 'string') {
         if (/^https?:\/\//i.test(entry)) return entry;
         return buildCloudinaryUrl(entry);
@@ -293,7 +346,7 @@ export function getIngredientImageUrl(imageOrItem, protocolId = 'lid', fallback 
       return fallback;
     }
 
-    // 3d. If the string contains a slash (e.g. 'kosherai/lid_protocol/ingredients/salt-kosher'),
+    // 3d. If the string contains a slash (e.g. 'kosherai/all_ingredients/salt-kosher' or legacy path),
     // it is a confirmed Cloudinary public ID path
     if (trimmed.includes('/')) {
       return buildCloudinaryUrl(trimmed);
@@ -311,8 +364,8 @@ export function getIngredientImageUrl(imageOrItem, protocolId = 'lid', fallback 
  * Fetches the latest active ingredient images from Neon PostgreSQL (/api/ingredient-images)
  * and updates the in-memory cache and localStorage.
  */
-export async function fetchIngredientImages(protocolId = 'lid', force = false) {
-  const normProto = (protocolId || 'lid').toLowerCase();
+export async function fetchIngredientImages(protocolId = 'global', force = false) {
+  const normProto = (protocolId || 'global').toLowerCase();
 
   try {
     const res = await fetch(`/api/ingredient-images?protocol=${encodeURIComponent(normProto)}`, {
@@ -325,14 +378,16 @@ export async function fetchIngredientImages(protocolId = 'lid', force = false) {
 
     if (!res.ok) {
       console.warn('[ingredientImageService] Failed to fetch ingredient images:', res.status);
-      return inMemoryCache[normProto] || {};
+      return inMemoryCache['global'] || inMemoryCache[normProto] || {};
     }
 
     const data = await res.json();
     if (data.success && data.images) {
+      inMemoryCache['global'] = data.images;
       inMemoryCache[normProto] = data.images;
       if (typeof localStorage !== 'undefined') {
         try {
+          localStorage.setItem(GLOBAL_MAPPINGS_KEY, JSON.stringify(data.images));
           localStorage.setItem(getStorageKey(normProto), JSON.stringify(data.images));
         } catch (_) {}
       }
@@ -349,27 +404,28 @@ export async function fetchIngredientImages(protocolId = 'lid', force = false) {
     console.warn('[ingredientImageService] Fetch exception:', err?.message || err);
   }
 
-  return inMemoryCache[normProto] || {};
+  return inMemoryCache['global'] || inMemoryCache[normProto] || {};
 }
 
 /**
  * Uploads an ingredient image to Cloudinary and persists the mapping to Neon PostgreSQL.
+ * Destination folder is standardized globally to: kosherai/all_ingredients
  *
  * @param {object} params
  * @param {File|Blob|string} params.file - Image file, Blob, or base64 data URI
- * @param {string} params.protocolId - e.g. 'lid', 'diabetic', etc.
+ * @param {string} params.protocolId - Optional context protocol
  * @param {string} params.ingredientId - Target ingredient ID
  * @param {string} [params.status='active'] - Status of image mapping
- * @returns {Promise<object>} Created/updated mapping record
+ * @returns {Promise<object>} Created/updated global mapping record
  */
-export async function uploadIngredientImage({ file, protocolId = 'lid', ingredientId, status = 'active' }) {
+export async function uploadIngredientImage({ file, protocolId = 'global', ingredientId, status = 'active' }) {
   if (!file) throw new Error('No image file provided for upload.');
   if (!ingredientId) throw new Error('Target ingredient ID is required.');
 
-  const normProto = (protocolId || 'lid').toLowerCase();
+  const normProto = (protocolId || 'global').toLowerCase();
   const cloudName = CLOUD_NAME;
   const uploadPreset = UPLOAD_PRESET;
-  const folder = `kosherai/${normProto}_protocol/ingredients`;
+  const folder = 'kosherai/all_ingredients';
 
   const formData = new FormData();
   if (typeof Blob !== 'undefined' && file instanceof Blob) {
@@ -385,7 +441,7 @@ export async function uploadIngredientImage({ file, protocolId = 'lid', ingredie
   formData.append('folder', folder);
   formData.append('public_id', `${ingredientId}`);
 
-  // 1. Upload to Cloudinary via unsigned preset
+  // 1. Upload to Cloudinary via unsigned preset into kosherai/all_ingredients
   const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/image/upload`, {
     method: 'POST',
     body: formData
@@ -404,7 +460,7 @@ export async function uploadIngredientImage({ file, protocolId = 'lid', ingredie
     throw new Error('Cloudinary response missing secure_url.');
   }
 
-  // 2. Persist mapping into Neon PostgreSQL via admin API
+  // 2. Persist global mapping into Neon PostgreSQL via admin API
   const saveRes = await fetch('/api/admin/ingredient-images', {
     method: 'POST',
     headers: {
@@ -413,7 +469,7 @@ export async function uploadIngredientImage({ file, protocolId = 'lid', ingredie
     },
     body: JSON.stringify({
       action: 'save',
-      protocol_id: normProto,
+      protocol_id: 'global',
       ingredient_id: ingredientId,
       public_id: publicId,
       secure_url: secureUrl,
@@ -431,27 +487,46 @@ export async function uploadIngredientImage({ file, protocolId = 'lid', ingredie
 
   const saveData = await saveRes.json();
   const mapping = saveData.mapping || {
-    id: `img_${normProto}_${ingredientId}`,
-    protocol_id: normProto,
+    id: `img_global_${ingredientId}`,
+    protocol_id: 'global',
     ingredient_id: ingredientId,
     public_id: publicId,
     secure_url: secureUrl,
     status
   };
 
-  // 3. Update local cache immediately
+  // 3. Update global local cache immediately
+  if (!inMemoryCache['global']) inMemoryCache['global'] = {};
+  inMemoryCache['global'][ingredientId] = mapping;
   if (!inMemoryCache[normProto]) inMemoryCache[normProto] = {};
   inMemoryCache[normProto][ingredientId] = mapping;
 
   if (typeof localStorage !== 'undefined') {
     try {
-      localStorage.setItem(getStorageKey(normProto), JSON.stringify(inMemoryCache[normProto]));
+      localStorage.setItem(GLOBAL_MAPPINGS_KEY, JSON.stringify(inMemoryCache['global']));
+      localStorage.setItem(getStorageKey(normProto), JSON.stringify(inMemoryCache['global']));
+
+      // Synchronize cached admin summary
+      const adminSummary = getCachedAdminSummary('global');
+      if (adminSummary && Array.isArray(adminSummary.mappings)) {
+        const existingIdx = adminSummary.mappings.findIndex(m => m.ingredient_id === ingredientId);
+        if (existingIdx >= 0) {
+          adminSummary.mappings[existingIdx] = mapping;
+        } else {
+          adminSummary.mappings.unshift(mapping);
+          if (adminSummary.stats) {
+            adminSummary.stats.withImage = (adminSummary.stats.withImage || 0) + 1;
+            adminSummary.stats.missingImage = Math.max(0, (adminSummary.stats.totalIngredients || 36) - adminSummary.stats.withImage);
+          }
+        }
+        saveAdminImageCache('global', adminSummary);
+      }
     } catch (_) {}
   }
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('kosherai:ingredient-images-updated', {
-      detail: { protocol: normProto, images: inMemoryCache[normProto] }
+      detail: { protocol: 'global', images: inMemoryCache['global'] }
     }));
   }
 
@@ -564,30 +639,34 @@ export async function deleteIngredientMapping(id, protocol = 'lid', ingredientId
     throw new Error(err.message || `Delete failed with status ${res.status}`);
   }
 
-  const normProto = (protocol || 'lid').toLowerCase();
-  if (ingredientId && inMemoryCache[normProto] && inMemoryCache[normProto][ingredientId]) {
-    delete inMemoryCache[normProto][ingredientId];
+  const normProto = (protocol || 'global').toLowerCase();
+  if (ingredientId) {
+    if (inMemoryCache['global']) delete inMemoryCache['global'][ingredientId];
+    if (inMemoryCache[normProto]) delete inMemoryCache[normProto][ingredientId];
     if (typeof localStorage !== 'undefined') {
       try {
-        localStorage.setItem(getStorageKey(normProto), JSON.stringify(inMemoryCache[normProto]));
+        localStorage.setItem(GLOBAL_MAPPINGS_KEY, JSON.stringify(inMemoryCache['global'] || {}));
+        localStorage.setItem(getStorageKey(normProto), JSON.stringify(inMemoryCache['global'] || {}));
       } catch (_) {}
     }
   }
 
-  // Also remove from admin summary cache if present
+  // Also remove from global admin summary cache
   if (typeof localStorage !== 'undefined') {
     try {
-      const summaryKey = getAdminStorageKey(normProto);
-      const raw = localStorage.getItem(summaryKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.mappings)) {
-          parsed.mappings = parsed.mappings.filter(m => m.id !== id && m.ingredient_id !== ingredientId);
-          if (parsed.stats && typeof parsed.stats.withImage === 'number') {
-            parsed.stats.withImage = Math.max(0, parsed.stats.withImage - 1);
-            parsed.stats.missingImage = Math.min(parsed.stats.totalIngredients || 36, (parsed.stats.missingImage || 0) + 1);
+      const summaryKeys = [GLOBAL_ADMIN_STORAGE_KEY, getAdminStorageKey(normProto)];
+      for (const summaryKey of summaryKeys) {
+        const raw = localStorage.getItem(summaryKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && Array.isArray(parsed.mappings)) {
+            parsed.mappings = parsed.mappings.filter(m => m.id !== id && m.ingredient_id !== ingredientId);
+            if (parsed.stats && typeof parsed.stats.withImage === 'number') {
+              parsed.stats.withImage = Math.max(0, parsed.stats.withImage - 1);
+              parsed.stats.missingImage = Math.min(parsed.stats.totalIngredients || 36, (parsed.stats.missingImage || 0) + 1);
+            }
+            localStorage.setItem(summaryKey, JSON.stringify(parsed));
           }
-          localStorage.setItem(summaryKey, JSON.stringify(parsed));
         }
       }
     } catch (_) {}

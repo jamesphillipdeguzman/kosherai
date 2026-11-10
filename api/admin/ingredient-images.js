@@ -5,7 +5,7 @@ import 'dotenv/config';
 import { setCorsHeaders, isAdminUser, getAuthenticatedUser } from '../../lib/auth.js';
 import { isValidPostgresUrl } from '../trips.js';
 import { ensureIngredientImagesTable } from '../ingredient-images.js';
-import { matchAssetToIngredient } from '../../lib/ingredientImageMatcher.js';
+import { matchAssetToIngredient, normalizeToken } from '../../lib/ingredientImageMatcher.js';
 import { LID_DATABASE } from '../../src/data/lidDatabase.js';
 import { buildCloudinaryUrl } from '../../src/services/ingredientImageService.js';
 
@@ -56,7 +56,7 @@ async function fetchCloudinaryFolderAssets(folderPrefix = 'kosherai') {
   try {
     const authHeader = 'Basic ' + Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
     const endpoint = `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/resources/image?prefix=${encodeURIComponent(folderPrefix)}&max_results=500`;
-    
+
     const res = await fetch(endpoint, {
       method: 'GET',
       headers: {
@@ -175,36 +175,29 @@ export default async function handler(req, res) {
         ORDER BY updated_at DESC;
       `;
 
-      // Compute Global & Protocol Stats
-      const relevantItems = protocol === 'all' 
-        ? LID_DATABASE 
-        : LID_DATABASE; // Database items represent standard ingredient library
-      
+      // Compute Global Stats across the canonical ingredient database
+      const relevantItems = LID_DATABASE; // Standard food database (36 items)
       const totalIngredients = relevantItems.length;
-      
-      const activeMappings = protocol === 'all'
-        ? allRows.filter(r => r.status === 'active')
-        : allRows.filter(r => r.status === 'active' && r.protocol_id === protocol);
-      
-      const pendingMappings = protocol === 'all'
-        ? allRows.filter(r => r.status === 'pending_review')
-        : allRows.filter(r => r.status === 'pending_review' && r.protocol_id === protocol);
+
+      // Global Active & Pending Review mappings (shared across ALL protocols)
+      const activeMappings = allRows.filter(r => r.status === 'active');
+      const pendingMappings = allRows.filter(r => r.status === 'pending_review');
 
       // Check which ingredients have an active image
-      const mappedIngredientIds = new Set(activeMappings.map(r => r.ingredient_id));
-      const withImage = relevantItems.filter(item => mappedIngredientIds.has(item.id)).length;
+      const mappedIngredientIds = new Set(activeMappings.map(r => (r.ingredient_id || '').toLowerCase()));
+      const withImage = relevantItems.filter(item =>
+        mappedIngredientIds.has((item.id || '').toLowerCase()) ||
+        mappedIngredientIds.has((item.name || '').toLowerCase())
+      ).length;
       const missingImage = Math.max(0, totalIngredients - withImage);
 
-      // Filter rows for response list
+      // Filter rows for response list (Global mappings: do NOT partition or exclude by protocol)
       let filteredRows = allRows;
-      if (protocol !== 'all') {
-        filteredRows = filteredRows.filter(r => r.protocol_id === protocol);
-      }
       if (statusFilter !== 'all') {
         filteredRows = filteredRows.filter(r => r.status === statusFilter);
       }
       if (searchQuery) {
-        filteredRows = filteredRows.filter(r => 
+        filteredRows = filteredRows.filter(r =>
           (r.ingredient_id && r.ingredient_id.toLowerCase().includes(searchQuery)) ||
           (r.public_id && r.public_id.toLowerCase().includes(searchQuery)) ||
           (r.original_filename && r.original_filename.toLowerCase().includes(searchQuery))
@@ -278,25 +271,50 @@ export default async function handler(req, res) {
           const originalFilename = asset.original_filename || publicId.split('/').pop() || '';
 
           if (match.matched && match.ingredientId) {
-            const mappingId = `img_${match.protocolId}_${match.ingredientId}`;
             const status = match.status; // 'active' or 'pending_review'
 
-            // Upsert into Neon PostgreSQL
-            await sql`
-              INSERT INTO ingredient_images (
-                id, protocol_id, ingredient_id, cloudinary_asset_id, public_id, secure_url, asset_version, format, original_filename, status, updated_at
-              ) VALUES (
-                ${mappingId}, ${match.protocolId}, ${match.ingredientId}, ${asset.asset_id || null}, ${publicId}, ${secureUrl}, ${assetVersion}, ${format}, ${originalFilename}, ${status}, NOW()
-              )
-              ON CONFLICT (protocol_id, ingredient_id) DO UPDATE SET
-                public_id = EXCLUDED.public_id,
-                secure_url = EXCLUDED.secure_url,
-                asset_version = EXCLUDED.asset_version,
-                format = EXCLUDED.format,
-                original_filename = EXCLUDED.original_filename,
-                status = EXCLUDED.status,
-                updated_at = NOW();
+            // Query Neon to check if an image mapping already exists for this ingredient across ALL protocols
+            const existingRows = await sql`
+              SELECT id, protocol_id, ingredient_id
+              FROM ingredient_images
+              WHERE LOWER(ingredient_id) = LOWER(${match.ingredientId})
+              ORDER BY updated_at DESC
+              LIMIT 1;
             `;
+
+            if (existingRows.length > 0) {
+              // Update existing record, preserving existing record ID and protocol_id
+              await sql`
+                UPDATE ingredient_images
+                SET 
+                  public_id = ${publicId},
+                  secure_url = ${secureUrl},
+                  asset_version = ${assetVersion},
+                  format = ${format},
+                  original_filename = ${originalFilename},
+                  status = ${status},
+                  updated_at = NOW()
+                WHERE id = ${existingRows[0].id};
+              `;
+            } else {
+              // Insert new global image mapping
+              const mappingId = `img_global_${match.ingredientId}`;
+              await sql`
+                INSERT INTO ingredient_images (
+                  id, protocol_id, ingredient_id, cloudinary_asset_id, public_id, secure_url, asset_version, format, original_filename, status, updated_at
+                ) VALUES (
+                  ${mappingId}, 'global', ${match.ingredientId}, ${asset.asset_id || null}, ${publicId}, ${secureUrl}, ${assetVersion}, ${format}, ${originalFilename}, ${status}, NOW()
+                )
+                ON CONFLICT (protocol_id, ingredient_id) DO UPDATE SET
+                  public_id = EXCLUDED.public_id,
+                  secure_url = EXCLUDED.secure_url,
+                  asset_version = EXCLUDED.asset_version,
+                  format = EXCLUDED.format,
+                  original_filename = EXCLUDED.original_filename,
+                  status = EXCLUDED.status,
+                  updated_at = NOW();
+              `;
+            }
 
             if (status === 'active') matchedCount++;
             else pendingReviewCount++;
@@ -341,8 +359,9 @@ export default async function handler(req, res) {
       // -----------------------------------------------------------------------
       if (action === 'save') {
         const {
-          protocol_id = 'lid',
+          protocol_id = 'global',
           ingredient_id,
+          ingredient_name,
           public_id,
           secure_url,
           asset_version = null,
@@ -360,28 +379,74 @@ export default async function handler(req, res) {
           });
         }
 
-        const id = body.id || `img_${protocol_id.toLowerCase()}_${ingredient_id}`;
+        // 1. Resolve canonical ingredient identity
+        const cleanId = String(ingredient_id || '').trim();
+        const cleanName = String(ingredient_name || '').trim();
 
-        const rows = await sql`
-          INSERT INTO ingredient_images (
-            id, protocol_id, ingredient_id, cloudinary_asset_id, public_id, secure_url, asset_version, format, original_filename, status, updated_at
-          ) VALUES (
-            ${id}, ${protocol_id.toLowerCase()}, ${ingredient_id}, ${body.cloudinary_asset_id || null}, ${public_id}, ${resolvedSecureUrl}, ${asset_version ? String(asset_version) : null}, ${format}, ${original_filename}, ${status}, NOW()
-          )
-          ON CONFLICT (protocol_id, ingredient_id) DO UPDATE SET
-            public_id = EXCLUDED.public_id,
-            secure_url = EXCLUDED.secure_url,
-            asset_version = EXCLUDED.asset_version,
-            format = EXCLUDED.format,
-            original_filename = EXCLUDED.original_filename,
-            status = EXCLUDED.status,
-            updated_at = NOW()
-          RETURNING *;
+        const canonicalItem = LID_DATABASE.find(item =>
+          item.id === cleanId ||
+          item.name.toLowerCase() === cleanId.toLowerCase() ||
+          (cleanName && item.name.toLowerCase() === cleanName.toLowerCase()) ||
+          normalizeToken(item.id) === normalizeToken(cleanId) ||
+          (cleanName && normalizeToken(item.name) === normalizeToken(cleanName))
+        );
+
+        const targetIngredientId = canonicalItem ? canonicalItem.id : cleanId;
+
+        // 2. Query Neon to check if an image mapping already exists for this ingredient across ALL protocols
+        const existingRows = await sql`
+          SELECT id, protocol_id, ingredient_id, public_id, secure_url, status
+          FROM ingredient_images
+          WHERE LOWER(ingredient_id) = LOWER(${targetIngredientId})
+          ORDER BY updated_at DESC
+          LIMIT 1;
         `;
+
+        let resultRow;
+        if (existingRows.length > 0) {
+          // Existing record found: preserve existing record ID and protocol_id, update image details
+          const existing = existingRows[0];
+          const updateResult = await sql`
+            UPDATE ingredient_images
+            SET 
+              public_id = ${public_id},
+              secure_url = ${resolvedSecureUrl},
+              asset_version = ${asset_version ? String(asset_version) : null},
+              format = ${format},
+              original_filename = ${original_filename || existing.original_filename},
+              status = ${status},
+              updated_at = NOW()
+            WHERE id = ${existing.id}
+            RETURNING *;
+          `;
+          resultRow = updateResult[0];
+        } else {
+          // No record exists yet: insert a new global image mapping
+          const newProtocol = 'global';
+          const newId = body.id || `img_global_${targetIngredientId}`;
+
+          const insertResult = await sql`
+            INSERT INTO ingredient_images (
+              id, protocol_id, ingredient_id, cloudinary_asset_id, public_id, secure_url, asset_version, format, original_filename, status, updated_at
+            ) VALUES (
+              ${newId}, ${newProtocol}, ${targetIngredientId}, ${body.cloudinary_asset_id || null}, ${public_id}, ${resolvedSecureUrl}, ${asset_version ? String(asset_version) : null}, ${format}, ${original_filename}, ${status}, NOW()
+            )
+            ON CONFLICT (protocol_id, ingredient_id) DO UPDATE SET
+              public_id = EXCLUDED.public_id,
+              secure_url = EXCLUDED.secure_url,
+              asset_version = EXCLUDED.asset_version,
+              format = EXCLUDED.format,
+              original_filename = EXCLUDED.original_filename,
+              status = EXCLUDED.status,
+              updated_at = NOW()
+            RETURNING *;
+          `;
+          resultRow = insertResult[0];
+        }
 
         return sendJson(res, 200, {
           success: true,
-          mapping: rows[0]
+          mapping: resultRow
         });
       }
 
@@ -424,18 +489,24 @@ export default async function handler(req, res) {
       // Action: DELETE
       // -----------------------------------------------------------------------
       if (action === 'delete') {
-        const { id } = body;
-        if (!id) {
-          return sendJson(res, 400, { error: 'MISSING_ID', message: 'Mapping id is required.' });
+        const { id, ingredient_id } = body;
+        if (!id && !ingredient_id) {
+          return sendJson(res, 400, { error: 'MISSING_ID', message: 'Mapping id or ingredient_id is required.' });
         }
 
-        await sql`
-          DELETE FROM ingredient_images WHERE id = ${id};
-        `;
+        if (id) {
+          await sql`
+            DELETE FROM ingredient_images WHERE id = ${id};
+          `;
+        } else if (ingredient_id) {
+          await sql`
+            DELETE FROM ingredient_images WHERE LOWER(ingredient_id) = LOWER(${ingredient_id});
+          `;
+        }
 
         return sendJson(res, 200, {
           success: true,
-          deletedId: id
+          deletedId: id || ingredient_id
         });
       }
 
@@ -481,17 +552,24 @@ export default async function handler(req, res) {
     // =========================================================================
     if (method === 'DELETE') {
       const id = urlObj.searchParams.get('id');
-      if (!id) {
-        return sendJson(res, 400, { error: 'MISSING_ID', message: 'Mapping id query parameter is required.' });
+      const ingredientId = urlObj.searchParams.get('ingredient_id');
+      if (!id && !ingredientId) {
+        return sendJson(res, 400, { error: 'MISSING_ID', message: 'Mapping id or ingredient_id query parameter is required.' });
       }
 
-      await sql`
-        DELETE FROM ingredient_images WHERE id = ${id};
-      `;
+      if (id) {
+        await sql`
+          DELETE FROM ingredient_images WHERE id = ${id};
+        `;
+      } else if (ingredientId) {
+        await sql`
+          DELETE FROM ingredient_images WHERE LOWER(ingredient_id) = LOWER(${ingredientId});
+        `;
+      }
 
       return sendJson(res, 200, {
         success: true,
-        deletedId: id
+        deletedId: id || ingredientId
       });
     }
 

@@ -98,11 +98,17 @@ console.log('\nTest 2: Admin Summary Cache persistence and synchronous pre-seedi
   assert.strictEqual(cached.stats.missingImage, 30, 'Must retain 30 missing photos');
   assert.strictEqual(cached.mappings.length, 6, 'Must retain 6 mappings');
 
-  // Verify protocol isolation (diabetic cache should be null)
+  // Verify global cache sharing across protocols (photos are shared across ALL protocols)
   const diabeticCached = getCachedAdminSummary('diabetic');
-  assert.strictEqual(diabeticCached, null, 'Diabetic protocol cache must be null when only LID was saved');
+  assert.ok(diabeticCached, 'Diabetic protocol must access global image cache');
+  assert.strictEqual(diabeticCached.stats.withImage, 6, 'Diabetic protocol must access all 6 mapped photos');
+  assert.strictEqual(diabeticCached.mappings.length, 6, 'Diabetic protocol must have all 6 mappings');
 
-  console.log('  ✅ Cache persistence and protocol isolation verified.');
+  const purineCached = getCachedAdminSummary('low_purine');
+  assert.ok(purineCached, 'Low-Purine protocol must access global image cache');
+  assert.strictEqual(purineCached.stats.withImage, 6, 'Low-Purine protocol must access all 6 mapped photos');
+
+  console.log('  ✅ Cache persistence and global protocol sharing verified.');
 }
 
 // ============================================================================

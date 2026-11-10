@@ -79,13 +79,12 @@ export default async function handler(req, res) {
       ? await sql`
           SELECT id, protocol_id, ingredient_id, public_id, secure_url, asset_version, format, original_filename, status, updated_at
           FROM ingredient_images
-          WHERE protocol_id = ${protocol}
           ORDER BY updated_at DESC;
         `
       : await sql`
           SELECT id, protocol_id, ingredient_id, public_id, secure_url, asset_version, format, original_filename, status, updated_at
           FROM ingredient_images
-          WHERE protocol_id = ${protocol} AND status = 'active'
+          WHERE status = 'active'
           ORDER BY updated_at DESC;
         `;
 

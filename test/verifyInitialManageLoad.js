@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import assert from 'node:assert';
 
 const EDGE_PATH = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const PORT = 5176;
@@ -26,6 +27,7 @@ await sleep(2000);
 
 // 2. Launch Headless Edge
 const userDataDir = path.resolve('tmp_edge_profile_manage_test');
+try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch (_) {}
 fs.mkdirSync(userDataDir, { recursive: true });
 
 const edgeProcess = spawn(EDGE_PATH, [
@@ -361,6 +363,139 @@ if (scenarioD.result.value.mappedPhotosCount !== 6) {
   process.exit(1);
 }
 console.log('  ✅ Scenario D Passed: Cached images preserved during simulated backend outage!');
+
+// ============================================================================
+// SCENARIO E: Global Protocol Switching in Manage Hub (Low-Purine, Diabetic, Low-Sodium, Pinoy-Keto)
+// ============================================================================
+console.log('\n--- Scenario E: Protocol Dropdown Switching in Manage Hub ---');
+
+// Restore normal fetch mock before protocol switching
+await sendCdp('Runtime.evaluate', {
+  expression: `
+    (() => {
+      window.fetch = async (url, opts) => {
+        const urlStr = typeof url === 'string' ? url : (url?.url || '');
+        if (urlStr.includes('/api/auth/get-session')) {
+          return new Response(JSON.stringify({
+            user: { id: 'admin_test_1', name: 'James Admin', email: 'jamesphillipdeguzman@gmail.com', role: 'admin' },
+            session: { token: 'mock-admin-token' }
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (urlStr.includes('/api/admin/ingredient-images')) {
+          return new Response(JSON.stringify({
+            success: true,
+            stats: { totalIngredients: 36, withImage: 6, missingImage: 30, pendingReview: 0 },
+            mappings: window.__realNeonMappings
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (urlStr.includes('/api/ingredient-images')) {
+          const imagesMap = {};
+          for (const m of window.__realNeonMappings) { imagesMap[m.ingredient_id] = m; }
+          return new Response(JSON.stringify({ success: true, count: 6, images: imagesMap }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response('{}');
+      };
+
+      // Navigate back to Manage
+      const manageBtn = document.querySelector('[data-tab="manage"]');
+      if (manageBtn) manageBtn.click();
+    })()
+  `
+});
+await sleep(500);
+
+const testProtocols = [
+  { id: 'low_purine', name: 'Low-Purine' },
+  { id: 'diabetic', name: 'Diabetic' },
+  { id: 'low_sodium', name: 'Low-Sodium' },
+  { id: 'pinoy_keto', name: 'Pinoy-Keto' }
+];
+
+for (const p of testProtocols) {
+  await sendCdp('Runtime.evaluate', {
+    expression: `
+      (() => {
+        const select = document.querySelector('#admin-image-protocol-select');
+        if (select) {
+          select.value = '${p.id}';
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      })()
+    `
+  });
+  await sleep(600);
+
+  const checkProto = await sendCdp('Runtime.evaluate', {
+    expression: `
+      (() => {
+        const images = document.querySelectorAll('.ingredient-card__image img');
+        const stats = document.querySelector('.admin-stats-grid');
+        return {
+          mappedCount: images.length,
+          statsText: stats ? stats.textContent.replace(/\\s+/g, ' ') : ''
+        };
+      })()
+    `,
+    returnByValue: true
+  });
+
+  const resProto = checkProto.result.value;
+  console.log(`  Protocol '${p.name}' mapped photos count:`, resProto.mappedCount);
+  console.log(`  Protocol '${p.name}' stats bar:`, resProto.statsText);
+
+  if (resProto.mappedCount !== 6) {
+    console.error(`❌ Protocol '${p.name}' must retain all 6 global mapped photos! Got ${resProto.mappedCount}`);
+    process.exit(1);
+  }
+
+  const shot = await sendCdp('Page.captureScreenshot', { format: 'png' });
+  const shotPath = path.join(SHOTS_DIR, `manage-protocol-switch-${p.id}.png`);
+  fs.writeFileSync(shotPath, Buffer.from(shot.data, 'base64'));
+  console.log(`  📸 Screenshot saved: ${shotPath}`);
+}
+console.log('  ✅ Scenario E Passed: Switching protocols retained all 6 global images without resetting to 0!');
+
+// ============================================================================
+// SCENARIO F: User-Facing Search / Checker Cross-Protocol Verification
+// ============================================================================
+console.log('\n--- Scenario F: User-Facing Search across Protocols ---');
+await sendCdp('Runtime.evaluate', {
+  expression: `
+    (() => {
+      // 1. Switch back to diet protocol mode
+      const dietPill = document.querySelector('[data-app-mode="diet"]');
+      if (dietPill) dietPill.click();
+      // 2. Click Checker tab
+      const checkerBtn = document.querySelector('[data-tab="checker"]');
+      if (checkerBtn) checkerBtn.click();
+    })()
+  `
+});
+await sleep(600);
+
+const userFacingLid = await sendCdp('Runtime.evaluate', {
+  expression: `
+    (() => {
+      const card = document.querySelector('[data-item-id="salt-kosher"]');
+      const img = card ? card.querySelector('img') : null;
+      return {
+        cardFound: Boolean(card),
+        imgSrc: img ? img.src : null,
+        cardText: card ? card.textContent : ''
+      };
+    })()
+  `,
+  returnByValue: true
+});
+
+console.log('  LID Checker Kosher Salt photo rendered:', Boolean(userFacingLid.result.value.imgSrc));
+assert.ok(userFacingLid.result.value.imgSrc, 'Kosher Salt photo must render in LID Checker');
+
+const shotF = await sendCdp('Page.captureScreenshot', { format: 'png' });
+const shotFPath = path.join(SHOTS_DIR, 'user-search-global-photos.png');
+fs.writeFileSync(shotFPath, Buffer.from(shotF.data, 'base64'));
+console.log(`  📸 Screenshot saved: ${shotFPath}`);
+console.log('  ✅ Scenario F Passed: User-facing view displays shared ingredient photo!');
 
 // Cleanup
 console.log('\n5. Cleaning up processes...');

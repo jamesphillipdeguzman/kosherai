@@ -271,10 +271,11 @@ const state = {
   adminImageLoading: false
 };
 
-// Pre-seed admin state from cache immediately on script evaluation
+// Pre-seed admin and public image state from global cache immediately on script evaluation
 (() => {
   try {
-    const cached = getCachedAdminSummary('lid');
+    initIngredientImageCache('global');
+    const cached = getCachedAdminSummary('global') || getCachedAdminSummary('lid');
     if (cached && Array.isArray(cached.mappings) && cached.mappings.length > 0) {
       state.adminImageMappings = cached.mappings;
       if (cached.stats) state.adminImageStats = cached.stats;
@@ -447,10 +448,11 @@ let adminImageActiveProtocol = null;
 
 async function loadAdminImageData(protocol = 'lid', force = false) {
   const normProto = (protocol || state.adminImageProtocol || state.activeDiet || 'lid').toLowerCase();
+  state.adminImageProtocol = normProto;
 
-  // 1. Immediately apply cached data if state is unpopulated or protocol changed
-  if (state.adminImageProtocol !== normProto || state.adminImageMappings.length === 0 || force) {
-    const cached = getCachedAdminSummary(normProto);
+  // 1. Immediately apply cached global data if unpopulated; retain existing global mappings when switching protocols
+  if (state.adminImageMappings.length === 0 || force) {
+    const cached = getCachedAdminSummary(normProto) || getCachedAdminSummary('global');
     if (cached && Array.isArray(cached.mappings) && cached.mappings.length > 0) {
       state.adminImageStats = cached.stats || {
         totalIngredients: 36,
@@ -459,14 +461,15 @@ async function loadAdminImageData(protocol = 'lid', force = false) {
         pendingReview: 0
       };
       state.adminImageMappings = cached.mappings;
-      state.adminImageProtocol = normProto;
       state.adminImageLoading = false;
       render();
     } else {
-      state.adminImageProtocol = normProto;
       state.adminImageLoading = true;
       render();
     }
+  } else {
+    // Keep existing global mappings active across protocol switches (do not flash empty or missing)
+    render();
   }
 
   // 2. Prevent duplicate concurrent fetches for the same protocol

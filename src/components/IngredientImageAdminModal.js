@@ -25,25 +25,27 @@ export function renderIngredientImageAdminModal(props = {}) {
     embedded = false
   } = props;
 
-  // Map of currently mapped images for O(1) lookup
+  // Global map of currently mapped images for O(1) lookup across ALL protocols
   const mappingByIngredientId = {};
   for (const m of mappings) {
-    if (m.protocol_id === activeProtocol || activeProtocol === 'all') {
+    if (m.ingredient_id) {
       mappingByIngredientId[m.ingredient_id] = m;
-      if (m.ingredient_name) {
-        mappingByIngredientId[m.ingredient_name] = m;
-      }
+      mappingByIngredientId[m.ingredient_id.toLowerCase()] = m;
+    }
+    if (m.ingredient_name) {
+      mappingByIngredientId[m.ingredient_name] = m;
+      mappingByIngredientId[m.ingredient_name.toLowerCase()] = m;
     }
   }
 
-  // Pre-seed any cached mappings that might not be in the passed mappings array yet
+  // Pre-seed any cached global mappings that might not be in the passed mappings array yet
   for (const item of LID_DATABASE) {
     if (!mappingByIngredientId[item.id]) {
       const resolved = resolveGalleryIngredientImage(item, null, activeProtocol);
       if (resolved.isMapped && resolved.url) {
         mappingByIngredientId[item.id] = {
-          id: `cached_${activeProtocol}_${item.id}`,
-          protocol_id: activeProtocol,
+          id: `cached_global_${item.id}`,
+          protocol_id: 'global',
           ingredient_id: item.id,
           secure_url: resolved.url,
           public_id: resolved.publicId || item.id,

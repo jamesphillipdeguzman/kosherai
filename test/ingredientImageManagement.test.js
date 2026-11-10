@@ -292,7 +292,8 @@ console.log('Test 6: Admin API Discovery & Upsert Verification');
   try {
     const { neon } = await import('@neondatabase/serverless');
     const sql = neon(process.env.DATABASE_URL);
-    await sql.query("DELETE FROM ingredient_images WHERE secure_url LIKE '%v1794200001%' OR secure_url LIKE '%v12345%' OR secure_url LIKE '%v99999%';");
+    await sql.query("DELETE FROM ingredient_images WHERE ingredient_id = 'banana-ketchup' OR secure_url LIKE '%v12345%' OR secure_url LIKE '%v99999%';");
+    await sql.query("UPDATE ingredient_images SET secure_url = 'https://res.cloudinary.com/dego6hgcb/image/upload/v1794228286/kosherai/lid_protocol/ingredients/salt-kosher.webp', public_id = 'kosherai/lid_protocol/ingredients/salt-kosher' WHERE ingredient_id = 'salt-kosher';");
   } catch (cleanErr) {
     console.warn('  ⚠️ Test cleanup warning:', cleanErr?.message);
   }
