@@ -122,24 +122,24 @@ export function renderCourseProjectView(state = {}) {
 
           <!-- W1–W6 Study Cards -->
           ${schedule.map(w => {
-            const isCurrent = selectedWeek === w.weekNumber;
-            const weekStats = comparison.weeklyData.find(d => d.weekNumber === w.weekNumber);
-            const hasData = weekStats && weekStats.hasRecords;
-            const weekTripsCount = trips.filter(t => {
-              const tripWeek = t.projectWeek ? Number(t.projectWeek) : getProjectWeekForDate(t.date, config.startDate);
-              return tripWeek === w.weekNumber;
-            }).length;
-            const pillClasses = isCurrent
-              ? 'active bg-teal-600 text-white dark:bg-teal-500'
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
-            return `
+    const isCurrent = selectedWeek === w.weekNumber;
+    const weekStats = comparison.weeklyData.find(d => d.weekNumber === w.weekNumber);
+    const hasData = weekStats && weekStats.hasRecords;
+    const weekTripsCount = trips.filter(t => {
+      const tripWeek = t.projectWeek ? Number(t.projectWeek) : getProjectWeekForDate(t.date, config.startDate);
+      return tripWeek === w.weekNumber;
+    }).length;
+    const pillClasses = isCurrent
+      ? 'active bg-teal-600 text-white dark:bg-teal-500'
+      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
+    return `
               <button type="button" class="week-step-pill study-week-card ${pillClasses} ${hasData || weekTripsCount > 0 ? 'has-data' : ''}" data-week-select="${w.weekNumber}" title="Filter study to Week ${w.weekNumber}">
                 <div class="week-pill-num">W${w.weekNumber}</div>
                 <div class="week-pill-type">${w.isBaseline ? 'Baseline' : (w.weekNumber === 2 ? 'Intervene' : 'Evaluate')}</div>
                 <div class="week-pill-dates">${w.startDate.slice(5)} • ${weekTripsCount} ${weekTripsCount === 1 ? 'trip' : 'trips'}</div>
               </button>
             `;
-          }).join('')}
+  }).join('')}
         </div>
 
         <!-- Course Sub-navigation Bar -->
@@ -558,10 +558,10 @@ function renderGroceryPurchasesTab(state) {
         <div class="empty-state-card" style="padding: 32px 16px; text-align: center;">
           <div class="empty-icon" style="font-size: 2rem; margin-bottom: 8px;">${searchQuery ? '🔍' : '🥬'}</div>
           <h3>${searchQuery ? `No groceries matching "${escapeHtml(searchQuery)}"` : (selectedWeek === 'all' ? 'No Grocery Items in Inventory' : `No Grocery Items in Week ${selectedWeek}`)}</h3>
-          <p>${searchQuery 
-            ? `No matching grocery items found in ${selectedWeek === 'all' ? 'All Weeks' : `Week ${selectedWeek}`}. Try a different item name or clear your search.`
-            : (selectedWeek === 'all' ? 'Scan a receipt or add a shopping trip to populate itemized grocery records.' : `No items found for Week ${selectedWeek}. Select "All Weeks" above to view all records.`)
-          }</p>
+          <p>${searchQuery
+        ? `No matching grocery items found in ${selectedWeek === 'all' ? 'All Weeks' : `Week ${selectedWeek}`}. Try a different item name or clear your search.`
+        : (selectedWeek === 'all' ? 'Scan a receipt or add a shopping trip to populate itemized grocery records.' : `No items found for Week ${selectedWeek}. Select "All Weeks" above to view all records.`)
+      }</p>
           <div style="display: flex; gap: 10px; justify-content: center; margin-top: 14px;">
             ${searchQuery ? `
               <button class="btn-secondary" id="empty-clear-search-btn">Clear Search</button>
@@ -584,13 +584,13 @@ function renderGroceryPurchasesTab(state) {
             </thead>
             <tbody>
               ${items.map(i => {
-    const status = (i.lidStatus || 'SAFE').toUpperCase();
-    const displayName = getGroceryItemName(i);
-    const dbItem = LID_DATABASE.find(db => db.name.toLowerCase() === displayName.toLowerCase() || db.id === i.id || db.id === i.itemId);
-    const itemId = dbItem?.id || i.itemId || i.id || ('grocery-' + displayName.toLowerCase().replace(/\s+/g, '-'));
-    const itemWeek = resolveItemWeek(i, tripsMap, config);
-    const parentTrip = tripsMap.get(i.tripId || i.trip_id);
-    return `
+        const status = (i.lidStatus || 'SAFE').toUpperCase();
+        const displayName = getGroceryItemName(i);
+        const dbItem = LID_DATABASE.find(db => db.name.toLowerCase() === displayName.toLowerCase() || db.id === i.id || db.id === i.itemId);
+        const itemId = dbItem?.id || i.itemId || i.id || ('grocery-' + displayName.toLowerCase().replace(/\s+/g, '-'));
+        const itemWeek = resolveItemWeek(i, tripsMap, config);
+        const parentTrip = tripsMap.get(i.tripId || i.trip_id);
+        return `
                   <tr class="grocery-row grocery-card cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors" data-item-id="${escapeHtml(itemId)}" data-grocery-name="${escapeHtml(displayName)}" role="button" tabindex="0" title="Click to view food details and clinical guidance">
                     <td>
                       <div style="font-weight: 700;" class="text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1.5">
@@ -624,7 +624,7 @@ function renderGroceryPurchasesTab(state) {
                     </td>
                   </tr>
                 `;
-  }).join('')}
+      }).join('')}
             </tbody>
           </table>
         </div>
@@ -910,7 +910,7 @@ function createReceiptItemRowHtml(item = {}, idx = 0, dietProfile = null, isWetM
 
       <!-- Tier 2 Col 3 (Mobile) / Col 5 (Desktop): Line Total -->
       <td class="item-cell-total">
-        <label class="mobile-cell-label">Line Total (₱)</label>
+        <label class="mobile-cell-label">Total (₱)</label>
         <input type="number" step="0.01" min="0" class="table-input item-total-val" placeholder="0.00" value="${total !== '' ? total : ''}" readonly style="width: 100%; text-align: right;" />
       </td>
 
@@ -1052,8 +1052,8 @@ function renderReceiptScanModal(state) {
             <h2 class="modal-title">${isWetMarket ? 'Wet Market Food Intake & Manual Log' : 'Intelligent Supermarket Receipt Scanner'}</h2>
             <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">
               ${isWetMarket
-                ? 'Record palengke and receipt-less produce, scale weights, and itemized batch purchases.'
-                : 'AI document OCR extracts store details, itemized purchases, and final amount paid for side-by-side verification.'}
+      ? 'Record palengke and receipt-less produce, scale weights, and itemized batch purchases.'
+      : 'AI document OCR extracts store details, itemized purchases, and final amount paid for side-by-side verification.'}
             </div>
           </div>
           <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
