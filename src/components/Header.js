@@ -86,10 +86,10 @@ export function renderHeader(isOnline = true, appMode = 'diet', showProjectTab =
         ${currentUser && onlineVal ? `
           <div class="status-pill status-pill-user online inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 transition-all select-none shadow-2xs" title="Network connection active · Signed in as ${escapeAttr(currentUser.name || currentUser.email || 'User')}${currentUser.email ? ` (${escapeAttr(currentUser.email)})` : ''}">
             <span class="status-dot"></span>
-            <span class="user-avatar-badge status-label user-initial font-bold text-xs select-none sm:hidden">
+            <span class="user-avatar-badge status-label user-initial font-bold text-xs select-none">
               ${escapeHtml(initial)}
             </span>
-            <span class="user-desktop-name font-bold text-xs select-none hidden sm:inline max-w-[120px] truncate">
+            <span class="user-desktop-name font-bold text-xs select-none hidden sm:inline max-w-[120px] truncate text-emerald-800 dark:text-emerald-300">
               ${escapeHtml(firstName)}
             </span>
           </div>

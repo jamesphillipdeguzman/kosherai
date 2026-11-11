@@ -246,10 +246,10 @@ export function Header({
               title={`Network connection active · Signed in as ${currentUser.name || currentUser.email || 'User'}${currentUser.email ? ` (${currentUser.email})` : ''}`}
             >
               <span className="status-dot"></span>
-              <span className="user-avatar-badge status-label user-initial font-bold text-xs select-none sm:hidden">
+              <span className="user-avatar-badge status-label user-initial font-bold text-xs select-none">
                 {initial}
               </span>
-              <span className="user-desktop-name font-bold text-xs select-none hidden sm:inline max-w-[120px] truncate">
+              <span className="user-desktop-name font-bold text-xs select-none hidden sm:inline max-w-[120px] truncate text-emerald-800 dark:text-emerald-300">
                 {firstName}
               </span>
             </div>

@@ -38,24 +38,32 @@ const headerJsPath = path.join(rootDir, 'src', 'components', 'Header.js');
 const headerJsx = fs.readFileSync(headerJsxPath, 'utf8');
 const headerJs = fs.readFileSync(headerJsPath, 'utf8');
 
-// 1.1 Responsive classes: sm:hidden on initial, hidden sm:inline on desktop name
+// 1.1 Responsive classes: initial always visible, first name hidden on mobile and visible on desktop
 assert.ok(
-  headerJsx.includes('user-initial font-bold text-xs select-none sm:hidden'),
-  'Header.jsx must hide initial on desktop (sm:hidden)'
+  headerJsx.includes('user-initial font-bold text-xs select-none'),
+  'Header.jsx must render initial always visible'
+);
+assert.ok(
+  !headerJsx.includes('user-initial font-bold text-xs select-none sm:hidden'),
+  'Header.jsx must NOT hide initial on desktop'
 );
 assert.ok(
   headerJsx.includes('user-desktop-name font-bold text-xs select-none hidden sm:inline'),
-  'Header.jsx must show first name on desktop (hidden sm:inline)'
+  'Header.jsx must hide first name on mobile with hidden sm:inline'
 );
 
 // 1.2 Header.js must have matching responsive classes
 assert.ok(
-  headerJs.includes('user-initial font-bold text-xs select-none sm:hidden'),
-  'Header.js must hide initial on desktop (sm:hidden)'
+  headerJs.includes('user-initial font-bold text-xs select-none'),
+  'Header.js must render initial always visible'
+);
+assert.ok(
+  !headerJs.includes('user-initial font-bold text-xs select-none sm:hidden'),
+  'Header.js must NOT hide initial on desktop'
 );
 assert.ok(
   headerJs.includes('user-desktop-name font-bold text-xs select-none hidden sm:inline'),
-  'Header.js must show first name on desktop (hidden sm:inline)'
+  'Header.js must hide first name on mobile with hidden sm:inline'
 );
 
 // 1.3 Verify output for user with name "James Wilson"

@@ -6436,7 +6436,16 @@ html.dark .status-pill.status-pill-offline.offline,
   }
 }
 
+@media (max-width: 639.98px) {
+  .user-desktop-name {
+    display: none !important;
+  }
+}
+
 @media (min-width: 640px) {
+  .user-desktop-name {
+    display: inline !important;
+  }
   .signout-text {
     display: inline !important;
   }
