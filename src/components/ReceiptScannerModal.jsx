@@ -697,37 +697,33 @@ export default function ReceiptScannerModal({
             {/* AI / Neural OCR Scanning Toggle Switch (Normal Document Flow in Scrollable Form) */}
             <div className="ocr-toggle-wrapper w-full pb-3 static">
               <div
-                className={`ocr-toggle-card static p-2.5 sm:p-3 rounded-xl border flex items-center justify-between gap-3 transition-colors ${
-                  theme === 'dark'
+                className={`ocr-toggle-card static p-2.5 sm:p-3 rounded-xl border flex items-center justify-between gap-3 transition-colors ${theme === 'dark'
                     ? 'bg-slate-900/60 border-slate-800'
                     : 'bg-white border-slate-200 shadow-xs'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span className="text-xl select-none shrink-0">🤖</span>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span
-                        className={`text-xs sm:text-sm font-bold truncate ${
-                          theme === 'dark' ? 'text-white' : 'text-slate-900'
-                        }`}
+                        className={`text-xs sm:text-sm font-bold truncate ${theme === 'dark' ? 'text-white' : 'text-slate-900'
+                          }`}
                       >
                         AI / Neural OCR Scanning
                       </span>
                       <span
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                          enableOcrScan
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider ${enableOcrScan
                             ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
                             : 'bg-slate-700/40 text-slate-400 border border-slate-600/30'
-                        }`}
+                          }`}
                       >
                         {enableOcrScan ? 'Enabled' : 'Off (Quick Capture)'}
                       </span>
                     </div>
                     <p
-                      className={`text-[11px] sm:text-xs mt-0.5 line-clamp-1 ${
-                        theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-                      }`}
+                      className={`text-[11px] sm:text-xs mt-0.5 line-clamp-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
+                        }`}
                     >
                       {enableOcrScan
                         ? 'Automatically extracts store, total amount, and items when online.'
@@ -753,177 +749,176 @@ export default function ReceiptScannerModal({
             <div className="flex flex-col md:grid md:grid-cols-12 gap-6">
               {/* Left Column / Upload Card: available in both modes */}
               <div className="w-full md:col-span-5 flex flex-col">
-                  {/* Dedicated Camera Input with rear-facing mobile camera capture */}
-                  <input
-                    type="file"
-                    ref={cameraInputRef}
-                    id="receipt-camera-input"
-                    data-testid="receipt-camera-input"
-                    accept="image/*"
-                    capture="environment"
-                    disabled={isScanning}
-                    onChange={handleFileSelect}
-                    className="sr-only hidden"
-                    tabIndex={-1}
-                    aria-hidden="true"
-                  />
+                {/* Dedicated Camera Input with rear-facing mobile camera capture */}
+                <input
+                  type="file"
+                  ref={cameraInputRef}
+                  id="receipt-camera-input"
+                  data-testid="receipt-camera-input"
+                  accept="image/*"
+                  capture="environment"
+                  disabled={isScanning}
+                  onChange={handleFileSelect}
+                  className="sr-only hidden"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
 
-                  {/* Dedicated Gallery / File Picker Input without capture attribute */}
-                  <input
-                    type="file"
-                    ref={galleryInputRef}
-                    id="receipt-gallery-input"
-                    data-testid="receipt-gallery-input"
-                    accept="image/*"
-                    disabled={isScanning}
-                    onChange={handleFileSelect}
-                    className="sr-only hidden"
-                    tabIndex={-1}
-                    aria-hidden="true"
-                  />
+                {/* Dedicated Gallery / File Picker Input without capture attribute */}
+                <input
+                  type="file"
+                  ref={galleryInputRef}
+                  id="receipt-gallery-input"
+                  data-testid="receipt-gallery-input"
+                  accept="image/*"
+                  disabled={isScanning}
+                  onChange={handleFileSelect}
+                  className="sr-only hidden"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
 
-                  <div
-                    className={`w-full h-full min-h-[280px] sm:min-h-[340px] md:min-h-[440px] rounded-xl border flex flex-col items-center justify-center p-4 transition-colors ${theme === 'dark'
-                      ? 'bg-slate-900/60 border-slate-800'
-                      : 'bg-white border-slate-200 shadow-sm'
-                      }`}
-                  >
-                    {previewUrl ? (
-                      <div className="w-full h-full flex flex-col justify-between items-center gap-3">
-                        <div className={`relative w-full flex-1 max-h-[380px] rounded-lg overflow-hidden bg-black/90 flex items-center justify-center border border-slate-700/50 ${isScanning ? 'scanning-thumbnail-box' : ''
-                          }`}>
-                          <img
-                            src={previewUrl}
-                            alt="Scanned Receipt Preview"
-                            className={`max-h-full max-w-full object-contain transition-opacity duration-300 ${isScanning ? 'opacity-80' : 'opacity-100'
-                              }`}
-                          />
-                          {isScanning && <div className="scanning-laser-beam" />}
-                        </div>
-
-                        {/* Toast / Status Badge for OCR Engine */}
-                        {ocrStatusBadge && (
-                          <div className="w-full py-1.5 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5 animate-fadeIn">
-                            <span>✓</span>
-                            <span>{ocrStatusBadge}</span>
-                          </div>
-                        )}
-
-                        {/* Receipt Action Toolbar */}
-                        <div className="w-full flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={handleRetake}
-                            disabled={isScanning}
-                            className={`flex-1 min-w-[110px] min-h-[38px] flex items-center justify-center gap-1.5 rounded-xl text-xs font-semibold border transition-all ${isScanning ? 'opacity-50 pointer-events-none' : 'cursor-pointer'
-                              } ${theme === 'dark'
-                                ? 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
-                                : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-                              }`}
-                          >
-                            🔄 Retake Photo
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={handleRescanGemini}
-                            disabled={isScanning || !previewUrl}
-                            title="Re-scan receipt using Gemini Flash Vision"
-                            className={`min-h-[38px] px-3 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 ${isScanning || !previewUrl
-                              ? 'opacity-50 pointer-events-none'
-                              : 'cursor-pointer hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-700 bg-teal-50/50 dark:bg-teal-950/20'
-                              }`}
-                          >
-                            {activeEngine === 'gemini' ? (
-                              <span className="spinner-micro"></span>
-                            ) : (
-                              <span>✨</span>
-                            )}
-                            <span>Re-scan with Gemini</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={handleManualPaddleScan}
-                            disabled={isScanning || !previewUrl}
-                            title="Force local on-device PaddleOCR extraction without Gemini"
-                            className={`border border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors min-h-[38px] ${isScanning || !previewUrl
-                              ? 'opacity-50 pointer-events-none'
-                              : 'cursor-pointer'
-                              }`}
-                          >
-                            {activeEngine === 'paddle' ? (
-                              <span className="spinner-micro"></span>
-                            ) : (
-                              <span>⚡</span>
-                            )}
-                            <span>On-Device OCR</span>
-                          </button>
-                        </div>
+                <div
+                  className={`w-full h-full min-h-[280px] sm:min-h-[340px] md:min-h-[440px] rounded-xl border flex flex-col items-center justify-center p-4 transition-colors ${theme === 'dark'
+                    ? 'bg-slate-900/60 border-slate-800'
+                    : 'bg-white border-slate-200 shadow-sm'
+                    }`}
+                >
+                  {previewUrl ? (
+                    <div className="w-full h-full flex flex-col justify-between items-center gap-3">
+                      <div className={`relative w-full flex-1 max-h-[380px] rounded-lg overflow-hidden bg-black/90 flex items-center justify-center border border-slate-700/50 ${isScanning ? 'scanning-thumbnail-box' : ''
+                        }`}>
+                        <img
+                          src={previewUrl}
+                          alt="Scanned Receipt Preview"
+                          className={`max-h-full max-w-full object-contain transition-opacity duration-300 ${isScanning ? 'opacity-80' : 'opacity-100'
+                            }`}
+                        />
+                        {isScanning && <div className="scanning-laser-beam" />}
                       </div>
-                    ) : (
-                      <div className="w-full h-full border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center border-cyan-500/40 bg-teal-500/5">
-                        <div className="text-4xl sm:text-5xl mb-3">📷</div>
-                        <div
-                          className={`font-bold text-base sm:text-lg mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-900'
+
+                      {/* Toast / Status Badge for OCR Engine */}
+                      {ocrStatusBadge && (
+                        <div className="w-full py-1.5 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5 animate-fadeIn">
+                          <span>✓</span>
+                          <span>{ocrStatusBadge}</span>
+                        </div>
+                      )}
+
+                      {/* Receipt Action Toolbar */}
+                      <div className="w-full flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleRetake}
+                          disabled={isScanning}
+                          className={`flex-1 min-w-[110px] min-h-[38px] flex items-center justify-center gap-1.5 rounded-xl text-xs font-semibold border transition-all ${isScanning ? 'opacity-50 pointer-events-none' : 'cursor-pointer'
+                            } ${theme === 'dark'
+                              ? 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                              : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
                             }`}
                         >
-                          {venueMode === 'wet_market' ? 'Take Photo of Produce, Receipt or Scale' : 'Take Photo or Upload Receipt'}
-                        </div>
-                        <p
-                          className={`text-xs sm:text-sm max-w-xs mb-5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
+                          🔄 Retake Photo
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleRescanGemini}
+                          disabled={isScanning || !previewUrl}
+                          title="Re-scan receipt using Gemini Flash Vision"
+                          className={`min-h-[38px] px-3 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center justify-center gap-1.5 ${isScanning || !previewUrl
+                            ? 'opacity-50 pointer-events-none'
+                            : 'cursor-pointer hover:bg-teal-50 dark:hover:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-700 bg-teal-50/50 dark:bg-teal-950/20'
                             }`}
                         >
-                          Supports receipts, produce, and weighing-scale photos directly from your mobile camera
-                        </p>
-                        {/* Two Distinct Actions: Take Photo (Camera) & Upload from Photos (Gallery) */}
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 w-full max-w-sm">
-                          {/* Take Photo Button */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (cameraInputRef.current) {
-                                cameraInputRef.current.value = '';
-                                cameraInputRef.current.click();
-                              }
-                            }}
-                            disabled={isScanning}
-                            id="take-photo-btn"
-                            data-testid="take-photo-btn"
-                            className="flex-1 min-h-[44px] px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-500 active:scale-95 text-white cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
-                            aria-label="Take Photo"
-                          >
-                            <span className="text-base">📸</span>
-                            <span>Take Photo</span>
-                          </button>
+                          {activeEngine === 'gemini' ? (
+                            <span className="spinner-micro"></span>
+                          ) : (
+                            <span>✨</span>
+                          )}
+                          <span>Re-scan with Gemini</span>
+                        </button>
 
-                          {/* Upload from Photos Button */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (galleryInputRef.current) {
-                                galleryInputRef.current.value = '';
-                                galleryInputRef.current.click();
-                              }
-                            }}
-                            disabled={isScanning}
-                            id="upload-photos-btn"
-                            data-testid="upload-photos-btn"
-                            className={`flex-1 min-h-[44px] px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2 border active:scale-95 cursor-pointer disabled:opacity-50 disabled:pointer-events-none ${
-                              theme === 'dark'
-                                ? 'bg-slate-800 hover:bg-slate-700 text-slate-100 border-slate-700'
-                                : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300 shadow-sm'
+                        <button
+                          type="button"
+                          onClick={handleManualPaddleScan}
+                          disabled={isScanning || !previewUrl}
+                          title="Force local on-device PaddleOCR extraction without Gemini"
+                          className={`border border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors min-h-[38px] ${isScanning || !previewUrl
+                            ? 'opacity-50 pointer-events-none'
+                            : 'cursor-pointer'
                             }`}
-                            aria-label="Upload from Photos"
-                          >
-                            <span className="text-base">🖼️</span>
-                            <span>Upload from Photos</span>
-                          </button>
-                        </div>
+                        >
+                          {activeEngine === 'paddle' ? (
+                            <span className="spinner-micro"></span>
+                          ) : (
+                            <span>⚡</span>
+                          )}
+                          <span>On-Device OCR</span>
+                        </button>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="w-full h-full border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center border-cyan-500/40 bg-teal-500/5">
+                      <div className="text-4xl sm:text-5xl mb-3">📷</div>
+                      <div
+                        className={`font-bold text-base sm:text-lg mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-900'
+                          }`}
+                      >
+                        {venueMode === 'wet_market' ? 'Take Photo of Produce, Receipt or Scale' : 'Take Photo or Upload Receipt'}
+                      </div>
+                      <p
+                        className={`text-xs sm:text-sm max-w-xs mb-5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
+                          }`}
+                      >
+                        Supports receipts, produce, and weighing-scale photos directly from your mobile camera
+                      </p>
+                      {/* Two Distinct Actions: Take Photo (Camera) & Upload from Photos (Gallery) */}
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 w-full max-w-sm">
+                        {/* Take Photo Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (cameraInputRef.current) {
+                              cameraInputRef.current.value = '';
+                              cameraInputRef.current.click();
+                            }
+                          }}
+                          disabled={isScanning}
+                          id="take-photo-btn"
+                          data-testid="take-photo-btn"
+                          className="flex-1 min-h-[44px] px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-500 active:scale-95 text-white cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+                          aria-label="Take Photo"
+                        >
+                          <span className="text-base">📸</span>
+                          <span>Take Photo</span>
+                        </button>
+
+                        {/* Upload from Photos Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (galleryInputRef.current) {
+                              galleryInputRef.current.value = '';
+                              galleryInputRef.current.click();
+                            }
+                          }}
+                          disabled={isScanning}
+                          id="upload-photos-btn"
+                          data-testid="upload-photos-btn"
+                          className={`flex-1 min-h-[44px] px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2 border active:scale-95 cursor-pointer disabled:opacity-50 disabled:pointer-events-none ${theme === 'dark'
+                              ? 'bg-slate-800 hover:bg-slate-700 text-slate-100 border-slate-700'
+                              : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300 shadow-sm'
+                            }`}
+                          aria-label="Upload from Photos"
+                        >
+                          <span className="text-base">🖼️</span>
+                          <span>Upload from Photos</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
+              </div>
 
               {/* Right Column / Extracted Editable Form (Full width on mobile, 7 cols on desktop) */}
               <div className="relative w-full md:col-span-7 flex flex-col">
@@ -1129,13 +1124,12 @@ export default function ReceiptScannerModal({
                       {activeOverBuyingWarnings.map(warning => (
                         <div
                           key={warning.id}
-                          className={`p-3 rounded-xl border transition-all ${
-                            warning.level === 'high'
+                          className={`p-3 rounded-xl border transition-all ${warning.level === 'high'
                               ? 'border-rose-300 dark:border-rose-900/60 bg-rose-50/80 dark:bg-rose-950/20'
                               : warning.level === 'moderate'
-                              ? 'border-amber-300 dark:border-amber-900/60 bg-amber-50/80 dark:bg-amber-950/20'
-                              : 'border-cyan-300 dark:border-cyan-900/60 bg-cyan-50/80 dark:bg-cyan-950/20'
-                          }`}
+                                ? 'border-amber-300 dark:border-amber-900/60 bg-amber-50/80 dark:bg-amber-950/20'
+                                : 'border-cyan-300 dark:border-cyan-900/60 bg-cyan-50/80 dark:bg-cyan-950/20'
+                            }`}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-start gap-2.5">
@@ -1147,11 +1141,10 @@ export default function ReceiptScannerModal({
                                   <span className="font-bold text-xs uppercase tracking-wider text-slate-900 dark:text-white">
                                     {warning.level === 'high' ? 'Potential Over-Purchasing Detected' : warning.level === 'moderate' ? 'Historical Waste Alert' : 'Advisory Note'}: {warning.category}
                                   </span>
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                    warning.level === 'high'
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${warning.level === 'high'
                                       ? 'bg-rose-500/20 text-rose-800 dark:text-rose-300 border-rose-500/40'
                                       : 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40'
-                                  }`}>
+                                    }`}>
                                     {warning.level.toUpperCase()} ADVISORY
                                   </span>
                                 </div>
@@ -1218,11 +1211,10 @@ export default function ReceiptScannerModal({
                         items.map((item, index) => (
                           <div
                             key={item.id || index}
-                            className={`p-3 rounded-xl border flex flex-col gap-3 transition-colors ${
-                              theme === 'dark'
+                            className={`p-3 rounded-xl border flex flex-col gap-3 transition-colors ${theme === 'dark'
                                 ? 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
                                 : 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                            }`}
+                              }`}
                           >
                             {/* Line 1: Full-width item name and remove button */}
                             <div className="flex items-center gap-2">
@@ -1233,11 +1225,10 @@ export default function ReceiptScannerModal({
                                 onChange={(e) =>
                                   handleItemChange(item.id, 'name', e.target.value)
                                 }
-                                className={`flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border focus:outline-none focus:border-teal-500 placeholder-slate-500 transition-colors ${
-                                  theme === 'dark'
+                                className={`flex-1 min-w-0 px-3 py-2 text-sm rounded-lg border focus:outline-none focus:border-teal-500 placeholder-slate-500 transition-colors ${theme === 'dark'
                                     ? 'bg-slate-950/80 border-slate-700/80 text-slate-100'
                                     : 'bg-white border-slate-300 text-slate-900'
-                                }`}
+                                  }`}
                               />
 
                               <button
@@ -1267,11 +1258,10 @@ export default function ReceiptScannerModal({
                                   onChange={(e) =>
                                     handleItemChange(item.id, 'quantity', e.target.value)
                                   }
-                                  className={`w-full min-w-0 px-1.5 py-2 text-xs rounded-lg border text-center font-mono focus:outline-none focus:border-teal-500 transition-colors ${
-                                    theme === 'dark'
+                                  className={`w-full min-w-0 px-1.5 py-2 text-xs rounded-lg border text-center font-mono focus:outline-none focus:border-teal-500 transition-colors ${theme === 'dark'
                                       ? 'bg-slate-950/80 border-slate-700/80 text-slate-100'
                                       : 'bg-white border-slate-300 text-slate-900'
-                                  }`}
+                                    }`}
                                 />
                               </div>
 
@@ -1285,11 +1275,10 @@ export default function ReceiptScannerModal({
                                   onChange={(e) =>
                                     handleItemChange(item.id, 'unit', e.target.value)
                                   }
-                                  className={`w-full min-w-0 px-1 py-2 text-xs rounded-lg border text-center focus:outline-none focus:border-teal-500 cursor-pointer transition-colors ${
-                                    theme === 'dark'
+                                  className={`w-full min-w-0 px-1 py-2 text-xs rounded-lg border text-center focus:outline-none focus:border-teal-500 cursor-pointer transition-colors ${theme === 'dark'
                                       ? 'bg-slate-950/80 border-slate-700/80 text-slate-100'
                                       : 'bg-white border-slate-300 text-slate-900'
-                                  }`}
+                                    }`}
                                 >
                                   <option value="kg">kg</option>
                                   <option value="g">g</option>
@@ -1315,24 +1304,22 @@ export default function ReceiptScannerModal({
                                   onChange={(e) =>
                                     handleItemChange(item.id, 'price', e.target.value)
                                   }
-                                  className={`w-full min-w-0 px-1.5 py-2 text-xs rounded-lg border text-center font-mono focus:outline-none focus:border-teal-500 placeholder-slate-500 transition-colors ${
-                                    theme === 'dark'
+                                  className={`w-full min-w-0 px-1.5 py-2 text-xs rounded-lg border text-center font-mono focus:outline-none focus:border-teal-500 placeholder-slate-500 transition-colors ${theme === 'dark'
                                       ? 'bg-slate-950/80 border-slate-700/80 text-slate-100'
                                       : 'bg-white border-slate-300 text-slate-900'
-                                  }`}
+                                    }`}
                                 />
                               </div>
 
                               {/* Line Total */}
                               <div className="min-w-0">
                                 <label className={`block text-[10px] uppercase font-bold mb-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`} title="Line Total">
-                                  Line Total
+                                  Total
                                 </label>
-                                <div className={`w-full min-w-0 px-1 py-2 text-xs rounded-lg border text-center font-mono font-bold text-emerald-500 dark:text-emerald-400 truncate ${
-                                  theme === 'dark'
+                                <div className={`w-full min-w-0 px-1 py-2 text-xs rounded-lg border text-center font-mono font-bold text-emerald-500 dark:text-emerald-400 truncate ${theme === 'dark'
                                     ? 'bg-slate-950 border-slate-800'
                                     : 'bg-slate-100 border-slate-200'
-                                }`}>
+                                  }`}>
                                   ₱{(Number(item.quantity || 0) * Number(item.price !== undefined ? item.price : (item.unitPrice || 0))).toFixed(2)}
                                 </div>
                               </div>
@@ -1367,7 +1354,7 @@ export default function ReceiptScannerModal({
                       className={`min-h-[44px] px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all flex items-center justify-center gap-1.5 ${isScanning ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'} ${theme === 'dark'
                         ? 'bg-amber-950/30 text-amber-300 border-amber-600/50 hover:bg-amber-900/40'
                         : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
-                      }`}
+                        }`}
                       title="Quick save photo draft to finish entering items later"
                     >
                       <span>📝</span> Quick Save Draft
