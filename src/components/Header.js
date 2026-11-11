@@ -46,21 +46,18 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
     <header class="app-header">
       <div class="brand-wrapper inline-flex items-center gap-2 bg-slate-100/90 dark:bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-200/70 dark:border-slate-700/60 shadow-sm backdrop-blur-md cursor-pointer hover:border-emerald-500/50 transition-all select-none group" id="brand-logo-btn" role="button" tabindex="0" title="Click to synchronize cloud data (/api/scans, /api/trips, /api/food-waste)">
         <img src="/favicon.svg" alt="KosherAI Logo" class="brand-icon ${isSyncing ? 'syncing animate-spin' : 'group-hover:scale-105'} transition-transform duration-300" />
-        <div>
-          <div class="brand-title text-slate-900 dark:text-white font-black text-xl tracking-tight flex items-center gap-1.5 leading-none">
-            <span>KosherAI</span>
-            <span class="brand-badge leading-none">${appMode === 'course' ? 'SUSTAIN' : currentProfile.badge}</span>
-            ${isSyncing ? `
-              <span class="inline-flex items-center gap-1 text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 dark:bg-teal-500/20 px-1.5 py-0.5 rounded-full border border-teal-500/30 animate-pulse leading-none">
-                Syncing...
-              </span>
-            ` : (justSynced ? `
-              <span class="synced-badge inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 px-1.5 py-0.5 rounded-full border border-emerald-500/30 animate-fade-in shadow-xs leading-none">
-                ✓ Synced!
-              </span>
-            ` : '')}
-          </div>
-          <div class="brand-subtitle text-slate-600 dark:text-slate-400 text-xs font-medium">${appMode === 'course' ? 'Six-Week Food Cost & Waste Study' : currentProfile.name}</div>
+        <div class="brand-title text-slate-900 dark:text-white font-black text-xl tracking-tight flex items-center gap-1.5 leading-none">
+          <span>KosherAI</span>
+          <span class="brand-badge leading-none">${appMode === 'course' ? 'SUSTAIN' : currentProfile.badge}</span>
+          ${isSyncing ? `
+            <span class="inline-flex items-center gap-1 text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 dark:bg-teal-500/20 px-1.5 py-0.5 rounded-full border border-teal-500/30 animate-pulse leading-none">
+              Syncing...
+            </span>
+          ` : (justSynced ? `
+            <span class="synced-badge inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 px-1.5 py-0.5 rounded-full border border-emerald-500/30 animate-fade-in shadow-xs leading-none">
+              ✓ Synced!
+            </span>
+          ` : '')}
         </div>
       </div>
 
@@ -94,8 +91,8 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
             <button
               type="button"
               id="header-signout-btn"
-              title="Sign out of your session"
-              aria-label="Sign out"
+              title="Sign Out"
+              aria-label="Sign Out"
               class="header-signout-btn"
             >
               <svg class="signout-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

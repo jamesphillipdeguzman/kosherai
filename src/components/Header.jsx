@@ -179,10 +179,11 @@ export function Header({
   const justSynced = propJustSynced !== undefined ? propJustSynced : internalJustSynced;
 
   const rawName = (currentUser?.name || '').trim();
+  const rawEmail = (currentUser?.email || '').trim();
+  const initial = (rawName ? rawName[0] : (rawEmail ? rawEmail[0] : 'U')).toUpperCase();
   const firstName = rawName
     ? rawName.split(' ')[0]
-    : (currentUser?.email ? currentUser.email.split('@')[0] : 'User');
-  const initial = (firstName || currentUser?.name || currentUser?.email || 'U')[0].toUpperCase();
+    : (rawEmail ? rawEmail.split('@')[0] : 'User');
 
   const handleLogoClick = async (e) => {
     e.preventDefault();
@@ -223,23 +224,18 @@ export function Header({
             alt="KosherAI Logo"
             className={`brand-icon ${isSyncing ? 'syncing animate-spin' : 'group-hover:scale-105'} transition-transform duration-300`}
           />
-          <div>
-            <div className="brand-title text-slate-900 dark:text-white font-black text-xl tracking-tight flex items-center gap-1.5 leading-none">
-              <span>KosherAI</span>
-              <span className="brand-badge leading-none">{appMode === 'course' ? 'SUSTAIN' : currentProfile.badge}</span>
-              {isSyncing ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 dark:bg-teal-500/20 px-1.5 py-0.5 rounded-full border border-teal-500/30 animate-pulse leading-none">
-                  Syncing...
-                </span>
-              ) : justSynced ? (
-                <span className="synced-badge inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 px-1.5 py-0.5 rounded-full border border-emerald-500/30 animate-fade-in shadow-xs leading-none">
-                  ✓ Synced!
-                </span>
-              ) : null}
-            </div>
-            <div className="brand-subtitle text-slate-600 dark:text-slate-400 text-xs font-medium">
-              {appMode === 'course' ? 'Six-Week Food Cost & Waste Study' : currentProfile.name}
-            </div>
+          <div className="brand-title text-slate-900 dark:text-white font-black text-xl tracking-tight flex items-center gap-1.5 leading-none">
+            <span>KosherAI</span>
+            <span className="brand-badge leading-none">{appMode === 'course' ? 'SUSTAIN' : currentProfile.badge}</span>
+            {isSyncing ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 dark:bg-teal-500/20 px-1.5 py-0.5 rounded-full border border-teal-500/30 animate-pulse leading-none">
+                Syncing...
+              </span>
+            ) : justSynced ? (
+              <span className="synced-badge inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 px-1.5 py-0.5 rounded-full border border-emerald-500/30 animate-fade-in shadow-xs leading-none">
+                ✓ Synced!
+              </span>
+            ) : null}
           </div>
         </button>
 
@@ -248,15 +244,13 @@ export function Header({
           {currentUser && isBrowserOnline ? (
             <div
               className="status-pill status-pill-user online inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 transition-all select-none shadow-2xs"
-              title={`Network connection active · Signed in as ${currentUser.name || currentUser.email || 'User'}${currentUser.email ? ` (${currentUser.email})` : ''}`}
+              title={`Network connection active · Signed in as ${currentUser.name || firstName}${currentUser.email ? ` (${currentUser.email})` : ''}`}
             >
               <span className="status-dot"></span>
-              <span className="user-avatar-badge w-5 h-5 rounded-full bg-emerald-600 text-white font-bold text-[11px] inline-flex items-center justify-center flex-shrink-0 select-none">
+              <span className="user-avatar-badge status-label user-initial font-bold text-xs select-none">
                 {initial}
               </span>
-              <span className="status-label user-first-name font-semibold truncate max-w-[110px]">
-                {firstName || 'User'}
-              </span>
+              <span className="sr-only user-first-name">{firstName}</span>
             </div>
           ) : !isBrowserOnline ? (
             <div
@@ -283,8 +277,8 @@ export function Header({
                 type="button"
                 id="header-signout-btn"
                 onClick={handleSignOut}
-                title="Sign out and clear local device cache"
-                aria-label="Sign out"
+                title="Sign Out"
+                aria-label="Sign Out"
                 className="header-signout-btn"
               >
                 <svg className="signout-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -292,7 +286,7 @@ export function Header({
                   <polyline points="16 17 21 12 16 7"/>
                   <line x1="21" y1="12" x2="9" y2="12"/>
                 </svg>
-                <span className="signout-text">Sign Out</span>
+                <span className="signout-text hidden sm:inline">Sign Out</span>
               </button>
             ) : (
               <div className="header-auth-buttons flex items-center gap-2">
