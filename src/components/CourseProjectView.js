@@ -70,8 +70,8 @@ import { DIET_RECIPES } from '../data/dietRecipes.js';
 import lidRecipes from '../data/lidRecipes.json' with { type: 'json' };
 import { renderManualTripModal } from './ManualTripModal.js';
 import { renderShoppingTripsView, renderEditTripModal, renderTripCard, renderReceiptLightboxModal } from './ShoppingTripsView.js';
-import { normalizeWeek, resolveItemWeek, getGroceryItemName, matchesGroceryQuery } from '../utils/weekNormalization.js';
-export { renderManualTripModal, renderShoppingTripsView, renderEditTripModal, renderTripCard, renderReceiptLightboxModal, updateShoppingTrip, normalizeWeek, resolveItemWeek, getGroceryItemName, matchesGroceryQuery };
+import { normalizeWeek, resolveItemWeek, resolveWasteWeek, isWasteLogMatchWeek, getGroceryItemName, matchesGroceryQuery } from '../utils/weekNormalization.js';
+export { renderManualTripModal, renderShoppingTripsView, renderEditTripModal, renderTripCard, renderReceiptLightboxModal, updateShoppingTrip, normalizeWeek, resolveItemWeek, resolveWasteWeek, isWasteLogMatchWeek, getGroceryItemName, matchesGroceryQuery };
 
 export function renderCourseProjectView(state = {}) {
   const activeSubTab = state.courseSubTab || 'dashboard'; // 'dashboard' | 'trips' | 'groceries' | 'waste' | 'mealplan' | 'export'
@@ -198,7 +198,7 @@ function renderSubTabContent(subTab, state, comparison, config) {
     case 'groceries':
       return renderGroceryPurchasesTab(state);
     case 'waste':
-      return renderFoodWasteTab(state);
+      return renderFoodWasteTab(state, config);
     case 'mealplan':
       return renderMealPlanTab(state);
     case 'export':
@@ -636,8 +636,15 @@ function renderGroceryPurchasesTab(state) {
 // =========================================================================
 // 4. FOOD WASTE TRACKER TAB
 // =========================================================================
-function renderFoodWasteTab(state) {
-  const records = getFoodWasteRecords();
+function renderFoodWasteTab(state, config) {
+  const allRecords = getFoodWasteRecords();
+  const projectConfig = config || getCourseConfig();
+  const selectedWeek = normalizeWeek(state?.selectedWeekView || state?.selectedWeek || state?.tripsWeekFilter || 'all');
+
+  const records = selectedWeek === 'all'
+    ? allRecords
+    : allRecords.filter(r => isWasteLogMatchWeek(r, selectedWeek, projectConfig));
+
   const totalGrams = records.reduce((sum, r) => sum + Number(r.measuredWeightG || 0), 0);
   const totalCost = records.reduce((sum, r) => sum + Number(r.estimatedCost || 0), 0);
 
@@ -656,11 +663,27 @@ function renderFoodWasteTab(state) {
         </button>
       </div>
 
+      <!-- Active Week Context Strip -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 10px 14px; background: var(--surface-secondary, rgba(255,255,255,0.03)); border: 1px solid var(--border-subtle, rgba(255,255,255,0.08)); border-radius: 12px; font-size: 0.82rem; flex-wrap: wrap; gap: 8px;">
+        <span style="color: var(--text-muted, #94a3b8);">
+          Showing: <strong class="text-slate-700 dark:text-slate-200" style="color: var(--text-main, #f8fafc);">${selectedWeek === 'all' ? 'All Weeks' : `Week ${selectedWeek} (W0${selectedWeek})`}</strong> 
+          • ${records.length} ${records.length === 1 ? 'log' : 'logs'} recorded
+        </span>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          ${selectedWeek !== 'all' ? `
+            <button type="button" class="text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer" data-week-select="all" style="background: none; border: none; padding: 0; font-size: 0.8rem; cursor: pointer;">
+              Show All Weeks (${allRecords.length})
+            </button>
+          ` : ''}
+        </div>
+      </div>
+
       <!-- Summary Banner -->
       <div class="waste-stats-banner">
         <div class="waste-stat-box">
           <span class="stat-label">Total Measured Waste</span>
           <span class="stat-number text-avoid">${(totalGrams / 1000).toFixed(2)} kg <span style="font-size: 0.9rem; font-weight: 500;">(${totalGrams} g)</span></span>
+          <span style="font-size: 0.72rem; color: var(--text-muted);">${selectedWeek === 'all' ? 'Across all 6 study weeks' : `Week ${selectedWeek} totals`}</span>
         </div>
         <div class="waste-stat-box">
           <span class="stat-label">Estimated Waste Value</span>
@@ -670,15 +693,24 @@ function renderFoodWasteTab(state) {
         <div class="waste-stat-box">
           <span class="stat-label">Total Waste Entries</span>
           <span class="stat-number">${records.length} logs</span>
+          <span style="font-size: 0.72rem; color: var(--text-muted);">${selectedWeek === 'all' ? `All logs (${allRecords.length})` : `Filtered for Week ${selectedWeek}`}</span>
         </div>
       </div>
 
       ${records.length === 0 ? `
         <div class="empty-state-card">
           <div class="empty-icon">⚖️</div>
-          <h3>No Food Waste Logged</h3>
-          <p>Weigh any spoiled ingredients, cooked leftovers, or meal prep waste on your digital scale and log them here.</p>
-          <button class="btn-primary" id="empty-waste-btn" style="margin-top: 12px;">➕ Log First Waste Item</button>
+          <h3>${selectedWeek === 'all' ? 'No Food Waste Logged' : `No food waste logs recorded for Week ${selectedWeek}`}</h3>
+          <p>${selectedWeek === 'all' 
+            ? 'Weigh any spoiled ingredients, cooked leftovers, or meal prep waste on your digital scale and log them here.' 
+            : `No food waste entries found for Week ${selectedWeek}. Select "All Weeks" above to view all records.`}
+          </p>
+          <div style="display: flex; gap: 10px; justify-content: center; margin-top: 14px;">
+            ${selectedWeek !== 'all' ? `
+              <button class="btn-secondary" data-week-select="all">Show All Weeks</button>
+            ` : ''}
+            <button class="btn-primary" id="empty-waste-btn">➕ Log Waste Item</button>
+          </div>
         </div>
       ` : `
         <div class="table-responsive">
@@ -713,7 +745,7 @@ function renderFoodWasteTab(state) {
                     ${r.notes ? `<div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(r.notes)}</div>` : ''}
                   </td>
                   <td style="font-family: var(--font-mono); font-size: 0.8rem;">
-                    Week ${r.projectWeek} • ${r.date}
+                    Week ${resolveWasteWeek(r, projectConfig)} • ${r.date}
                   </td>
                   <td style="font-family: var(--font-mono); font-weight: 700; color: #f87171;">
                     ${r.measuredWeightG} g

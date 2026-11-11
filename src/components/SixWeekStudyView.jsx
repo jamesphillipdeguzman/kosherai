@@ -223,6 +223,7 @@ export default function SixWeekStudyView({
         {activeSubTab === 'waste' && (
           <FoodWasteLogView
             records={waste}
+            wasteLogs={waste}
             selectedWeek={normWeek}
             onSelectWeek={handleWeekSelect}
           />

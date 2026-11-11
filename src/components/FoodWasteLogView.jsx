@@ -8,7 +8,7 @@ import {
   getCourseConfig
 } from '../services/courseProjectStorage.js';
 import { formatNumber } from './ShoppingTripsView.js';
-import { normalizeWeek } from '../utils/weekNormalization.js';
+import { normalizeWeek, resolveWasteWeek, isWasteLogMatchWeek } from '../utils/weekNormalization.js';
 import EditWasteLogModal from './EditWasteLogModal.jsx';
 
 /**
@@ -19,11 +19,13 @@ import EditWasteLogModal from './EditWasteLogModal.jsx';
  */
 export default function FoodWasteLogView({
   records: propRecords,
+  wasteLogs,
   selectedWeek = 'all',
   onSelectWeek,
   onEditWaste,
   onDeleteWaste
 }) {
+  const incomingRecords = propRecords || wasteLogs;
   const [wasteList, setWasteList] = useState([]);
   const [editingLog, setEditingLog] = useState(null);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
@@ -51,8 +53,8 @@ export default function FoodWasteLogView({
   };
 
   useEffect(() => {
-    if (propRecords && Array.isArray(propRecords)) {
-      setWasteList(propRecords);
+    if (incomingRecords && Array.isArray(incomingRecords)) {
+      setWasteList(incomingRecords);
     } else {
       refreshWaste();
     }
@@ -67,14 +69,15 @@ export default function FoodWasteLogView({
       window.removeEventListener('kosherai-food-waste-synced', handleUpdate);
       window.removeEventListener('kosherai_storage_updated', handleUpdate);
     };
-  }, [propRecords]);
+  }, [incomingRecords]);
 
   const normWeek = normalizeWeek(selectedWeek);
+  const config = typeof getCourseConfig === 'function' ? getCourseConfig() : null;
 
   // Filter records by selected week if specified
   const filteredRecords = normWeek === 'all'
     ? wasteList
-    : wasteList.filter(r => normalizeWeek(r.projectWeek) === normWeek);
+    : wasteList.filter(r => isWasteLogMatchWeek(r, normWeek, config));
 
   // Summary Banner Metrics (recalculated dynamically whenever wasteList changes)
   const totalGrams = filteredRecords.reduce((sum, r) => sum + Number(r.measuredWeightG || 0), 0);
@@ -174,6 +177,23 @@ export default function FoodWasteLogView({
         </button>
       </div>
 
+      {/* Active Week Context Strip */}
+      <div className="flex justify-between items-center mb-3 px-3.5 py-2 bg-slate-50 dark:bg-slate-850/60 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs">
+        <span className="text-slate-500 dark:text-slate-400">
+          Showing: <strong className="text-slate-800 dark:text-slate-100">{normWeek === 'all' ? 'All Weeks' : `Week ${normWeek} (W0${normWeek})`}</strong>
+          {' '}• {filteredRecords.length} {filteredRecords.length === 1 ? 'log' : 'logs'} recorded
+        </span>
+        {normWeek !== 'all' && (
+          <button
+            type="button"
+            className="text-teal-600 dark:text-teal-400 hover:underline font-semibold cursor-pointer text-xs"
+            onClick={() => onSelectWeek && onSelectWeek('all')}
+          >
+            Show All Weeks ({wasteList.length})
+          </button>
+        )}
+      </div>
+
       {/* Summary Statistics Banner (Automatically recalculated without reload) */}
       <div className="waste-stats-banner grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         <div className="waste-stat-box p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
@@ -217,18 +237,33 @@ export default function FoodWasteLogView({
       {filteredRecords.length === 0 ? (
         <div className="empty-state-card p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
           <div className="empty-icon text-3xl mb-2">⚖️</div>
-          <h3 className="text-sm font-bold text-slate-800 dark:text-white m-0">No Food Waste Logged</h3>
+          <h3 className="text-sm font-bold text-slate-800 dark:text-white m-0">
+            {normWeek === 'all' ? 'No Food Waste Logged' : `No food waste logs recorded for Week ${normWeek}`}
+          </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
-            Weigh any spoiled ingredients, cooked leftovers, or prep waste on your digital scale and log them here.
+            {normWeek === 'all'
+              ? 'Weigh any spoiled ingredients, cooked leftovers, or prep waste on your digital scale and log them here.'
+              : `No food waste entries found for Week ${normWeek}. Select "All Weeks" to view all records.`}
           </p>
-          <button
-            type="button"
-            id="empty-waste-btn"
-            className="btn-primary mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-teal-600 hover:bg-teal-500 text-white cursor-pointer"
-            onClick={() => setIsNewModalOpen(true)}
-          >
-            ➕ Log First Waste Item
-          </button>
+          <div className="flex gap-2 justify-center mt-3">
+            {normWeek !== 'all' && (
+              <button
+                type="button"
+                className="btn-secondary px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                onClick={() => onSelectWeek && onSelectWeek('all')}
+              >
+                Show All Weeks
+              </button>
+            )}
+            <button
+              type="button"
+              id="empty-waste-btn"
+              className="btn-primary inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-teal-600 hover:bg-teal-500 text-white cursor-pointer"
+              onClick={() => setIsNewModalOpen(true)}
+            >
+              ➕ Log First Waste Item
+            </button>
+          </div>
         </div>
       ) : (
         <div className="table-responsive bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
@@ -265,7 +300,7 @@ export default function FoodWasteLogView({
                     )}
                   </td>
                   <td className="p-3 font-mono text-[11px] text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                    Week {r.projectWeek} • {r.date}
+                    Week {resolveWasteWeek(r, config)} • {r.date}
                   </td>
                   <td className="p-3 font-mono font-bold text-rose-600 dark:text-rose-400 whitespace-nowrap">
                     {r.measuredWeightG} g
@@ -475,4 +510,6 @@ export default function FoodWasteLogView({
     </div>
   );
 }
+
+export { FoodWasteLogView, FoodWasteLogView as FoodWasteLogTab };
 

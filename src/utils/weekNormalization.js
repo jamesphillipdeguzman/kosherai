@@ -91,6 +91,51 @@ export function isWeekMatch(recordWeek, targetWeek) {
 }
 
 /**
+ * Resolves the study week number (1 to 6) for a food waste record.
+ * Checks explicit projectWeek / project_week, then derives from date / createdAt.
+ *
+ * @param {object} record - Food waste log record
+ * @param {object} [config] - Project configuration with startDate
+ * @returns {number} Study week number (1 to 6)
+ */
+export function resolveWasteWeek(record, config = null) {
+  if (!record) return 1;
+
+  // 1. Direct explicit project week
+  const rawWeek = record.projectWeek ?? record.project_week ?? record.week;
+  if (rawWeek !== undefined && rawWeek !== null) {
+    const norm = normalizeWeek(rawWeek);
+    if (norm !== 'all') return norm;
+  }
+
+  // 2. Derive from date
+  const resolvedConfig = config || (typeof getProjectConfig === 'function' ? getProjectConfig() : { startDate: PROJECT_CONFIG.START_DATE });
+  const startDate = resolvedConfig?.startDate || PROJECT_CONFIG.START_DATE;
+  const dateStr = record.date || record.loggedAt || record.createdAt;
+  if (dateStr && typeof getProjectWeekForDate === 'function') {
+    const cleanDate = typeof dateStr === 'string' ? dateStr.split('T')[0] : dateStr;
+    return getProjectWeekForDate(cleanDate, startDate);
+  }
+
+  return 1;
+}
+
+/**
+ * Checks whether a food waste record matches the target week.
+ *
+ * @param {object} record - Food waste log record
+ * @param {string|number} targetWeek - 'all' or week number / string (e.g. 'W1', 'W2 INTERVENE')
+ * @param {object} [config] - Project configuration with startDate
+ * @returns {boolean}
+ */
+export function isWasteLogMatchWeek(record, targetWeek, config = null) {
+  const normTarget = normalizeWeek(targetWeek);
+  if (normTarget === 'all') return true;
+  const recordWeek = resolveWasteWeek(record, config);
+  return recordWeek === normTarget;
+}
+
+/**
  * Resolves the display name of a grocery item supporting all field variations:
  * name, itemName, item_name, productName, product_name, raw_receipt_text, rawReceiptText
  *
@@ -172,7 +217,9 @@ export function getTripGroceryItems(trip, allGroceryItems = null) {
 export default {
   normalizeWeek,
   resolveItemWeek,
+  resolveWasteWeek,
   isWeekMatch,
+  isWasteLogMatchWeek,
   getGroceryItemName,
   matchesGroceryQuery,
   getTripGroceryItems
