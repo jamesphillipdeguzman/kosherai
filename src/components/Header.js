@@ -18,12 +18,32 @@ function escapeAttr(str) {
     .replace(/"/g, '&quot;');
 }
 
-export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', showProjectTab = true, activeDiet = 'lid', theme = 'dark', user = null, isSyncing = false, justSynced = false) {
-  const currentProfile = getDietProfile(activeDiet);
-  const activeDescription = getDietDescription(activeDiet);
+export function renderHeader(isOnline = true, appMode = 'diet', showProjectTab = true, activeDiet = 'lid', theme = 'dark', user = null, isSyncing = false, justSynced = false) {
+  let onlineVal = isOnline;
+  let modeVal = appMode;
+  let showProjVal = showProjectTab;
+  let dietVal = activeDiet;
+  let themeVal = theme;
+  let userVal = user;
+  let syncingVal = isSyncing;
+  let justSyncedVal = justSynced;
+
+  if (isOnline && typeof isOnline === 'object') {
+    onlineVal = isOnline.isOnline !== undefined ? isOnline.isOnline : true;
+    modeVal = isOnline.appMode || 'diet';
+    showProjVal = isOnline.showProjectTab !== undefined ? isOnline.showProjectTab : true;
+    dietVal = isOnline.activeDiet || 'lid';
+    themeVal = isOnline.theme || 'dark';
+    userVal = isOnline.user || isOnline.currentUser || null;
+    syncingVal = isOnline.isSyncing || false;
+    justSyncedVal = isOnline.justSynced || false;
+  }
+
+  const currentProfile = getDietProfile(dietVal);
+  const activeDescription = getDietDescription(dietVal);
   const targetLimit = (currentProfile.target || '').replace(/^Clinical Target:\s*/i, '');
 
-  let currentUser = user;
+  let currentUser = userVal;
   if (!currentUser && typeof window !== 'undefined') {
     try {
       const stored = localStorage.getItem('kosherai_current_user') || localStorage.getItem('kosherai_user_session');
@@ -39,18 +59,21 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
   const rawName = (currentUser?.name || '').trim();
   const rawEmail = (currentUser?.email || '').trim();
   const initial = (rawName ? rawName[0] : (rawEmail ? rawEmail[0] : 'U')).toUpperCase();
+  const firstName = rawName
+    ? rawName.split(' ')[0]
+    : (rawEmail ? rawEmail.split('@')[0] : 'User');
 
   return `
     <header class="app-header">
       <div class="brand-wrapper inline-flex items-center gap-2 bg-slate-100/90 dark:bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-200/70 dark:border-slate-700/60 shadow-sm backdrop-blur-md cursor-pointer hover:border-emerald-500/50 transition-all select-none group" id="brand-logo-btn" role="button" tabindex="0" title="Click to synchronize cloud data (/api/scans, /api/trips, /api/food-waste)">
-        <img src="/favicon.svg" alt="KosherAI Logo" class="brand-icon ${isSyncing ? 'syncing animate-spin' : 'group-hover:scale-105'} transition-transform duration-300" />
+        <img src="/favicon.svg" alt="KosherAI Logo" class="brand-icon ${syncingVal ? 'syncing animate-spin' : 'group-hover:scale-105'} transition-transform duration-300" />
         <div class="brand-title text-slate-900 dark:text-white font-black text-xl tracking-tight flex items-center gap-1.5 leading-none">
           <span>KosherAI</span>
-          ${isSyncing ? `
+          ${syncingVal ? `
             <span class="inline-flex items-center gap-1 text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 dark:bg-teal-500/20 px-1.5 py-0.5 rounded-full border border-teal-500/30 animate-pulse leading-none">
               Syncing...
             </span>
-          ` : (justSynced ? `
+          ` : (justSyncedVal ? `
             <span class="synced-badge inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 px-1.5 py-0.5 rounded-full border border-emerald-500/30 animate-fade-in shadow-xs leading-none">
               ✓ Synced!
             </span>
@@ -60,14 +83,17 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
 
       <div class="header-actions flex items-center gap-2">
         <!-- Consolidated Network Connection & User Status Pill -->
-        ${currentUser && isOnline ? `
+        ${currentUser && onlineVal ? `
           <div class="status-pill status-pill-user online inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 transition-all select-none shadow-2xs" title="Network connection active · Signed in as ${escapeAttr(currentUser.name || currentUser.email || 'User')}${currentUser.email ? ` (${escapeAttr(currentUser.email)})` : ''}">
             <span class="status-dot"></span>
-            <span class="user-avatar-badge status-label user-initial font-bold text-xs select-none">
+            <span class="user-avatar-badge status-label user-initial font-bold text-xs select-none sm:hidden">
               ${escapeHtml(initial)}
             </span>
+            <span class="user-desktop-name font-bold text-xs select-none hidden sm:inline max-w-[120px] truncate">
+              ${escapeHtml(firstName)}
+            </span>
           </div>
-        ` : (!isOnline ? `
+        ` : (!onlineVal ? `
           <div class="status-pill status-pill-offline offline inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-500/30 transition-all select-none shadow-2xs" title="Offline · Device has no active network connection">
             <span class="status-dot offline"></span>
             <span class="status-label font-semibold">Offline</span>

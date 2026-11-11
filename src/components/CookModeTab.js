@@ -21,7 +21,8 @@ export function renderCookModeTab(state = {}) {
     recipeCategoryFilter = 'ALL',
     activeDiet = 'lid',
     household_members = 4,
-    isAdmin = false
+    isAdmin = false,
+    checklistExpanded = false
   } = state;
 
   const isUserAdmin = Boolean(
@@ -78,53 +79,86 @@ export function renderCookModeTab(state = {}) {
 
   return `
     <div class="cook-container">
-      <!-- Pre-Cooking Checklist Card -->
-      <div class="checklist-card">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
-          <div>
-            <h2 class="checklist-title">Pre-Cooking Safety Checklist</h2>
-            <p class="checklist-desc">
-              Caregivers and home cooks: verify these ${totalChecks} safety rules before turning on the stove.
-            </p>
+      <!-- Pre-Cooking Checklist Card (Collapsible) -->
+      <div class="checklist-card ${checklistExpanded ? 'is-expanded' : 'is-collapsed'}" id="checklist-card-container">
+        <!-- Interactive Collapsible Header -->
+        <div 
+          class="checklist-header-wrapper flex items-center justify-between gap-3 cursor-pointer select-none" 
+          id="toggle-checklist-btn" 
+          role="button" 
+          tabindex="0" 
+          aria-expanded="${checklistExpanded}" 
+          aria-controls="checklist-body"
+          aria-label="Toggle Pre-Cooking Safety Checklist"
+        >
+          <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
+            <span class="checklist-chevron" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; transition: transform 0.2s ease; transform: ${checklistExpanded ? 'rotate(180deg)' : 'rotate(0deg)'}; color: var(--text-secondary); flex-shrink: 0;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </span>
+            <div style="min-width: 0;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <h2 class="checklist-title" style="margin: 0; font-size: 1.15rem; font-weight: 800; display: inline-flex; align-items: center; gap: 6px;">
+                  <span>Pre-Cooking Safety Checklist</span>
+                </h2>
+                <!-- Progress indicator in header (e.g. 0/7 Verified) -->
+                <span id="checklist-header-badge" class="checklist-progress-badge ${isAllClear ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'}" style="font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 9999px; border-width: 1px; border-style: solid; font-family: var(--font-mono); white-space: nowrap;">
+                  ${checkedCount}/${totalChecks} Verified
+                </span>
+              </div>
+              ${checklistExpanded ? `
+                <p class="checklist-desc" style="margin: 4px 0 0 0; font-size: 0.8rem; color: var(--text-secondary);">
+                  Caregivers and home cooks: verify these ${totalChecks} safety rules before turning on the stove.
+                </p>
+              ` : ''}
+            </div>
           </div>
-          <button id="reset-checklist-btn" class="btn-secondary" style="padding: 6px 12px; font-size: 0.78rem;">
-            Reset
-          </button>
+
+          <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;" onclick="event.stopPropagation();">
+            <button id="reset-checklist-btn" type="button" class="btn-secondary" style="padding: 5px 12px; font-size: 0.75rem; border-radius: 8px;" title="Reset checklist progress">
+              Reset
+            </button>
+          </div>
         </div>
 
-        <div class="checklist-items">
-          ${activeChecklist.map(item => {
-            const isChecked = !!checklistState[item.id];
-            return `
-              <div class="check-item ${isChecked ? 'checked' : ''}" data-check-id="${item.id}" role="checkbox" aria-checked="${isChecked}" tabindex="0">
-                <div class="custom-checkbox">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
+        ${checklistExpanded ? `
+          <div class="checklist-body" id="checklist-body" style="margin-top: 14px;">
+            <div class="checklist-items">
+              ${activeChecklist.map(item => {
+                const isChecked = !!checklistState[item.id];
+                return `
+                  <div class="check-item ${isChecked ? 'checked' : ''}" data-check-id="${item.id}" role="checkbox" aria-checked="${isChecked}" tabindex="0">
+                    <div class="custom-checkbox">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                    </div>
+                    <div class="check-item-text">${escapeHtml(item.text)}</div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+
+            <!-- Meter -->
+            <div class="checklist-meter ${isAllClear ? 'all-clear border border-emerald-600/50 dark:border-emerald-400/50 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300' : 'pending border border-amber-600/50 dark:border-amber-400/50 bg-amber-500/10 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300'}">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.3rem;">${isAllClear ? '🛡️' : '⚠️'}</span>
+                <div>
+                  <div style="font-weight: 800; font-size: 0.95rem;">
+                    ${isAllClear ? 'ALL CLEAR: SAFE TO COOK' : `${checkedCount} of ${totalChecks} Rules Verified`}
+                  </div>
+                  <div style="font-size: 0.78rem; opacity: 0.9;">
+                    ${isAllClear ? 'Your kitchen setup fully protects against accidental contamination.' : 'Review any unchecked items before proceeding.'}
+                  </div>
                 </div>
-                <div class="check-item-text">${escapeHtml(item.text)}</div>
               </div>
-            `;
-          }).join('')}
-        </div>
-
-        <!-- Meter -->
-        <div class="checklist-meter ${isAllClear ? 'all-clear border border-emerald-600/50 dark:border-emerald-400/50 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300' : 'pending border border-amber-600/50 dark:border-amber-400/50 bg-amber-500/10 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300'}">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 1.3rem;">${isAllClear ? '🛡️' : '⚠️'}</span>
-            <div>
-              <div style="font-weight: 800; font-size: 0.95rem;">
-                ${isAllClear ? 'ALL CLEAR: SAFE TO COOK' : `${checkedCount} of ${totalChecks} Rules Verified`}
-              </div>
-              <div style="font-size: 0.78rem; opacity: 0.9;">
-                ${isAllClear ? 'Your kitchen setup fully protects against accidental contamination.' : 'Review any unchecked items before proceeding.'}
+              <div style="font-family: var(--font-mono); font-weight: 800; font-size: 1.2rem;">
+                ${Math.round((checkedCount / totalChecks) * 100)}%
               </div>
             </div>
           </div>
-          <div style="font-family: var(--font-mono); font-weight: 800; font-size: 1.2rem;">
-            ${Math.round((checkedCount / totalChecks) * 100)}%
-          </div>
-        </div>
+        ` : ''}
       </div>
 
       <!-- Recipe Safety Analyzer -->
@@ -215,7 +249,7 @@ export function renderCookModeTab(state = {}) {
               <!-- Decrement Button -->
               <button
                 type="button"
-                class="household-dec-btn w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 cursor-pointer shadow-2xs"
+                class="household-dec-btn w-8 h-8 flex items-center justify-center rounded-full bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 cursor-pointer shadow-xs"
                 data-current-val="${householdMembers}"
                 title="Decrease members"
                 aria-label="Decrease household members"

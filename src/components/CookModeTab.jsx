@@ -107,7 +107,7 @@ export function CookModeTab({ activeDiet = 'pinoy_keto', onLoadRecipe, isAdmin =
                 type="button"
                 onClick={handleDec}
                 disabled={householdMembers <= 1}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 cursor-pointer shadow-2xs"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 cursor-pointer shadow-xs"
                 aria-label="Decrease household members"
                 title="Decrease members"
               >

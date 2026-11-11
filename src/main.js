@@ -187,6 +187,7 @@ const state = {
 
   // Cook Mode Tab
   checklistState: getChecklistState(),
+  checklistExpanded: false,
   recipeText: '',
   recipeAnalysis: null,
   recipeCategoryFilter: 'ALL',
@@ -579,6 +580,9 @@ function attachEventHandlers() {
         }
       } else if (tab) {
         state.activeTab = tab;
+        if (tab === 'cook') {
+          state.checklistExpanded = false;
+        }
         window.scrollTo({ top: 0, behavior: 'smooth' });
         render();
         if (tab === 'scanner') {
@@ -1863,6 +1867,24 @@ function attachEventHandlers() {
   }
 
   // ==================== COOK MODE TAB EVENTS ====================
+  // Pre-Cooking Safety Checklist Collapsible Header
+  const toggleChecklistBtn = document.querySelector('#toggle-checklist-btn');
+  if (toggleChecklistBtn) {
+    toggleChecklistBtn.addEventListener('click', (e) => {
+      if (e.target.closest('#reset-checklist-btn')) return;
+      state.checklistExpanded = !state.checklistExpanded;
+      render();
+    });
+    toggleChecklistBtn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        if (e.target.closest('#reset-checklist-btn')) return;
+        e.preventDefault();
+        state.checklistExpanded = !state.checklistExpanded;
+        render();
+      }
+    });
+  }
+
   document.querySelectorAll('.check-item[data-check-id]').forEach(item => {
     item.addEventListener('click', () => {
       const cid = item.getAttribute('data-check-id');
@@ -1874,7 +1896,8 @@ function attachEventHandlers() {
 
   const resetChecklistBtn = document.querySelector('#reset-checklist-btn');
   if (resetChecklistBtn) {
-    resetChecklistBtn.addEventListener('click', () => {
+    resetChecklistBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       state.checklistState = {};
       saveChecklistState({});
       render();

@@ -2129,6 +2129,21 @@ html.dark .culinary-tip-title,
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: 22px;
+  transition: padding 0.2s ease, box-shadow 0.2s ease;
+}
+
+.checklist-card.is-collapsed {
+  padding: 14px 18px;
+}
+
+.checklist-card.is-expanded {
+  padding: 18px 22px;
+}
+
+.checklist-header-wrapper:focus-visible {
+  outline: 2px solid var(--primary-color, #10b981);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .checklist-title {
