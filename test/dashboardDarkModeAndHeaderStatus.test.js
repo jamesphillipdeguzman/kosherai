@@ -103,7 +103,7 @@ const userWithEmailOnly = {
   email: 'maria.santos@company.ph'
 };
 
-// 2.1 Online + Authenticated (with full name): Displays First Name + Green Dot + Emerald Pill
+// 2.1 Online + Authenticated (with full name): Displays User Initial + Green Dot + Emerald Pill
 const htmlUserOnline = renderHeader(true, 'diet', true, 'lid', 'dark', userWithFullName);
 
 assert.ok(
@@ -112,14 +112,9 @@ assert.ok(
 );
 
 assert.ok(
-  htmlUserOnline.includes('user-first-name font-semibold truncate max-w-[110px]">\n              James\n            </span>') ||
-  htmlUserOnline.includes('user-first-name font-semibold truncate max-w-[110px]">\r\n              James\r\n            </span>') ||
-  (htmlUserOnline.includes('James') && htmlUserOnline.match(/user-first-name[^>]*>\s*James\s*<\/span>/)),
-  'Consolidated status pill label must display the user first name "James"'
+  !htmlUserOnline.includes('status-label user-first-name'),
+  'Consolidated status pill must NOT render separate user-first-name element'
 );
-
-const labelMatch = htmlUserOnline.match(/<span class="status-label user-first-name[^>]*>([\s\S]*?)<\/span>/);
-assert.ok(labelMatch && labelMatch[1].trim() === 'James', 'The visible label text inside user-first-name must be exactly "James"');
 
 assert.ok(
   htmlUserOnline.includes('status-dot'),
@@ -133,15 +128,24 @@ assert.ok(
 );
 
 assert.ok(
+  htmlUserOnline.includes('James Wilson'),
+  'Tooltip title must include the full user name "James Wilson"'
+);
+
+assert.ok(
   !htmlUserOnline.includes('user-profile-pill'),
   'Separate user-profile-pill must NOT be rendered (consolidated into status pill)'
 );
 
-// 2.2 Online + Authenticated (with email only fallback): Displays email prefix
+// 2.2 Online + Authenticated (with email only fallback): Displays email initial
 const htmlUserEmailFallback = renderHeader(true, 'diet', true, 'lid', 'dark', userWithEmailOnly);
 assert.ok(
-  htmlUserEmailFallback.includes('maria.santos'),
-  'Consolidated status pill must fall back to email prefix when user.name is empty'
+  htmlUserEmailFallback.match(/user-avatar-badge[^>]*>\s*M\s*<\/span>/),
+  'Consolidated status pill must display initial "M" when user.name is empty and email is maria.santos@company.ph'
+);
+assert.ok(
+  htmlUserEmailFallback.includes('maria.santos@company.ph'),
+  'Tooltip title must include email when user.name is empty'
 );
 
 // 2.3 Offline + Authenticated: Displays "Offline" + Amber Dot + Amber Pill

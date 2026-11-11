@@ -226,7 +226,6 @@ export function Header({
           />
           <div className="brand-title text-slate-900 dark:text-white font-black text-xl tracking-tight flex items-center gap-1.5 leading-none">
             <span>KosherAI</span>
-            <span className="brand-badge leading-none">{appMode === 'course' ? 'SUSTAIN' : currentProfile.badge}</span>
             {isSyncing ? (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 dark:bg-teal-500/20 px-1.5 py-0.5 rounded-full border border-teal-500/30 animate-pulse leading-none">
                 Syncing...
@@ -244,13 +243,12 @@ export function Header({
           {currentUser && isBrowserOnline ? (
             <div
               className="status-pill status-pill-user online inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 transition-all select-none shadow-2xs"
-              title={`Network connection active · Signed in as ${currentUser.name || firstName}${currentUser.email ? ` (${currentUser.email})` : ''}`}
+              title={`Network connection active · Signed in as ${currentUser.name || currentUser.email || 'User'}${currentUser.email ? ` (${currentUser.email})` : ''}`}
             >
               <span className="status-dot"></span>
               <span className="user-avatar-badge status-label user-initial font-bold text-xs select-none">
                 {initial}
               </span>
-              <span className="sr-only user-first-name">{firstName}</span>
             </div>
           ) : !isBrowserOnline ? (
             <div
@@ -271,7 +269,7 @@ export function Header({
           )}
 
           {/* Dynamic Auth State: Sign Out button if logged in, Sign In / Get Started buttons if logged out */}
-          <div className="header-auth-controls inline-flex items-center gap-1.5" id="header-auth-container">
+          <div className="header-auth-controls inline-flex items-center gap-1.5 shrink-0" id="header-auth-container">
             {currentUser ? (
               <button
                 type="button"
@@ -321,14 +319,14 @@ export function Header({
             type="button"
             onClick={onToggleTheme}
             aria-label="Toggle theme"
-            className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900 text-slate-700 dark:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900 text-slate-700 dark:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
           >
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
 
           <button
             id="settings-open-btn"
-            className="btn-icon"
+            className="btn-icon shrink-0"
             onClick={onOpenSettings}
             title="App & API Settings"
             aria-label="Settings"

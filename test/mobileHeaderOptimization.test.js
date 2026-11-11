@@ -65,6 +65,16 @@ console.log('--- Section 1: User Initial Derivation & Status Display ---');
     'Header.jsx must include full user name in tooltip title'
   );
 
+  // 1.5 Header.js renders single initial without user-first-name element
+  assert.ok(
+    headerJs.includes('user-avatar-badge status-label user-initial'),
+    'Header.js must render user-initial class in status pill'
+  );
+  assert.ok(
+    !headerJs.includes('class="status-label user-first-name'),
+    'Header.js must NOT render user-first-name element'
+  );
+
   console.log('  ✅ Section 1 Passed: User initial resolved from name -> email -> U and displayed as compact ● initial pill.');
 }
 
@@ -76,7 +86,11 @@ console.log('\n--- Section 2: Icon-Only Sign Out on Mobile ---');
   // 2.1 Sign Out text has responsive hiding class
   assert.ok(
     headerJsx.includes('signout-text hidden sm:inline'),
-    'Sign Out text must be hidden on mobile viewports with "signout-text hidden sm:inline"'
+    'Sign Out text in Header.jsx must be hidden on mobile viewports with "signout-text hidden sm:inline"'
+  );
+  assert.ok(
+    headerJs.includes('signout-text hidden sm:inline'),
+    'Sign Out text in Header.js must be hidden on mobile viewports with "signout-text hidden sm:inline"'
   );
 
   // 2.2 Accessibility attributes preserved
@@ -95,7 +109,7 @@ console.log('\n--- Section 2: Icon-Only Sign Out on Mobile ---');
     'Sign Out button must retain SVG signout-icon'
   );
 
-  // 2.4 CSS rule for hiding text on mobile and providing comfortable square touch target
+  // 2.4 CSS rule for hiding text on mobile and providing comfortable touch target
   assert.ok(
     styleCss.includes('@media (max-width: 639px)') &&
     styleCss.includes('.signout-text') &&
@@ -110,15 +124,15 @@ console.log('\n--- Section 2: Icon-Only Sign Out on Mobile ---');
     'style.css must display .signout-text on sm and larger screens (>= 640px)'
   );
 
-  console.log('  ✅ Section 2 Passed: Sign Out button is icon-only on mobile with 38px touch target and text on desktop.');
+  console.log('  ✅ Section 2 Passed: Sign Out button is icon-only on mobile with 40px touch target and text on desktop.');
 }
 
 // =========================================================================
-// Section 3: Subtitle Removal & Brand / Badge Preservation
+// Section 3: Subtitle & Protocol Badge Removal from Header
 // =========================================================================
-console.log('\n--- Section 3: Header Subtitle Removal & Brand Preservation ---');
+console.log('\n--- Section 3: Header Subtitle & Protocol Badge Removal ---');
 {
-  // 3.1 Subtitle elements removed from Header.jsx
+  // 3.1 Subtitle elements removed from Header.jsx and Header.js
   assert.ok(
     !headerJsx.includes('Six-Week Food Cost & Waste Study'),
     'Header.jsx must NOT contain "Six-Week Food Cost & Waste Study" subtitle'
@@ -127,8 +141,6 @@ console.log('\n--- Section 3: Header Subtitle Removal & Brand Preservation ---')
     !headerJsx.includes('brand-subtitle'),
     'Header.jsx must NOT contain .brand-subtitle element'
   );
-
-  // 3.2 Subtitle elements removed from Header.js
   assert.ok(
     !headerJs.includes('Six-Week Food Cost & Waste Study'),
     'Header.js must NOT contain "Six-Week Food Cost & Waste Study" subtitle'
@@ -136,6 +148,16 @@ console.log('\n--- Section 3: Header Subtitle Removal & Brand Preservation ---')
   assert.ok(
     !headerJs.includes('brand-subtitle'),
     'Header.js must NOT contain .brand-subtitle element'
+  );
+
+  // 3.2 Protocol badges (LID RAI / SUSTAIN / brand-badge) removed from header brand area
+  assert.ok(
+    !headerJsx.includes('brand-badge'),
+    'Header.jsx brand area must NOT contain brand-badge'
+  );
+  assert.ok(
+    !headerJs.includes('brand-badge'),
+    'Header.js brand area must NOT contain brand-badge'
   );
 
   // 3.3 KosherAI logo and brand title preserved
@@ -147,14 +169,16 @@ console.log('\n--- Section 3: Header Subtitle Removal & Brand Preservation ---')
     headerJsx.includes('/favicon.svg'),
     'Header.jsx must keep KosherAI logo image'
   );
-
-  // 3.4 Sustain and protocol badges preserved
   assert.ok(
-    headerJsx.includes("appMode === 'course' ? 'SUSTAIN' : currentProfile.badge"),
-    'Header.jsx must preserve SUSTAIN and diet badges'
+    headerJs.includes('KosherAI'),
+    'Header.js must keep KosherAI brand title'
+  );
+  assert.ok(
+    headerJs.includes('/favicon.svg'),
+    'Header.js must keep KosherAI logo image'
   );
 
-  console.log('  ✅ Section 3 Passed: Subtitle cleanly removed; KosherAI brand and Sustain badge preserved.');
+  console.log('  ✅ Section 3 Passed: Subtitles and diet protocol badges completely removed from Header; KosherAI brand preserved.');
 }
 
 // =========================================================================

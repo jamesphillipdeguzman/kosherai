@@ -6395,10 +6395,11 @@ html.dark .status-pill.status-pill-offline.offline,
 }
 
 .status-pill .user-first-name {
-  max-width: 110px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: none !important;
+}
+
+.app-header .brand-badge {
+  display: none !important;
 }
 
 /* Mobile Icon-Only Sign Out button on viewports < 640px (sm breakpoint) */
@@ -6407,10 +6408,10 @@ html.dark .status-pill.status-pill-offline.offline,
     display: none !important;
   }
   .header-signout-btn {
-    width: 38px !important;
-    height: 38px !important;
-    min-width: 38px !important;
-    min-height: 38px !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
     padding: 0 !important;
     display: inline-flex !important;
     align-items: center !important;

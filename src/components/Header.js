@@ -37,10 +37,8 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
   }
 
   const rawName = (currentUser?.name || '').trim();
-  const firstName = rawName
-    ? rawName.split(' ')[0]
-    : (currentUser?.email ? currentUser.email.split('@')[0] : 'User');
-  const initial = (firstName || currentUser?.name || currentUser?.email || 'U')[0].toUpperCase();
+  const rawEmail = (currentUser?.email || '').trim();
+  const initial = (rawName ? rawName[0] : (rawEmail ? rawEmail[0] : 'U')).toUpperCase();
 
   return `
     <header class="app-header">
@@ -48,7 +46,6 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
         <img src="/favicon.svg" alt="KosherAI Logo" class="brand-icon ${isSyncing ? 'syncing animate-spin' : 'group-hover:scale-105'} transition-transform duration-300" />
         <div class="brand-title text-slate-900 dark:text-white font-black text-xl tracking-tight flex items-center gap-1.5 leading-none">
           <span>KosherAI</span>
-          <span class="brand-badge leading-none">${appMode === 'course' ? 'SUSTAIN' : currentProfile.badge}</span>
           ${isSyncing ? `
             <span class="inline-flex items-center gap-1 text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 dark:bg-teal-500/20 px-1.5 py-0.5 rounded-full border border-teal-500/30 animate-pulse leading-none">
               Syncing...
@@ -66,11 +63,8 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
         ${currentUser && isOnline ? `
           <div class="status-pill status-pill-user online inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 transition-all select-none shadow-2xs" title="Network connection active · Signed in as ${escapeAttr(currentUser.name || currentUser.email || 'User')}${currentUser.email ? ` (${escapeAttr(currentUser.email)})` : ''}">
             <span class="status-dot"></span>
-            <span class="user-avatar-badge w-5 h-5 rounded-full bg-emerald-600 text-white font-bold text-[11px] inline-flex items-center justify-center flex-shrink-0 select-none">
+            <span class="user-avatar-badge status-label user-initial font-bold text-xs select-none">
               ${escapeHtml(initial)}
-            </span>
-            <span class="status-label user-first-name font-semibold truncate max-w-[110px]">
-              ${escapeHtml(firstName || 'User')}
             </span>
           </div>
         ` : (!isOnline ? `
@@ -86,7 +80,7 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
         `)}
 
         <!-- Dynamic Auth State: Sign Out if logged in, Sign In/Get Started if logged out -->
-        <div class="header-auth-controls inline-flex items-center gap-1.5" id="header-auth-container">
+        <div class="header-auth-controls inline-flex items-center gap-1.5 shrink-0" id="header-auth-container">
           ${currentUser ? `
             <button
               type="button"
@@ -100,7 +94,7 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
                 <polyline points="16 17 21 12 16 7"></polyline>
                 <line x1="21" y1="12" x2="9" y2="12"></line>
               </svg>
-              <span class="signout-text">Sign Out</span>
+              <span class="signout-text hidden sm:inline">Sign Out</span>
             </button>
           ` : `
             <div class="header-auth-buttons flex items-center gap-2">
@@ -128,12 +122,12 @@ export function renderHeader(isOnline = navigator.onLine, appMode = 'diet', show
           type="button"
           aria-label="Toggle theme"
           title="Toggle Light / Dark Mode"
-          class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900 text-slate-700 dark:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900 text-slate-700 dark:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
         >
           ${theme === 'dark' ? '☀️' : '🌙'}
         </button>
 
-        <button class="btn-icon" id="settings-open-btn" title="App & API Settings" aria-label="Settings">
+        <button class="btn-icon shrink-0" id="settings-open-btn" title="App & API Settings" aria-label="Settings">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
             <circle cx="12" cy="12" r="3"/>
