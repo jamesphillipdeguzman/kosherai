@@ -675,61 +675,6 @@ export default function ReceiptScannerModal({
           </div>
         </div>
 
-        {/* AI / Neural OCR Scanning Toggle Switch */}
-        <div className="px-4 sm:px-6 pt-2 pb-1">
-          <div
-            className={`p-2.5 sm:p-3 rounded-xl border flex items-center justify-between gap-3 transition-colors ${
-              theme === 'dark'
-                ? 'bg-slate-900/60 border-slate-800'
-                : 'bg-white border-slate-200 shadow-xs'
-            }`}
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="text-xl select-none shrink-0">🤖</span>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className={`text-xs sm:text-sm font-bold truncate ${
-                      theme === 'dark' ? 'text-white' : 'text-slate-900'
-                    }`}
-                  >
-                    AI / Neural OCR Scanning
-                  </span>
-                  <span
-                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                      enableOcrScan
-                        ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
-                        : 'bg-slate-700/40 text-slate-400 border border-slate-600/30'
-                    }`}
-                  >
-                    {enableOcrScan ? 'Enabled' : 'Off (Quick Capture)'}
-                  </span>
-                </div>
-                <p
-                  className={`text-[11px] sm:text-xs mt-0.5 line-clamp-1 ${
-                    theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-                  }`}
-                >
-                  {enableOcrScan
-                    ? 'Automatically extracts store, total amount, and items when online.'
-                    : 'Capture and save photos instantly without AI delay. Finish items later at home.'}
-                </p>
-              </div>
-            </div>
-
-            <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-2" title="Toggle AI / Neural OCR Scanning">
-              <input
-                type="checkbox"
-                id="ocr-scan-toggle"
-                checked={enableOcrScan}
-                onChange={(e) => handleToggleOcrScan(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
-            </label>
-          </div>
-        </div>
-
         {/* Modal Body: Responsive Layout Container */}
         {isScanning ? (
           <div className="flex flex-col items-center justify-center p-12 text-center min-h-[380px]">
@@ -749,6 +694,61 @@ export default function ReceiptScannerModal({
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+            {/* AI / Neural OCR Scanning Toggle Switch (Normal Document Flow in Scrollable Form) */}
+            <div className="ocr-toggle-wrapper w-full pb-3 static">
+              <div
+                className={`ocr-toggle-card static p-2.5 sm:p-3 rounded-xl border flex items-center justify-between gap-3 transition-colors ${
+                  theme === 'dark'
+                    ? 'bg-slate-900/60 border-slate-800'
+                    : 'bg-white border-slate-200 shadow-xs'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-xl select-none shrink-0">🤖</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`text-xs sm:text-sm font-bold truncate ${
+                          theme === 'dark' ? 'text-white' : 'text-slate-900'
+                        }`}
+                      >
+                        AI / Neural OCR Scanning
+                      </span>
+                      <span
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                          enableOcrScan
+                            ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
+                            : 'bg-slate-700/40 text-slate-400 border border-slate-600/30'
+                        }`}
+                      >
+                        {enableOcrScan ? 'Enabled' : 'Off (Quick Capture)'}
+                      </span>
+                    </div>
+                    <p
+                      className={`text-[11px] sm:text-xs mt-0.5 line-clamp-1 ${
+                        theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
+                      }`}
+                    >
+                      {enableOcrScan
+                        ? 'Automatically extracts store, total amount, and items when online.'
+                        : 'Capture and save photos instantly without AI delay. Finish items later at home.'}
+                    </p>
+                  </div>
+                </div>
+
+                <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-2" title="Toggle AI / Neural OCR Scanning">
+                  <input
+                    type="checkbox"
+                    id="ocr-scan-toggle"
+                    checked={enableOcrScan}
+                    onChange={(e) => handleToggleOcrScan(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
+                </label>
+              </div>
+            </div>
+
             {/* Main responsive grid: Split 5/7 for both Supermarket and Wet Market */}
             <div className="flex flex-col md:grid md:grid-cols-12 gap-6">
               {/* Left Column / Upload Card: available in both modes */}
@@ -1325,8 +1325,8 @@ export default function ReceiptScannerModal({
 
                               {/* Line Total */}
                               <div className="min-w-0">
-                                <label className={`block text-[10px] uppercase font-bold mb-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                                  Total
+                                <label className={`block text-[10px] uppercase font-bold mb-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`} title="Line Total">
+                                  Line Total
                                 </label>
                                 <div className={`w-full min-w-0 px-1 py-2 text-xs rounded-lg border text-center font-mono font-bold text-emerald-500 dark:text-emerald-400 truncate ${
                                   theme === 'dark'

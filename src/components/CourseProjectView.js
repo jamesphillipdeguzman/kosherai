@@ -910,8 +910,8 @@ function createReceiptItemRowHtml(item = {}, idx = 0, dietProfile = null, isWetM
 
       <!-- Tier 2 Col 3 (Mobile) / Col 5 (Desktop): Line Total -->
       <td class="item-cell-total">
-        <label class="mobile-cell-label">Total (₱)</label>
-        <input type="number" step="0.01" min="0" class="table-input item-total-val" placeholder="0.00" value="${total !== '' ? total : ''}" style="width: 100%; text-align: right;" />
+        <label class="mobile-cell-label">Line Total (₱)</label>
+        <input type="number" step="0.01" min="0" class="table-input item-total-val" placeholder="0.00" value="${total !== '' ? total : ''}" readonly style="width: 100%; text-align: right;" />
       </td>
 
       <!-- Tier 1 Delete (Mobile) / Col 6 (Desktop): Delete Button -->
@@ -1076,34 +1076,34 @@ function renderReceiptScanModal(state) {
           </div>
         </div>
 
-        <!-- AI / Neural OCR Scanning Toggle Switch -->
-        <div class="px-4 sm:px-6 pt-1 pb-2" style="padding: 4px 16px 10px 16px;">
-          <div class="ocr-toggle-card" style="padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border-color, #334155); background: var(--bg-card, rgba(15, 23, 42, 0.6)); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-            <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-              <span style="font-size: 1.25rem; user-select: none; flex-shrink: 0;">🤖</span>
-              <div style="min-width: 0;">
-                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                  <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary, #fff);">AI / Neural OCR Scanning</span>
-                  <span style="font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 9999px; text-transform: uppercase; ${ocrEnabled ? 'background: rgba(20, 184, 166, 0.2); color: #2dd4bf; border: 1px solid rgba(20, 184, 166, 0.3);' : 'background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.3);'}">
-                    ${ocrEnabled ? 'Enabled' : 'Off (Quick Capture)'}
-                  </span>
-                </div>
-                <div style="font-size: 0.72rem; color: var(--text-muted, #94a3b8); margin-top: 2px;">
-                  ${ocrEnabled ? 'Automatically extracts store, total amount, and items when online.' : 'Capture and save photos instantly without AI delay. Finish items later at home.'}
-                </div>
-              </div>
-            </div>
-            <label class="toggle-switch" style="position: relative; display: inline-flex; align-items: center; cursor: pointer; flex-shrink: 0;" title="Toggle AI / Neural OCR Scanning">
-              <input type="checkbox" id="ocr-scan-toggle" ${ocrEnabled ? 'checked' : ''} style="display: none;" />
-              <div class="toggle-track" style="width: 44px; height: 24px; border-radius: 9999px; background: ${ocrEnabled ? '#0d9488' : '#475569'}; transition: background 0.2s ease; position: relative;">
-                <div class="toggle-thumb" style="width: 20px; height: 20px; border-radius: 50%; background: #ffffff; position: absolute; top: 2px; left: ${ocrEnabled ? '22px' : '2px'}; transition: left 0.2s ease;"></div>
-              </div>
-            </label>
-          </div>
-        </div>
-
         <!-- Main Body: Split 5/7 layout for both Supermarket and Wet Market -->
         <div class="receipt-scanner-split flex flex-col md:grid md:grid-cols-12 gap-6 relative">
+          
+          <!-- AI / Neural OCR Scanning Toggle Switch (Inside scrollable body for normal document flow) -->
+          <div class="ocr-toggle-wrapper w-full md:col-span-12" style="position: static; margin-bottom: -6px;">
+            <div class="ocr-toggle-card" style="position: static; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border-color, #334155); background: var(--bg-card, rgba(15, 23, 42, 0.6)); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                <span style="font-size: 1.25rem; user-select: none; flex-shrink: 0;">🤖</span>
+                <div style="min-width: 0;">
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary, #fff);">AI / Neural OCR Scanning</span>
+                    <span style="font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 9999px; text-transform: uppercase; ${ocrEnabled ? 'background: rgba(20, 184, 166, 0.2); color: #2dd4bf; border: 1px solid rgba(20, 184, 166, 0.3);' : 'background: rgba(100, 116, 139, 0.2); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.3);'}">
+                      ${ocrEnabled ? 'Enabled' : 'Off (Quick Capture)'}
+                    </span>
+                  </div>
+                  <div style="font-size: 0.72rem; color: var(--text-muted, #94a3b8); margin-top: 2px;">
+                    ${ocrEnabled ? 'Automatically extracts store, total amount, and items when online.' : 'Capture and save photos instantly without AI delay. Finish items later at home.'}
+                  </div>
+                </div>
+              </div>
+              <label class="toggle-switch" style="position: relative; display: inline-flex; align-items: center; cursor: pointer; flex-shrink: 0;" title="Toggle AI / Neural OCR Scanning">
+                <input type="checkbox" id="ocr-scan-toggle" ${ocrEnabled ? 'checked' : ''} style="display: none;" />
+                <div class="toggle-track" style="width: 44px; height: 24px; border-radius: 9999px; background: ${ocrEnabled ? '#0d9488' : '#475569'}; transition: background 0.2s ease; position: relative;">
+                  <div class="toggle-thumb" style="width: 20px; height: 20px; border-radius: 50%; background: #ffffff; position: absolute; top: 2px; left: ${ocrEnabled ? '22px' : '2px'}; transition: left 0.2s ease;"></div>
+                </div>
+              </label>
+            </div>
+          </div>
           
           <!-- Left Pane / Upload Card (Mobile: full width on top, Desktop: 5 cols) -->
           <div class="split-left-pane w-full md:col-span-5">

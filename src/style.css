@@ -5634,6 +5634,15 @@ html.dark .venue-toggle-btn:hover {
   display: none;
 }
 
+/* AI / Neural OCR Scanning Toggle Switch - Document Flow (Non-sticky) */
+.ocr-toggle-wrapper,
+.ocr-toggle-card {
+  position: static !important;
+  top: auto !important;
+  bottom: auto !important;
+  z-index: auto !important;
+}
+
 /* Mobile 2-Tier Card Layout (< 640px) */
 @media (max-width: 639px) {
   .receipt-items-table-wrapper {
@@ -5652,7 +5661,7 @@ html.dark .venue-toggle-btn:hover {
   }
   .receipt-item-row {
     display: grid !important;
-    grid-template-columns: repeat(6, 1fr) !important;
+    grid-template-columns: repeat(12, 1fr) !important;
     gap: 8px !important;
     padding: 12px !important;
     margin-bottom: 12px !important;
@@ -5667,15 +5676,15 @@ html.dark .venue-toggle-btn:hover {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
   }
 
-  /* Tier 1: Full-width Item Name input + Inline Delete (✕) */
+  /* Tier 1 / Row 1: Full-width Item Name input + Inline Delete (✕) */
   .receipt-item-row .item-cell-name {
-    grid-column: 1 / 6 !important;
+    grid-column: 1 / 11 !important;
     display: block !important;
     padding: 0 !important;
     border: none !important;
   }
   .receipt-item-row .item-cell-delete {
-    grid-column: 6 / 7 !important;
+    grid-column: 11 / 13 !important;
     display: flex !important;
     align-items: flex-start !important;
     justify-content: flex-end !important;
@@ -5685,57 +5694,97 @@ html.dark .venue-toggle-btn:hover {
   .receipt-item-row .item-cell-delete .remove-item-row-btn {
     width: 36px !important;
     height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
     border-radius: 8px !important;
     color: #ef4444 !important;
     background: rgba(239, 68, 68, 0.1) !important;
+    border: 1px solid rgba(239, 68, 68, 0.25) !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     font-size: 1rem !important;
+    font-weight: 700 !important;
     cursor: pointer !important;
+    transition: all 0.15s ease !important;
+  }
+  .receipt-item-row .item-cell-delete .remove-item-row-btn:hover {
+    background: rgba(239, 68, 68, 0.2) !important;
+    color: #dc2626 !important;
+    border-color: rgba(239, 68, 68, 0.4) !important;
+  }
+  html.dark .receipt-item-row .item-cell-delete .remove-item-row-btn {
+    color: #fca5a5 !important;
+    background: rgba(239, 68, 68, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+  }
+  html.dark .receipt-item-row .item-cell-delete .remove-item-row-btn:hover {
+    background: rgba(239, 68, 68, 0.3) !important;
+    color: #ffffff !important;
   }
 
-  /* Tier 2: 3-column cluster */
-  /* Column 1 of cluster: [Qty + Unit selector] spanning cols 1-2 */
+  /* Tier 2 / Row 2: 4-Column Balanced Grid: Qty (3 cols), Unit (3 cols), Price (3 cols), Line Total (3 cols) */
   .receipt-item-row .item-cell-qty {
-    grid-column: 1 / 2 !important;
+    grid-column: 1 / 4 !important;
     display: block !important;
     padding: 0 !important;
     border: none !important;
   }
   .receipt-item-row .item-cell-unit {
-    grid-column: 2 / 3 !important;
+    grid-column: 4 / 7 !important;
     display: block !important;
     padding: 0 !important;
     border: none !important;
   }
-  .receipt-item-row .item-cell-qty input {
-    border-top-right-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-    border-right-width: 0 !important;
-    text-align: center !important;
-  }
-  .receipt-item-row .item-cell-unit input,
-  .receipt-item-row .item-cell-unit select {
-    border-top-left-radius: 0 !important;
-    border-bottom-left-radius: 0 !important;
-    text-align: center !important;
-  }
-
-  /* Column 2 of cluster: [Price (₱)] spanning cols 3-4 */
   .receipt-item-row .item-cell-price {
-    grid-column: 3 / 5 !important;
+    grid-column: 7 / 10 !important;
+    display: block !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+  .receipt-item-row .item-cell-total {
+    grid-column: 10 / 13 !important;
     display: block !important;
     padding: 0 !important;
     border: none !important;
   }
 
-  /* Column 3 of cluster: [Line Total (₱)] spanning cols 5-6 */
-  .receipt-item-row .item-cell-total {
-    grid-column: 5 / 7 !important;
-    display: block !important;
-    padding: 0 !important;
-    border: none !important;
+  .receipt-item-row .item-cell-qty input,
+  .receipt-item-row .item-cell-unit select,
+  .receipt-item-row .item-cell-price input,
+  .receipt-item-row .item-cell-total input {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-radius: 8px !important;
+    border-width: 1px !important;
+    height: 36px !important;
+    padding: 6px 8px !important;
+    box-sizing: border-box !important;
+    font-size: 0.82rem !important;
+  }
+
+  .receipt-item-row .item-cell-qty input {
+    text-align: center !important;
+  }
+  .receipt-item-row .item-cell-unit select {
+    text-align: center !important;
+  }
+  .receipt-item-row .item-cell-price input {
+    text-align: right !important;
+  }
+  .receipt-item-row .item-cell-total input {
+    text-align: right !important;
+    background: #f1f5f9 !important;
+    border-color: #cbd5e1 !important;
+    color: #059669 !important;
+    font-weight: 700 !important;
+    font-family: var(--font-mono, monospace) !important;
+    cursor: default !important;
+  }
+  html.dark .receipt-item-row .item-cell-total input {
+    background: rgba(15, 23, 42, 0.8) !important;
+    border-color: #334155 !important;
+    color: #34d399 !important;
   }
 
   .mobile-cell-label {
@@ -5745,10 +5794,32 @@ html.dark .venue-toggle-btn:hover {
     text-transform: uppercase !important;
     letter-spacing: 0.05em !important;
     color: #64748b !important;
-    margin-bottom: 2px !important;
+    margin-bottom: 3px !important;
   }
   html.dark .mobile-cell-label {
     color: #94a3b8 !important;
+  }
+}
+
+/* Extra narrow screens (<= 360px): adapt 4-column row into 2x2 grid to prevent cramped inputs */
+@media (max-width: 360px) {
+  .receipt-item-row .item-cell-name {
+    grid-column: 1 / 10 !important;
+  }
+  .receipt-item-row .item-cell-delete {
+    grid-column: 10 / 13 !important;
+  }
+  .receipt-item-row .item-cell-qty {
+    grid-column: 1 / 7 !important;
+  }
+  .receipt-item-row .item-cell-unit {
+    grid-column: 7 / 13 !important;
+  }
+  .receipt-item-row .item-cell-price {
+    grid-column: 1 / 7 !important;
+  }
+  .receipt-item-row .item-cell-total {
+    grid-column: 7 / 13 !important;
   }
 }
 
