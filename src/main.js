@@ -1035,10 +1035,13 @@ function attachEventHandlers() {
   // Admin Ingredient Image Management Hub Triggers & Actions
   const openIngredientAdminCookBtn = document.querySelector('#open-ingredient-admin-cook-btn');
   if (openIngredientAdminCookBtn) {
-    openIngredientAdminCookBtn.addEventListener('click', async () => {
-      state.adminImageModalOpen = true;
+    openIngredientAdminCookBtn.addEventListener('click', async (e) => {
+      e?.preventDefault();
+      state.activeTab = 'manage';
+      state.adminImageModalOpen = false;
       state.adminImageProtocol = state.activeDiet || 'lid';
       state.adminImageStatusMsg = '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       render();
       await loadAdminImageData(state.adminImageProtocol);
       render();
@@ -4378,6 +4381,19 @@ window.addEventListener('kosherai:sync-data', () => {
 window.addEventListener('kosherai:household-changed', (e) => {
   if (e.detail?.household_members) {
     state.household_members = e.detail.household_members;
+    render();
+  }
+});
+window.addEventListener('kosherai:navigate-tab', async (e) => {
+  const targetTab = e?.detail;
+  if (targetTab === 'manage') {
+    state.activeTab = 'manage';
+    state.adminImageModalOpen = false;
+    state.adminImageProtocol = state.activeDiet || 'lid';
+    state.adminImageStatusMsg = '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    render();
+    await loadAdminImageData(state.adminImageProtocol);
     render();
   }
 });

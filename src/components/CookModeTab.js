@@ -220,8 +220,10 @@ export function renderCookModeTab(state = {}) {
               <button 
                 type="button" 
                 id="open-ingredient-admin-cook-btn" 
+                data-tab="manage"
                 class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/50 text-indigo-200 text-xs font-bold transition-all shadow-sm cursor-pointer"
                 title="Manage Ingredient Photos"
+                aria-label="Manage Ingredient Photos"
               >
                 <span>🖼️</span>
                 <span>Manage Ingredient Photos</span>

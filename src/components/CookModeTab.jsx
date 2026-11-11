@@ -3,16 +3,20 @@ import { DIET_RECIPES } from '../data/dietRecipes.js';
 import { RecipeCard } from './RecipeCard.jsx';
 import { renderCookModeTab } from './CookModeTab.js';
 import { getHouseholdMembers, setHouseholdMembers } from '../services/storage.js';
-import AdminIngredientImagesModal from './AdminIngredientImagesModal.jsx';
 
 export { DIET_RECIPES, renderCookModeTab };
 
 /**
  * React Component for Cook Mode Dishes Catalog with dynamic household portion scaling
  */
-export function CookModeTab({ activeDiet = 'pinoy_keto', onLoadRecipe, isAdmin = false }) {
+export function CookModeTab({
+  activeDiet = 'pinoy_keto',
+  onLoadRecipe,
+  isAdmin = false,
+  setActiveTab,
+  onNavigateTab
+}) {
   const [householdMembers, setMembers] = useState(() => getHouseholdMembers());
-  const [showAdminImageModal, setShowAdminImageModal] = useState(false);
   const [userIsAdmin, setUserIsAdmin] = useState(() => {
     if (isAdmin) return true;
     if (typeof window !== 'undefined') {
@@ -80,8 +84,18 @@ export function CookModeTab({ activeDiet = 'pinoy_keto', onLoadRecipe, isAdmin =
             <button
               type="button"
               id="open-ingredient-admin-cook-btn"
-              onClick={() => setShowAdminImageModal(true)}
+              data-tab="manage"
+              onClick={() => {
+                if (typeof setActiveTab === 'function') {
+                  setActiveTab('manage');
+                } else if (typeof onNavigateTab === 'function') {
+                  onNavigateTab('manage');
+                } else if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('kosherai:navigate-tab', { detail: 'manage' }));
+                }
+              }}
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/50 text-indigo-200 text-xs font-bold transition-all shadow-sm cursor-pointer"
+              title="Manage Ingredient Photos"
             >
               <span>🖼️</span>
               <span>Manage Ingredient Photos</span>
@@ -159,14 +173,6 @@ export function CookModeTab({ activeDiet = 'pinoy_keto', onLoadRecipe, isAdmin =
           />
         ))}
       </div>
-
-      {showAdminImageModal && (
-        <AdminIngredientImagesModal
-          isOpen={true}
-          onClose={() => setShowAdminImageModal(false)}
-          initialProtocol={activeDiet || 'lid'}
-        />
-      )}
     </div>
   );
 }
