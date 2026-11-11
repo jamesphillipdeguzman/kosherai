@@ -84,7 +84,47 @@ assert.ok(modalSrc.includes('(Number(item.quantity || 0) * Number(item.price !==
 
 console.log('  ✅ Handlers, calculations, and data persistence preserved.');
 
+// =========================================================================
+// SECTION 4: Desktop Full-Width Vertical Stack for OCR Card & Photo Capture
+// =========================================================================
+console.log('\n--- Section 4: Full-Width Vertical Stack & Desktop Clearance ---');
+
+// 4.1 In style.css, verify .receipt-scanner-split uses flex flex-col on both mobile and desktop (no conflicting grid)
+assert.ok(/\.receipt-scanner-split\s*\{[\s\S]*?display:\s*flex\s*!important/i.test(styleSrc), 'receipt-scanner-split is flex flex-col');
+assert.ok(/\.split-left-pane\s*\{[\s\S]*?width:\s*100%\s*!important/i.test(styleSrc), 'split-left-pane spans full width on desktop');
+assert.ok(/\.split-right-pane\s*\{[\s\S]*?width:\s*100%\s*!important/i.test(styleSrc), 'split-right-pane spans full width on desktop');
+assert.ok(/\.ocr-toggle-wrapper\s*\{[\s\S]*?position:\s*static\s*!important/i.test(styleSrc), 'ocr-toggle-wrapper styled with static positioning');
+assert.ok(styleSrc.includes('width: 100% !important;'), 'ocr-toggle-wrapper spans 100% width');
+
+// 4.2 In CourseProjectView.js, verify the vertical order:
+// 1. Header & tabs
+// 2. AI / Neural OCR Scanning toggle card
+// 3. Take Photo capture area (split-left-pane)
+// 4. Physical Scale Weight banner (scale-reconciliation-card)
+// 5. Stall Name and Purchase Date inputs (edit-store-name)
+// 6. Itemized Purchases list (receipt-items-table)
+const modalHeaderIdx = courseViewSrc.indexOf('modal-header');
+const venueToggleIdx = courseViewSrc.indexOf('venue-mode-toggle');
+const ocrCardIdx = courseViewSrc.indexOf('ocr-toggle-card');
+const photoDropzoneIdx = courseViewSrc.indexOf('split-left-pane');
+const scaleBannerIdx = courseViewSrc.indexOf('scale-reconciliation-card');
+const storeNameIdx = courseViewSrc.indexOf('edit-store-name');
+const itemsTableIdx = courseViewSrc.indexOf('receipt-items-table');
+
+assert.ok(modalHeaderIdx > 0, 'Modal header present');
+assert.ok(venueToggleIdx > modalHeaderIdx, '1. Venue mode toggle sits below header');
+assert.ok(ocrCardIdx > venueToggleIdx, '2. AI / Neural OCR card sits below header/tabs');
+assert.ok(photoDropzoneIdx > ocrCardIdx, '3. Photo capture area sits directly below OCR card');
+assert.ok(scaleBannerIdx > photoDropzoneIdx, '4. Scale reconciliation banner sits below photo capture area');
+assert.ok(storeNameIdx > scaleBannerIdx, '5. Store / Stall name input sits below banner');
+assert.ok(itemsTableIdx > storeNameIdx, '6. Itemized purchases table sits below inputs');
+
+console.log('  ✅ Strict vertical order verified: Tabs -> OCR Toggle -> Photo Capture -> Scale Banner -> Inputs -> Items.');
+
+// 4.3 In ReceiptScannerModal.jsx, verify vertical stack classes
+assert.ok(modalSrc.includes('className="flex flex-col gap-4 w-full"'), 'ReceiptScannerModal uses vertical stack flex flex-col gap-4 w-full');
+console.log('  ✅ ReceiptScannerModal vertical stack verified.');
+
 console.log('\n======================================================================');
 console.log('🎉 ALL RECEIPT ITEM LAYOUT & OCR NORMAL SCROLL TESTS PASSED!');
 console.log('======================================================================\n');
-

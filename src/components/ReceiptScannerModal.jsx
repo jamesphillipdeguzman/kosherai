@@ -745,10 +745,10 @@ export default function ReceiptScannerModal({
               </div>
             </div>
 
-            {/* Main responsive grid: Split 5/7 for both Supermarket and Wet Market */}
-            <div className="flex flex-col md:grid md:grid-cols-12 gap-6">
-              {/* Left Column / Upload Card: available in both modes */}
-              <div className="w-full md:col-span-5 flex flex-col">
+            {/* Main responsive vertical stack */}
+            <div className="flex flex-col gap-4 w-full">
+              {/* Photo Capture Card / Left Column: available in both modes */}
+              <div className="w-full flex flex-col">
                 {/* Dedicated Camera Input with rear-facing mobile camera capture */}
                 <input
                   type="file"
@@ -920,8 +920,8 @@ export default function ReceiptScannerModal({
                 </div>
               </div>
 
-              {/* Right Column / Extracted Editable Form (Full width on mobile, 7 cols on desktop) */}
-              <div className="relative w-full md:col-span-7 flex flex-col">
+              {/* Right Column / Extracted Editable Form (Full width stacked vertically) */}
+              <div className="relative w-full flex flex-col">
                 {isScanning && (
                   <div className="active-scanning-overlay">
                     <div className="w-12 h-12 rounded-full border-4 border-teal-500/20 border-t-teal-500 animate-spin mb-3" />

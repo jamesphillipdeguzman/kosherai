@@ -4634,35 +4634,41 @@ html.light .receipt-modal-large .theme-toggle-btn {
   color: #334155;
 }
 
-/* 1. Layout & Mobile Responsiveness: Single-column on mobile (<md), 12-col grid on desktop (>=md) */
+/* 1. Layout & Responsiveness: Unified Vertical Stack across all viewports */
 .receipt-scanner-split {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
   padding: 16px;
   overflow-y: auto;
   max-height: calc(88vh - 70px);
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
 @media (min-width: 768px) {
   .receipt-scanner-split {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 24px;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
     padding: 24px;
-    overflow: hidden;
+    overflow-y: auto !important;
+    max-height: calc(88vh - 70px) !important;
+    width: 100% !important;
   }
 
   .split-left-pane {
-    grid-column: span 5 / span 5;
-    height: 100%;
+    width: 100% !important;
+    height: auto !important;
+    grid-column: auto !important;
   }
 
   .split-right-pane {
-    grid-column: span 7 / span 7;
-    overflow-y: auto;
-    max-height: calc(88vh - 120px);
-    padding-right: 4px;
+    width: 100% !important;
+    grid-column: auto !important;
+    overflow-y: visible !important;
+    max-height: none !important;
+    padding-right: 0 !important;
   }
 }
 
@@ -5634,13 +5640,25 @@ html.dark .venue-toggle-btn:hover {
   display: none;
 }
 
-/* AI / Neural OCR Scanning Toggle Switch - Document Flow (Non-sticky) */
-.ocr-toggle-wrapper,
+/* AI / Neural OCR Scanning Toggle Switch - Document Flow (Non-sticky & Full-width) */
+.ocr-toggle-wrapper {
+  position: static !important;
+  top: auto !important;
+  bottom: auto !important;
+  z-index: auto !important;
+  width: 100% !important;
+  display: block !important;
+  margin-bottom: 0 !important;
+  box-sizing: border-box !important;
+}
+
 .ocr-toggle-card {
   position: static !important;
   top: auto !important;
   bottom: auto !important;
   z-index: auto !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
 /* Mobile 2-Tier Card Layout (< 640px) */

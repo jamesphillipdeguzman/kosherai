@@ -1076,12 +1076,12 @@ function renderReceiptScanModal(state) {
           </div>
         </div>
 
-        <!-- Main Body: Split 5/7 layout for both Supermarket and Wet Market -->
-        <div class="receipt-scanner-split flex flex-col md:grid md:grid-cols-12 gap-6 relative">
+        <!-- Main Body: Unified Vertical Stack for both Supermarket and Wet Market -->
+        <div class="receipt-scanner-split flex flex-col w-full gap-4 relative">
           
-          <!-- AI / Neural OCR Scanning Toggle Switch (Inside scrollable body for normal document flow) -->
-          <div class="ocr-toggle-wrapper w-full md:col-span-12" style="position: static; margin-bottom: -6px;">
-            <div class="ocr-toggle-card" style="position: static; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border-color, #334155); background: var(--bg-card, rgba(15, 23, 42, 0.6)); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <!-- AI / Neural OCR Scanning Toggle Switch (Full-width card stacked vertically) -->
+          <div class="ocr-toggle-wrapper w-full" style="position: static;">
+            <div class="ocr-toggle-card w-full" style="position: static; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border-color, #334155); background: var(--bg-card, rgba(15, 23, 42, 0.6)); display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; box-sizing: border-box;">
               <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
                 <span style="font-size: 1.25rem; user-select: none; flex-shrink: 0;">🤖</span>
                 <div style="min-width: 0;">
@@ -1105,8 +1105,8 @@ function renderReceiptScanModal(state) {
             </div>
           </div>
           
-          <!-- Left Pane / Upload Card (Mobile: full width on top, Desktop: 5 cols) -->
-          <div class="split-left-pane w-full md:col-span-5">
+          <!-- Photo Capture Area (Full-width directly below OCR card) -->
+          <div class="split-left-pane w-full flex flex-col">
             <!-- Dedicated Camera & Gallery Inputs -->
             <input type="file" id="receipt-camera-input" accept="image/*" capture="environment" style="display: none;" />
             <input type="file" id="receipt-gallery-input" accept="image/*" style="display: none;" />
@@ -1149,7 +1149,7 @@ function renderReceiptScanModal(state) {
           </div>
 
           <!-- Right Pane: Extracted / Manual Editable Fields -->
-          <div class="split-right-pane w-full md:col-span-7 relative">
+          <div class="split-right-pane w-full flex flex-col gap-4 relative">
             ${isScanning ? `
               <div class="active-scanning-overlay">
                 <div class="w-12 h-12 rounded-full border-4 border-teal-500/20 border-t-teal-500 animate-spin mb-3"></div>
