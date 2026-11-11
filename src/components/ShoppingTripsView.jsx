@@ -73,6 +73,8 @@ export default function ShoppingTripsView({
   const [itemName, setItemName] = useState('');
   const [itemQuantity, setItemQuantity] = useState(1);
   const [itemUnit, setItemUnit] = useState('kg');
+  const [itemPrice, setItemPrice] = useState(0);
+  const [itemTotalPrice, setItemTotalPrice] = useState(0);
 
   const handleDeleteTrip = onDelete || (async (tripId) => {
     if (typeof window !== 'undefined' && window.confirm('Delete this shopping trip and its linked grocery items & expense record?')) {
@@ -153,10 +155,18 @@ export default function ShoppingTripsView({
       ? Number(item.quantity)
       : 1;
     const currentUnit = item?.unit || 'kg';
+    const currentPrice = (item?.price !== undefined && item?.price !== null && item?.price !== '')
+      ? Number(item.price)
+      : ((item?.unitPrice !== undefined && item?.unitPrice !== null && item?.unitPrice !== '') ? Number(item.unitPrice) : 0);
+    const currentTotal = (item?.totalPrice !== undefined && item?.totalPrice !== null && item?.totalPrice !== '')
+      ? Number(item.totalPrice)
+      : ((item?.lineTotal !== undefined && item?.lineTotal !== null && item?.lineTotal !== '') ? Number(item.lineTotal) : Math.round(currentQty * currentPrice * 100) / 100);
 
     setItemName(currentItemName);
     setItemQuantity(currentQty);
     setItemUnit(currentUnit);
+    setItemPrice(currentPrice);
+    setItemTotalPrice(currentTotal);
 
     setEditForm({
       storeName: trip.storeName || '',
@@ -169,7 +179,11 @@ export default function ShoppingTripsView({
       quantity: currentQty,
       itemQuantity: currentQty,
       unit: currentUnit,
-      itemUnit: currentUnit
+      itemUnit: currentUnit,
+      price: currentPrice,
+      unitPrice: currentPrice,
+      totalPrice: currentTotal,
+      lineTotal: currentTotal
     });
     if (onEdit) onEdit(trip);
   };
@@ -189,13 +203,21 @@ export default function ShoppingTripsView({
   };
 
   const handleSave = (tripId) => {
+    const qty = (itemQuantity !== undefined && itemQuantity !== null && itemQuantity !== '' && !isNaN(Number(itemQuantity))) ? Number(itemQuantity) : 1;
+    const price = (itemPrice !== undefined && itemPrice !== null && itemPrice !== '' && !isNaN(Number(itemPrice))) ? Number(itemPrice) : 0;
+    const total = (itemTotalPrice !== undefined && itemTotalPrice !== null && itemTotalPrice !== '' && !isNaN(Number(itemTotalPrice))) ? Number(itemTotalPrice) : Math.round(qty * price * 100) / 100;
+
     const formValues = {
       ...editForm,
       itemName: itemName ? itemName.trim() : '',
-      quantity: (itemQuantity !== undefined && itemQuantity !== null && itemQuantity !== '' && !isNaN(Number(itemQuantity))) ? Number(itemQuantity) : 1,
-      itemQuantity: (itemQuantity !== undefined && itemQuantity !== null && itemQuantity !== '' && !isNaN(Number(itemQuantity))) ? Number(itemQuantity) : 1,
+      quantity: qty,
+      itemQuantity: qty,
       unit: itemUnit ? itemUnit.trim() : 'kg',
-      itemUnit: itemUnit ? itemUnit.trim() : 'kg'
+      itemUnit: itemUnit ? itemUnit.trim() : 'kg',
+      price,
+      unitPrice: price,
+      totalPrice: total,
+      lineTotal: total
     };
 
     // Instant local-first save without blocking the UI
@@ -371,12 +393,12 @@ export default function ShoppingTripsView({
                 </div>
                 <div className="form-group">
                   <label htmlFor={`edit-item-name-${trip.id}`}>Item Name / Extracted Item</label>
-                  <div className="flex items-center gap-2 w-full">
-                    {/* 1. Item Name Input (Takes up most of the space) */}
+                  <div className="flex flex-col gap-2 w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+                    {/* Row 1: Item Name */}
                     <input
                       type="text"
                       id={`edit-item-name-${trip.id}`}
-                      className="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                      className="w-full px-3 py-1.5 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
                       placeholder="e.g. Bangus, Garlic, Cucumber"
                       value={itemName}
                       onChange={(e) => {
@@ -385,32 +407,80 @@ export default function ShoppingTripsView({
                       }}
                     />
 
-                    {/* 2. Quantity Input (Fixed compact width) */}
-                    <input
-                      type="number"
-                      step="any"
-                      id={`edit-item-qty-${trip.id}`}
-                      className="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
-                      placeholder="Qty"
-                      value={itemQuantity}
-                      onChange={(e) => {
-                        setItemQuantity(e.target.value);
-                        setEditForm(prev => ({ ...prev, itemQuantity: e.target.value }));
-                      }}
-                    />
+                    {/* Row 2: Qty, Unit, Price, Total */}
+                    <div className="grid grid-cols-4 gap-2 items-end w-full">
+                      <div className="min-w-0">
+                        <label className="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Qty</label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          id={`edit-item-qty-${trip.id}`}
+                          className="w-full min-w-0 px-1.5 py-1.5 border rounded-lg text-xs text-center font-mono bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          placeholder="Qty"
+                          value={itemQuantity}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setItemQuantity(val);
+                            const q = Number(val) || 0;
+                            const p = Number(itemPrice) || 0;
+                            const t = Math.round(q * p * 100) / 100;
+                            setItemTotalPrice(t);
+                            setEditForm(prev => ({ ...prev, itemQuantity: val, quantity: val, totalPrice: t, lineTotal: t }));
+                          }}
+                        />
+                      </div>
 
-                    {/* 3. Unit Input / Selector (Fixed compact width) */}
-                    <input
-                      type="text"
-                      id={`edit-item-unit-${trip.id}`}
-                      className="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
-                      placeholder="Unit (pc, kg)"
-                      value={itemUnit}
-                      onChange={(e) => {
-                        setItemUnit(e.target.value);
-                        setEditForm(prev => ({ ...prev, itemUnit: e.target.value }));
-                      }}
-                    />
+                      <div className="min-w-0">
+                        <label className="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Unit</label>
+                        <select
+                          id={`edit-item-unit-${trip.id}`}
+                          className="w-full min-w-0 px-1 py-1.5 border rounded-lg text-xs text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 cursor-pointer"
+                          value={itemUnit}
+                          onChange={(e) => {
+                            setItemUnit(e.target.value);
+                            setEditForm(prev => ({ ...prev, itemUnit: e.target.value, unit: e.target.value }));
+                          }}
+                        >
+                          <option value="kg">kg</option>
+                          <option value="g">g</option>
+                          <option value="pcs">pcs</option>
+                          <option value="pack">pack</option>
+                          <option value="bundle">bundle</option>
+                          <option value="can">can</option>
+                          <option value="bottle">bottle</option>
+                        </select>
+                      </div>
+
+                      <div className="min-w-0">
+                        <label className="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Price (₱)</label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          id={`edit-item-price-${trip.id}`}
+                          className="w-full min-w-0 px-1.5 py-1.5 border rounded-lg text-xs text-center font-mono bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 placeholder-slate-400 dark:placeholder-slate-500"
+                          placeholder="₱ Price"
+                          value={itemPrice || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setItemPrice(val);
+                            const p = Number(val) || 0;
+                            const q = Number(itemQuantity) || 0;
+                            const t = Math.round(q * p * 100) / 100;
+                            setItemTotalPrice(t);
+                            setEditForm(prev => ({ ...prev, itemPrice: val, price: val, unitPrice: val, totalPrice: t, lineTotal: t }));
+                          }}
+                        />
+                      </div>
+
+                      <div className="min-w-0">
+                        <label className="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400" title="Line Total">Total</label>
+                        <div className="w-full min-w-0 px-1 py-1.5 rounded-lg border text-xs text-center font-mono font-bold text-emerald-500 bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-800 truncate">
+                          ₱{(Number(itemQuantity || 0) * Number(itemPrice || 0)).toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-2 mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 trip-card-footer">

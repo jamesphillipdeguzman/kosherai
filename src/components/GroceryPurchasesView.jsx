@@ -207,10 +207,10 @@ export default function GroceryPurchasesView({
                       {i.quantity || 1} {i.unit || 'kg'}
                     </td>
                     <td className="p-3 font-mono text-slate-700 dark:text-slate-200">
-                      ₱{formatNumber(i.unitPrice)}
+                      ₱{formatNumber(i.unitPrice !== undefined && i.unitPrice !== null ? i.unitPrice : i.price)}
                     </td>
                     <td className="p-3 font-mono font-bold text-slate-900 dark:text-white">
-                      ₱{formatNumber(i.totalPrice)}
+                      ₱{formatNumber(i.totalPrice !== undefined && i.totalPrice !== null ? i.totalPrice : (i.lineTotal !== undefined && i.lineTotal !== null ? i.lineTotal : ((Number(i.quantity) || 1) * (Number(i.unitPrice ?? i.price) || 0))))}
                     </td>
                     <td className="p-3 font-mono text-[11px] text-slate-600 dark:text-slate-300">
                       {i.weightGrams ? `${i.weightGrams} g` : '—'}
@@ -284,13 +284,13 @@ export default function GroceryPurchasesView({
                 <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-lg">
                   <span className="text-slate-400 block mb-0.5">Unit Price</span>
                   <span className="font-bold text-slate-800 dark:text-slate-200">
-                    ₱{formatNumber(selectedItem.unitPrice)}
+                    ₱{formatNumber(selectedItem.unitPrice !== undefined && selectedItem.unitPrice !== null ? selectedItem.unitPrice : selectedItem.price)}
                   </span>
                 </div>
                 <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-lg">
                   <span className="text-slate-400 block mb-0.5">Line Total</span>
                   <span className="font-bold text-slate-800 dark:text-slate-200">
-                    ₱{formatNumber(selectedItem.totalPrice)}
+                    ₱{formatNumber(selectedItem.totalPrice !== undefined && selectedItem.totalPrice !== null ? selectedItem.totalPrice : (selectedItem.lineTotal !== undefined && selectedItem.lineTotal !== null ? selectedItem.lineTotal : ((Number(selectedItem.quantity) || 1) * (Number(selectedItem.unitPrice ?? selectedItem.price) || 0))))}
                   </span>
                 </div>
                 <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-lg">

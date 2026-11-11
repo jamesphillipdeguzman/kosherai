@@ -650,8 +650,10 @@ export async function syncPendingTrips() {
         rawReceiptText: item.rawReceiptText || item.name || '',
         quantity: Number(item.quantity || item.qty || 1),
         unit: item.unit || 'pcs',
-        unitPrice: Number(item.unitPrice || item.price || 0),
-        totalPrice: Number(item.totalPrice || item.lineTotal || (Number(item.quantity || 1) * Number(item.unitPrice || 0))),
+        unitPrice: Number(item.unitPrice !== undefined ? item.unitPrice : (item.price || 0)),
+        price: Number(item.price !== undefined ? item.price : (item.unitPrice || 0)),
+        totalPrice: Number(item.totalPrice !== undefined ? item.totalPrice : (item.lineTotal !== undefined ? item.lineTotal : (Number(item.quantity || 1) * Number(item.unitPrice !== undefined ? item.unitPrice : (item.price || 0))))),
+        lineTotal: Number(item.lineTotal !== undefined ? item.lineTotal : (item.totalPrice !== undefined ? item.totalPrice : (Number(item.quantity || 1) * Number(item.unitPrice !== undefined ? item.unitPrice : (item.price || 0))))),
         weightGrams: Number(item.weightGrams || item.weightG || 0),
         category: item.category && item.category !== 'General Food' ? item.category : resolveFoodCategory(item.name || item.itemName),
         lidStatus: item.lidStatus || 'SAFE',
@@ -1599,8 +1601,22 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
             }
             if (update.quantity !== undefined && !isNaN(update.quantity)) item.quantity = Number(update.quantity);
             if (update.unit) item.unit = update.unit.trim();
-            if (update.unitPrice !== undefined) item.unitPrice = Number(update.unitPrice);
-            if (update.totalPrice !== undefined) item.totalPrice = Number(update.totalPrice);
+            const itemPrice = (update.price !== undefined && update.price !== null && update.price !== '' && !isNaN(Number(update.price)))
+              ? Number(update.price)
+              : ((update.unitPrice !== undefined && update.unitPrice !== null && update.unitPrice !== '' && !isNaN(Number(update.unitPrice))) ? Number(update.unitPrice) : null);
+            if (itemPrice !== null) {
+              item.unitPrice = itemPrice;
+              item.price = itemPrice;
+            }
+            const itemLineTotal = (update.totalPrice !== undefined && update.totalPrice !== null && update.totalPrice !== '' && !isNaN(Number(update.totalPrice)))
+              ? Number(update.totalPrice)
+              : ((update.lineTotal !== undefined && update.lineTotal !== null && update.lineTotal !== '' && !isNaN(Number(update.lineTotal)))
+                ? Number(update.lineTotal)
+                : ((itemPrice !== null && item.quantity !== undefined) ? Math.round(itemPrice * Number(item.quantity) * 100) / 100 : null));
+            if (itemLineTotal !== null) {
+              item.totalPrice = itemLineTotal;
+              item.lineTotal = itemLineTotal;
+            }
             item.synced = false;
             groceryItemsUpdated = true;
           }
@@ -1613,6 +1629,9 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
           const lidEval = evaluateItemLidStatus(newItem.name || newItem.itemName);
           const newItemId = newItem.id || generateRecordId(`item_${tripId}`);
           removePendingDeletion(newItemId);
+          const itemPrice = Number(newItem.unitPrice !== undefined ? newItem.unitPrice : (newItem.price || 0));
+          const itemQuantity = Number(newItem.quantity || newItem.qty || 1);
+          const itemTotal = Number(newItem.totalPrice !== undefined ? newItem.totalPrice : (newItem.lineTotal !== undefined ? newItem.lineTotal : (itemQuantity * itemPrice)));
           allGroceryItems.push({
             id: newItemId,
             tripId,
@@ -1621,10 +1640,12 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
             name: newItem.name || 'Grocery Item',
             raw_receipt_text: newItem.rawReceiptText || newItem.name || '',
             rawReceiptText: newItem.rawReceiptText || newItem.name || '',
-            quantity: Number(newItem.quantity || newItem.qty || 1),
+            quantity: itemQuantity,
             unit: newItem.unit || 'pcs',
-            unitPrice: Number(newItem.unitPrice || newItem.price || 0),
-            totalPrice: Number(newItem.totalPrice || newItem.lineTotal || (Number(newItem.quantity || 1) * Number(newItem.unitPrice || 0))),
+            unitPrice: itemPrice,
+            price: itemPrice,
+            totalPrice: itemTotal,
+            lineTotal: itemTotal,
             weightGrams: Number(newItem.weightGrams || 0),
             category: newItem.category || resolveFoodCategory(newItem.name),
             lidStatus: newItem.lidStatus || lidEval.status,
@@ -1634,8 +1655,15 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
           groceryItemsUpdated = true;
         }
       });
-    } else if (cleanName || rawItemQty !== null || cleanUnit) {
+    } else if (cleanName || rawItemQty !== null || cleanUnit || updatedFields.price !== undefined || updatedFields.unitPrice !== undefined || updatedFields.totalPrice !== undefined || updatedFields.lineTotal !== undefined) {
       let foundMatching = false;
+      const singlePrice = (updatedFields.price !== undefined && updatedFields.price !== null && updatedFields.price !== '' && !isNaN(Number(updatedFields.price)))
+        ? Number(updatedFields.price)
+        : ((updatedFields.unitPrice !== undefined && updatedFields.unitPrice !== null && updatedFields.unitPrice !== '' && !isNaN(Number(updatedFields.unitPrice))) ? Number(updatedFields.unitPrice) : null);
+      const singleTotal = (updatedFields.totalPrice !== undefined && updatedFields.totalPrice !== null && updatedFields.totalPrice !== '' && !isNaN(Number(updatedFields.totalPrice)))
+        ? Number(updatedFields.totalPrice)
+        : ((updatedFields.lineTotal !== undefined && updatedFields.lineTotal !== null && updatedFields.lineTotal !== '' && !isNaN(Number(updatedFields.lineTotal))) ? Number(updatedFields.lineTotal) : null);
+
       allGroceryItems.forEach(item => {
         if (item.tripId === tripId || item.trip_id === tripId) {
           foundMatching = true;
@@ -1646,15 +1674,30 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
           }
           if (rawItemQty !== null && !isNaN(rawItemQty)) item.quantity = rawItemQty;
           if (cleanUnit) item.unit = cleanUnit;
+          if (singlePrice !== null) {
+            item.unitPrice = singlePrice;
+            item.price = singlePrice;
+          }
+          if (singleTotal !== null) {
+            item.totalPrice = singleTotal;
+            item.lineTotal = singleTotal;
+          } else if (singlePrice !== null) {
+            const calculatedTotal = Math.round(singlePrice * Number(item.quantity || 1) * 100) / 100;
+            item.totalPrice = calculatedTotal;
+            item.lineTotal = calculatedTotal;
+          }
           item.synced = false;
           groceryItemsUpdated = true;
         }
       });
 
-      if (!foundMatching && (cleanName || rawItemQty !== null)) {
+      if (!foundMatching && (cleanName || rawItemQty !== null || singlePrice !== null)) {
         // If trip had no line items yet, create one matching the updated item details
         const newItemId = generateRecordId(`item_${tripId}`);
         removePendingDeletion(newItemId);
+        const resolvedQty = (rawItemQty !== null && !isNaN(rawItemQty)) ? rawItemQty : 1;
+        const resolvedPrice = singlePrice !== null ? singlePrice : totalAmountPaid;
+        const resolvedTotal = singleTotal !== null ? singleTotal : (singlePrice !== null ? Math.round(singlePrice * resolvedQty * 100) / 100 : totalAmountPaid);
         allGroceryItems.push({
           id: newItemId,
           tripId,
@@ -1663,10 +1706,12 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
           name: cleanName || 'Item',
           raw_receipt_text: cleanName || 'Item',
           rawReceiptText: cleanName || 'Item',
-          quantity: (rawItemQty !== null && !isNaN(rawItemQty)) ? rawItemQty : 1,
+          quantity: resolvedQty,
           unit: cleanUnit || 'pc',
-          unitPrice: totalAmountPaid,
-          totalPrice: totalAmountPaid,
+          unitPrice: resolvedPrice,
+          price: resolvedPrice,
+          totalPrice: resolvedTotal,
+          lineTotal: resolvedTotal,
           weightGrams: 0,
           category: 'General Food',
           lidStatus: 'SAFE',
@@ -1775,6 +1820,10 @@ export async function updateShoppingTrip(tripId, updatedFields = {}) {
           unit: cleanUnit || (tripItems[0]?.unit || 'pc'),
           itemQuantity: rawItemQty !== null ? rawItemQty : (tripItems[0]?.quantity ?? 1),
           itemUnit: cleanUnit || (tripItems[0]?.unit || 'pc'),
+          price: (tripItems[0]?.price !== undefined ? tripItems[0]?.price : tripItems[0]?.unitPrice) ?? (updatedFields.price ?? updatedFields.unitPrice ?? 0),
+          unitPrice: (tripItems[0]?.unitPrice !== undefined ? tripItems[0]?.unitPrice : tripItems[0]?.price) ?? (updatedFields.unitPrice ?? updatedFields.price ?? 0),
+          totalPrice: (tripItems[0]?.totalPrice !== undefined ? tripItems[0]?.totalPrice : tripItems[0]?.lineTotal) ?? (updatedFields.totalPrice ?? updatedFields.lineTotal ?? 0),
+          lineTotal: (tripItems[0]?.lineTotal !== undefined ? tripItems[0]?.lineTotal : tripItems[0]?.totalPrice) ?? (updatedFields.lineTotal ?? updatedFields.totalPrice ?? 0),
           items: tripItems,
           ...updatedFields,
           isDraft: updatedTrip.isDraft,

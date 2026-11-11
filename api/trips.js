@@ -327,7 +327,9 @@ export default async function handler(req, res) {
           quantity: Number(p.quantity || 1),
           unit: p.unit || 'pcs',
           unitPrice: Number(p.unit_price || 0),
+          price: Number(p.unit_price || 0),
           totalPrice: Number(p.total_price || 0),
+          lineTotal: Number(p.total_price || 0),
           weightGrams: Number(p.weight_grams || 0),
           category: p.category || 'General Food',
           lidStatus: p.lid_status || 'SAFE',
@@ -748,8 +750,26 @@ export default async function handler(req, res) {
       const rawUnit = tripData.unit || body.unit || tripData.itemUnit || null;
       const cleanUnit = rawUnit ? String(rawUnit).trim() : null;
 
-      // If itemName, quantity, or unit are supplied, update grocery_purchases linked to that tripId
-      if (cleanItemName !== null || cleanQuantity !== null || cleanUnit !== null) {
+      const rawPrice = tripData.price !== undefined
+        ? tripData.price
+        : (body.price !== undefined
+          ? body.price
+          : (tripData.unitPrice !== undefined ? tripData.unitPrice : (body.unitPrice !== undefined ? body.unitPrice : null)));
+      const cleanUnitPrice = (rawPrice !== null && rawPrice !== undefined && rawPrice !== '' && !isNaN(Number(rawPrice)))
+        ? Number(rawPrice)
+        : null;
+
+      const rawTotal = tripData.totalPrice !== undefined
+        ? tripData.totalPrice
+        : (body.totalPrice !== undefined
+          ? body.totalPrice
+          : (tripData.lineTotal !== undefined ? tripData.lineTotal : (body.lineTotal !== undefined ? body.lineTotal : null)));
+      const cleanTotalPrice = (rawTotal !== null && rawTotal !== undefined && rawTotal !== '' && !isNaN(Number(rawTotal)))
+        ? Number(rawTotal)
+        : ((cleanUnitPrice !== null && cleanQuantity !== null) ? Math.round(cleanUnitPrice * cleanQuantity * 100) / 100 : null);
+
+      // If itemName, quantity, unit, price or totalPrice are supplied, update grocery_purchases linked to that tripId
+      if (cleanItemName !== null || cleanQuantity !== null || cleanUnit !== null || cleanUnitPrice !== null || cleanTotalPrice !== null) {
         await sql`
           UPDATE grocery_purchases 
           SET 
@@ -757,6 +777,8 @@ export default async function handler(req, res) {
             raw_receipt_text = COALESCE(${cleanItemName}, raw_receipt_text), 
             quantity = COALESCE(${cleanQuantity}, quantity),
             unit = COALESCE(${cleanUnit}, unit),
+            unit_price = COALESCE(${cleanUnitPrice}, unit_price),
+            total_price = COALESCE(${cleanTotalPrice}, total_price),
             updated_at = NOW() 
           WHERE trip_id = ${targetId} AND user_id = ${userId};
         `;
@@ -765,21 +787,43 @@ export default async function handler(req, res) {
       // Also support batch items update if items array provided
       const rawItems = (Array.isArray(body.items) && body.items.length > 0) ? body.items : (Array.isArray(tripData.items) ? tripData.items : null);
       if (rawItems && rawItems.length > 0) {
-        for (const item of rawItems) {
-          if (item.id) {
-            const iName = item.name ? String(item.name).trim() : null;
-            const iQty = (item.quantity !== undefined && item.quantity !== null && !isNaN(Number(item.quantity))) ? Number(item.quantity) : null;
-            const iUnit = item.unit ? String(item.unit).trim() : null;
-            await sql`
-              UPDATE grocery_purchases
-              SET name = COALESCE(${iName}, name),
-                  raw_receipt_text = COALESCE(${iName}, raw_receipt_text),
-                  quantity = COALESCE(${iQty}, quantity),
-                  unit = COALESCE(${iUnit}, unit),
-                  updated_at = NOW()
-              WHERE id = ${item.id} AND trip_id = ${targetId} AND user_id = ${userId};
-            `;
-          }
+        for (let idx = 0; idx < rawItems.length; idx++) {
+          const item = rawItems[idx];
+          const itemId = item.id || `item_${targetId}_${idx}_${Math.random().toString(36).slice(2, 6)}`;
+          const iName = item.name ? String(item.name).trim() : null;
+          const iQty = (item.quantity !== undefined && item.quantity !== null && !isNaN(Number(item.quantity))) ? Number(item.quantity) : null;
+          const iUnit = item.unit ? String(item.unit).trim() : null;
+          const rawItemPrice = item.price !== undefined ? item.price : (item.unitPrice !== undefined ? item.unitPrice : null);
+          const iUnitPrice = (rawItemPrice !== null && rawItemPrice !== undefined && rawItemPrice !== '' && !isNaN(Number(rawItemPrice))) ? Number(rawItemPrice) : null;
+          const rawItemTotal = item.totalPrice !== undefined ? item.totalPrice : (item.lineTotal !== undefined ? item.lineTotal : null);
+          const iTotalPrice = (rawItemTotal !== null && rawItemTotal !== undefined && rawItemTotal !== '' && !isNaN(Number(rawItemTotal)))
+            ? Number(rawItemTotal)
+            : ((iUnitPrice !== null && iQty !== null) ? Math.round(iUnitPrice * iQty * 100) / 100 : null);
+
+          const itemDate = row.date;
+          const itemWeek = Number(row.project_week || 1);
+
+          await sql`
+            INSERT INTO grocery_purchases (
+              id, user_id, trip_id, purchase_date, project_week, name,
+              raw_receipt_text, quantity, unit, unit_price,
+              total_price, weight_grams, category, lid_status, lid_reason, created_at, updated_at
+            ) VALUES (
+              ${itemId}, ${userId}, ${targetId}, ${itemDate}, ${itemWeek}, ${iName || 'Grocery Item'},
+              ${iName || 'Grocery Item'}, ${iQty || 1}, ${iUnit || 'pcs'}, ${iUnitPrice || 0},
+              ${iTotalPrice || 0}, ${Number(item.weightGrams || 0)}, ${item.category || 'General Food'},
+              ${item.lidStatus || 'SAFE'}, ${item.lidReason || ''}, NOW(), NOW()
+            )
+            ON CONFLICT (id) DO UPDATE SET
+              user_id = EXCLUDED.user_id,
+              name = COALESCE(${iName}, grocery_purchases.name),
+              raw_receipt_text = COALESCE(${iName}, grocery_purchases.raw_receipt_text),
+              quantity = COALESCE(${iQty}, grocery_purchases.quantity),
+              unit = COALESCE(${iUnit}, grocery_purchases.unit),
+              unit_price = COALESCE(${iUnitPrice}, grocery_purchases.unit_price),
+              total_price = COALESCE(${iTotalPrice}, grocery_purchases.total_price),
+              updated_at = NOW();
+          `;
         }
       }
 
@@ -798,7 +842,9 @@ export default async function handler(req, res) {
         quantity: Number(p.quantity || 1),
         unit: p.unit || 'pcs',
         unitPrice: Number(p.unit_price || 0),
+        price: Number(p.unit_price || 0),
         totalPrice: Number(p.total_price || 0),
+        lineTotal: Number(p.total_price || 0),
         weightGrams: Number(p.weight_grams || 0),
         category: p.category || 'General Food',
         lidStatus: p.lid_status || 'SAFE',

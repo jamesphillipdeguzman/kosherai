@@ -3300,15 +3300,52 @@ Cracked black pepper`;
             document.querySelector('#edit-total-amount').value = result.totalAmountPaid;
           }
           if (Array.isArray(result.items) && result.items.length > 0) {
-            const itemsList = document.querySelector('.edit-items-list');
+            const itemsList = document.querySelector('.edit-items-list') || document.querySelector('#edit-trip-items-container');
             if (itemsList) {
-              itemsList.innerHTML = result.items.map((it, idx) => `
-                <div class="edit-item-row flex items-center gap-2 w-full" data-item-id="extracted_${idx}" style="display: flex; align-items: center; gap: 8px; width: 100%;">
-                  <input type="text" name="itemName" class="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-name" placeholder="e.g. Bangus, Garlic" value="${escapeHtml(it.name)}" required />
-                  <input type="number" step="any" name="itemQty" class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-qty" placeholder="Qty" value="${it.quantity || 1}" />
-                  <input type="text" name="itemUnit" class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-unit" placeholder="Unit (kg, pc)" value="${escapeHtml(it.unit || 'kg')}" />
-                </div>
-              `).join('');
+              itemsList.innerHTML = result.items.map((it, idx) => {
+                const iQty = it.quantity || 1;
+                const iPrice = it.price !== undefined ? it.price : (it.unitPrice !== undefined ? it.unitPrice : 0);
+                const iTotal = it.totalPrice !== undefined ? it.totalPrice : (it.lineTotal !== undefined ? it.lineTotal : (iQty * iPrice));
+                return `
+                  <div class="edit-item-row p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 flex flex-col gap-2 w-full" data-item-id="extracted_${idx}">
+                    <div class="flex items-center gap-2 w-full" style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                      <input type="text" name="itemName" class="flex-1 min-w-0 px-3 py-1.5 border rounded-lg text-sm bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 form-input edit-item-name" placeholder="e.g. Bangus, Garlic" value="${escapeHtml(it.name)}" required />
+                      <button type="button" class="btn-remove-edit-item w-8 h-8 shrink-0 flex items-center justify-center rounded-lg bg-rose-950/40 text-rose-300 border border-rose-800/50 hover:bg-rose-900/60 transition-colors cursor-pointer text-xs" title="Remove item" aria-label="Remove item">✕</button>
+                    </div>
+                    <div class="grid grid-cols-4 gap-2 items-end w-full" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: flex-end; width: 100%;">
+                      <div class="min-w-0">
+                        <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Qty</label>
+                        <input type="number" step="any" min="0" name="itemQty" class="w-full min-w-0 px-1.5 py-1.5 border rounded-lg text-xs text-center font-mono bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 form-input edit-item-qty" placeholder="Qty" value="${iQty}" />
+                      </div>
+                      <div class="min-w-0">
+                        <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Unit</label>
+                        <select name="itemUnit" class="w-full min-w-0 px-1 py-1.5 border rounded-lg text-xs text-center bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 form-input edit-item-unit cursor-pointer">
+                          <option value="kg" ${it.unit === 'kg' ? 'selected' : ''}>kg</option>
+                          <option value="g" ${it.unit === 'g' ? 'selected' : ''}>g</option>
+                          <option value="pcs" ${it.unit === 'pcs' ? 'selected' : ''}>pcs</option>
+                          <option value="pack" ${it.unit === 'pack' ? 'selected' : ''}>pack</option>
+                          <option value="bundle" ${it.unit === 'bundle' ? 'selected' : ''}>bundle</option>
+                          <option value="can" ${it.unit === 'can' ? 'selected' : ''}>can</option>
+                          <option value="bottle" ${it.unit === 'bottle' ? 'selected' : ''}>bottle</option>
+                        </select>
+                      </div>
+                      <div class="min-w-0">
+                        <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Price (₱)</label>
+                        <input type="number" step="any" min="0" name="itemPrice" class="w-full min-w-0 px-1.5 py-1.5 border rounded-lg text-xs text-center font-mono bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 form-input edit-item-price" placeholder="₱ Price" value="${iPrice || ''}" />
+                      </div>
+                      <div class="min-w-0">
+                        <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400" title="Line Total">Total</label>
+                        <div class="w-full min-w-0 px-1 py-1.5 rounded-lg border text-xs text-center font-mono font-bold text-emerald-500 dark:text-emerald-400 truncate bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-800 edit-item-total-display">
+                          ₱${Number(iTotal).toFixed(2)}
+                        </div>
+                        <input type="hidden" name="itemTotalPrice" class="edit-item-total" value="${iTotal}" />
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('');
+              const countSpan = document.querySelector('#edit-items-count');
+              if (countSpan) countSpan.textContent = result.items.length;
             } else {
               const nameInput = document.querySelector('#edit-item-name');
               if (nameInput) nameInput.value = result.items[0]?.name || '';
@@ -3316,6 +3353,8 @@ Cracked black pepper`;
               if (qtyInput) qtyInput.value = result.items[0]?.quantity || 1;
               const unitInput = document.querySelector('#edit-item-unit');
               if (unitInput) unitInput.value = result.items[0]?.unit || 'kg';
+              const priceInput = document.querySelector('#edit-item-price');
+              if (priceInput) priceInput.value = result.items[0]?.price || result.items[0]?.unitPrice || '';
             }
           }
           showToast('OCR extracted new details! Review and click Save Changes.', 'info');
@@ -3353,6 +3392,11 @@ Cracked black pepper`;
       const itemName = itemNameInput?.value?.trim() || '';
       const itemQty = parseFloat(document.querySelector('#edit-item-qty')?.value || 1);
       const itemUnit = document.querySelector('#edit-item-unit')?.value?.trim() || 'kg';
+      const itemPrice = parseFloat(document.querySelector('#edit-item-price')?.value || 0);
+      const itemTotalRaw = document.querySelector('.edit-item-total')?.value;
+      const itemTotalPrice = (itemTotalRaw !== undefined && itemTotalRaw !== null && itemTotalRaw !== '')
+        ? parseFloat(itemTotalRaw)
+        : Math.round(itemQty * itemPrice * 100) / 100;
 
       // Multiple items support if .edit-item-row exists
       const itemRows = document.querySelectorAll('.edit-item-row');
@@ -3364,7 +3408,24 @@ Cracked black pepper`;
           const name = row.querySelector('.edit-item-name')?.value?.trim();
           const quantity = parseFloat(row.querySelector('.edit-item-qty')?.value || 1);
           const unit = row.querySelector('.edit-item-unit')?.value?.trim() || 'kg';
-          if (name) items.push({ id, name, quantity, unit });
+          const price = parseFloat(row.querySelector('.edit-item-price')?.value || 0);
+          const rawRowTotal = row.querySelector('.edit-item-total')?.value;
+          const lineTotal = (rawRowTotal !== undefined && rawRowTotal !== null && rawRowTotal !== '')
+            ? parseFloat(rawRowTotal)
+            : Math.round(quantity * price * 100) / 100;
+
+          if (name) {
+            items.push({
+              id,
+              name,
+              quantity,
+              unit,
+              price,
+              unitPrice: price,
+              totalPrice: lineTotal,
+              lineTotal
+            });
+          }
         });
       }
 
@@ -3411,6 +3472,10 @@ Cracked black pepper`;
         itemQty,
         unit: itemUnit,
         itemUnit,
+        price: itemPrice,
+        unitPrice: itemPrice,
+        totalPrice: itemTotalPrice,
+        lineTotal: itemTotalPrice,
         items
       });
 
@@ -3422,6 +3487,129 @@ Cracked black pepper`;
       state.editTripPhotoRemoved = false;
       showToast('Shopping trip updated! Syncing with Neon...', 'info');
       render();
+    });
+  }
+
+  // Add Item Row in Edit Trip Modal
+  const addEditTripItemBtn = document.querySelector('#add-edit-trip-item-btn');
+  if (addEditTripItemBtn) {
+    addEditTripItemBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const container = document.querySelector('#edit-trip-items-container') || document.querySelector('.edit-items-list');
+      if (!container) return;
+      const countSpan = document.querySelector('#edit-items-count');
+      const newIdx = container.querySelectorAll('.edit-item-row').length;
+      const newId = `item_new_${Date.now()}_${newIdx}`;
+      const div = document.createElement('div');
+      div.className = 'edit-item-row p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 flex flex-col gap-2 w-full';
+      div.setAttribute('data-item-id', newId);
+      div.innerHTML = `
+        <div class="flex items-center gap-2 w-full" style="display: flex; align-items: center; gap: 8px; width: 100%;">
+          <input
+            type="text"
+            name="itemName"
+            class="flex-1 min-w-0 px-3 py-1.5 border rounded-lg text-sm bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 form-input edit-item-name"
+            style="flex: 1 1 auto; min-width: 0; width: 100%;"
+            placeholder="e.g. Bangus, Garlic, Cucumber"
+            value=""
+            required
+          />
+          <button
+            type="button"
+            class="btn-remove-edit-item w-8 h-8 shrink-0 flex items-center justify-center rounded-lg bg-rose-950/40 text-rose-300 border border-rose-800/50 hover:bg-rose-900/60 transition-colors cursor-pointer text-xs"
+            style="width: 32px; height: 32px; min-width: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer;"
+            title="Remove item"
+            aria-label="Remove item"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="grid grid-cols-4 gap-2 items-end w-full" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: flex-end; width: 100%;">
+          <div class="min-w-0">
+            <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Qty</label>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              name="itemQty"
+              class="w-full min-w-0 px-1.5 py-1.5 border rounded-lg text-xs text-center font-mono bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 form-input edit-item-qty"
+              placeholder="Qty"
+              value="1"
+            />
+          </div>
+          <div class="min-w-0">
+            <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Unit</label>
+            <select
+              name="itemUnit"
+              class="w-full min-w-0 px-1 py-1.5 border rounded-lg text-xs text-center bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 form-input edit-item-unit cursor-pointer"
+            >
+              <option value="kg" selected>kg</option>
+              <option value="g">g</option>
+              <option value="pcs">pcs</option>
+              <option value="pack">pack</option>
+              <option value="bundle">bundle</option>
+              <option value="can">can</option>
+              <option value="bottle">bottle</option>
+            </select>
+          </div>
+          <div class="min-w-0">
+            <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Price (₱)</label>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              name="itemPrice"
+              class="w-full min-w-0 px-1.5 py-1.5 border rounded-lg text-xs text-center font-mono bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 form-input edit-item-price"
+              placeholder="₱ Price"
+              value=""
+            />
+          </div>
+          <div class="min-w-0">
+            <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400" title="Line Total">Total</label>
+            <div class="w-full min-w-0 px-1 py-1.5 rounded-lg border text-xs text-center font-mono font-bold text-emerald-500 dark:text-emerald-400 truncate bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-800 edit-item-total-display">
+              ₱0.00
+            </div>
+            <input type="hidden" name="itemTotalPrice" class="edit-item-total" value="0" />
+          </div>
+        </div>
+      `;
+      container.appendChild(div);
+      if (countSpan) countSpan.textContent = container.querySelectorAll('.edit-item-row').length;
+      div.querySelector('.edit-item-name')?.focus();
+    });
+  }
+
+  // Remove Item Row in Edit Trip Modal
+  document.querySelectorAll('.btn-remove-edit-item').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const row = btn.closest('.edit-item-row');
+      const container = row?.parentElement;
+      if (row) row.remove();
+      const countSpan = document.querySelector('#edit-items-count');
+      if (countSpan && container) {
+        countSpan.textContent = container.querySelectorAll('.edit-item-row').length;
+      }
+    });
+  });
+
+  // Dynamic Price & Line Total Calculation Listener
+  const editTripModalEl = document.querySelector('#edit-trip-modal');
+  if (editTripModalEl) {
+    editTripModalEl.addEventListener('input', (e) => {
+      const target = e.target;
+      if (!target) return;
+      if (target.matches('.edit-item-qty') || target.matches('.edit-item-price')) {
+        const row = target.closest('.edit-item-row');
+        if (!row) return;
+        const qty = parseFloat(row.querySelector('.edit-item-qty')?.value || 0);
+        const price = parseFloat(row.querySelector('.edit-item-price')?.value || 0);
+        const total = Math.round(qty * price * 100) / 100;
+        const display = row.querySelector('.edit-item-total-display');
+        if (display) display.textContent = `₱${total.toFixed(2)}`;
+        const hiddenInput = row.querySelector('.edit-item-total');
+        if (hiddenInput) hiddenInput.value = total;
+      }
     });
   }
 
@@ -3453,6 +3641,11 @@ Cracked black pepper`;
       const itemName = card.querySelector('.edit-item-name')?.value?.trim() || '';
       const itemQty = parseFloat(card.querySelector('.edit-item-qty')?.value || 1);
       const itemUnit = card.querySelector('.edit-item-unit')?.value?.trim() || 'kg';
+      const itemPrice = parseFloat(card.querySelector('.edit-item-price')?.value || 0);
+      const rawTotal = card.querySelector('.edit-item-total')?.value;
+      const itemTotalPrice = (rawTotal !== undefined && rawTotal !== null && rawTotal !== '')
+        ? parseFloat(rawTotal)
+        : Math.round(itemQty * itemPrice * 100) / 100;
 
       updateShoppingTrip(tripId, {
         storeName,
@@ -3466,7 +3659,11 @@ Cracked black pepper`;
         itemQuantity: itemQty,
         itemQty,
         unit: itemUnit,
-        itemUnit
+        itemUnit,
+        price: itemPrice,
+        unitPrice: itemPrice,
+        totalPrice: itemTotalPrice,
+        lineTotal: itemTotalPrice
       });
 
       state.editingTripId = null;
@@ -3474,6 +3671,23 @@ Cracked black pepper`;
       state.editTripModalOpen = false;
       showToast('Shopping trip updated! Syncing with Neon...', 'info');
       render();
+    });
+  });
+
+  // Dynamic Calculation Listener for Inline Editing
+  document.querySelectorAll('.trip-inline-edit-form').forEach(form => {
+    form.addEventListener('input', (e) => {
+      const target = e.target;
+      if (!target) return;
+      if (target.matches('.edit-item-qty') || target.matches('.edit-item-price')) {
+        const qty = parseFloat(form.querySelector('.edit-item-qty')?.value || 0);
+        const price = parseFloat(form.querySelector('.edit-item-price')?.value || 0);
+        const total = Math.round(qty * price * 100) / 100;
+        const display = form.querySelector('.edit-item-total-display');
+        if (display) display.textContent = `₱${total.toFixed(2)}`;
+        const hiddenInput = form.querySelector('.edit-item-total');
+        if (hiddenInput) hiddenInput.value = total;
+      }
     });
   });
 

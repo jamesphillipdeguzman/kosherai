@@ -78,12 +78,28 @@ export default function EditShoppingTripModal({
         else tripItems = [];
       }
 
-      setItems(tripItems.map((item, idx) => ({
-        id: item.id || `item_${idx}`,
-        name: item.name || item.raw_receipt_text || item.rawReceiptText || '',
-        quantity: item.quantity !== undefined ? item.quantity : (item.qty ?? 1),
-        unit: item.unit || 'kg'
-      })));
+      setItems(tripItems.map((item, idx) => {
+        const qty = (item.quantity !== undefined && item.quantity !== null && item.quantity !== '')
+          ? item.quantity
+          : (item.qty ?? 1);
+        const price = (item.price !== undefined && item.price !== null && item.price !== '')
+          ? item.price
+          : ((item.unitPrice !== undefined && item.unitPrice !== null && item.unitPrice !== '') ? item.unitPrice : 0);
+        const lineTotal = (item.totalPrice !== undefined && item.totalPrice !== null && item.totalPrice !== '')
+          ? item.totalPrice
+          : ((item.lineTotal !== undefined && item.lineTotal !== null && item.lineTotal !== '') ? item.lineTotal : (Number(qty) * Number(price)));
+
+        return {
+          id: item.id || `item_${idx}`,
+          name: item.name || item.raw_receipt_text || item.rawReceiptText || '',
+          quantity: qty,
+          unit: item.unit || 'kg',
+          price: Number(price) || 0,
+          unitPrice: Number(price) || 0,
+          totalPrice: Math.round(Number(lineTotal) * 100) / 100 || 0,
+          lineTotal: Math.round(Number(lineTotal) * 100) / 100 || 0
+        };
+      }));
 
       setPhotoPreview(trip.receiptImageUrl || null);
       setPendingFile(null);
@@ -132,7 +148,17 @@ export default function EditShoppingTripModal({
   const handleItemChange = (idx, field, value) => {
     setItems(prev => {
       const next = [...prev];
-      next[idx] = { ...next[idx], [field]: value };
+      const current = { ...next[idx], [field]: value };
+      if (field === 'price') current.unitPrice = value;
+      if (field === 'unitPrice') current.price = value;
+      if (field === 'quantity' || field === 'unitPrice' || field === 'price') {
+        const qty = field === 'quantity' ? Number(value) || 0 : (Number(current.quantity) || 0);
+        const price = (field === 'unitPrice' || field === 'price') ? Number(value) || 0 : (Number(current.price !== undefined ? current.price : current.unitPrice) || 0);
+        const calcTotal = Math.round(qty * price * 100) / 100;
+        current.totalPrice = calcTotal;
+        current.lineTotal = calcTotal;
+      }
+      next[idx] = current;
       return next;
     });
   };
@@ -144,7 +170,11 @@ export default function EditShoppingTripModal({
         id: generateRecordId('item'),
         name: '',
         quantity: 1,
-        unit: 'kg'
+        unit: 'kg',
+        price: 0,
+        unitPrice: 0,
+        totalPrice: 0,
+        lineTotal: 0
       }
     ]);
   };
@@ -221,6 +251,25 @@ export default function EditShoppingTripModal({
         }
       }
 
+      const processedItems = items.map(it => {
+        const qty = (it.quantity !== undefined && it.quantity !== null && it.quantity !== '' && !isNaN(Number(it.quantity))) ? Number(it.quantity) : 1;
+        const price = (it.price !== undefined && it.price !== null && it.price !== '' && !isNaN(Number(it.price)))
+          ? Number(it.price)
+          : ((it.unitPrice !== undefined && it.unitPrice !== null && it.unitPrice !== '' && !isNaN(Number(it.unitPrice))) ? Number(it.unitPrice) : 0);
+        const lineTotal = (it.totalPrice !== undefined && it.totalPrice !== null && it.totalPrice !== '' && !isNaN(Number(it.totalPrice)))
+          ? Number(it.totalPrice)
+          : Math.round(qty * price * 100) / 100;
+
+        return {
+          ...it,
+          quantity: qty,
+          unitPrice: price,
+          price: price,
+          totalPrice: lineTotal,
+          lineTotal: lineTotal
+        };
+      });
+
       const updatedPayload = {
         storeName: formData.storeName.trim() || 'Supermarket',
         tripType: formData.tripType,
@@ -232,7 +281,7 @@ export default function EditShoppingTripModal({
         receiptImageUrl: resolvedPhotoUrl,
         isDraft,
         is_draft: isDraft,
-        items
+        items: processedItems
       };
 
       await updateShoppingTrip(trip.id, updatedPayload);
@@ -451,49 +500,101 @@ export default function EditShoppingTripModal({
                 </button>
               </div>
 
-              <div className="flex flex-col gap-2 max-h-[180px] overflow-y-auto pr-1">
-                {items.map((it, idx) => (
-                  <div key={it.id || idx} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={it.name}
-                      onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
-                      placeholder="e.g. Bangus, Sayote"
-                      className="flex-1 min-w-0 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-                      required
-                    />
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      value={it.quantity}
-                      onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
-                      placeholder="Qty"
-                      className="w-16 px-2 py-1.5 text-xs text-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-                    />
-                    <select
-                      value={it.unit || 'kg'}
-                      onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
-                      className="w-16 px-2 py-1.5 text-xs text-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+              <div className="flex flex-col gap-2.5 max-h-[260px] overflow-y-auto pr-1">
+                {items.length === 0 ? (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 italic text-center py-3">
+                    No items recorded for this trip. Click &quot;➕ Add Item Row&quot; above to add items.
+                  </p>
+                ) : (
+                  items.map((it, idx) => (
+                    <div
+                      key={it.id || idx}
+                      className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 flex flex-col gap-2"
                     >
-                      <option value="kg">kg</option>
-                      <option value="g">g</option>
-                      <option value="pcs">pcs</option>
-                      <option value="pack">pack</option>
-                      <option value="bundle">bundle</option>
-                      <option value="can">can</option>
-                      <option value="bottle">bottle</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveItem(idx)}
-                      className="text-rose-500 hover:text-rose-600 p-1 text-sm cursor-pointer"
-                      title="Remove item"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
+                      {/* Row 1: Item Name + Remove Button */}
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={it.name}
+                          onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
+                          placeholder="e.g. Bangus, Sayote"
+                          className="flex-1 min-w-0 px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(idx)}
+                          className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg bg-rose-950/40 text-rose-300 border border-rose-800/50 hover:bg-rose-900/60 transition-colors cursor-pointer text-xs"
+                          title="Remove item"
+                          aria-label="Remove item"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* Row 2: Qty, Unit, Price (₱), Line Total (₱) */}
+                      <div className="grid grid-cols-4 gap-2 items-end">
+                        <div className="min-w-0">
+                          <label className="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">
+                            Qty
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={it.quantity}
+                            onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
+                            placeholder="Qty"
+                            className="w-full min-w-0 px-1.5 py-1.5 text-xs text-center font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-teal-500"
+                          />
+                        </div>
+
+                        <div className="min-w-0">
+                          <label className="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">
+                            Unit
+                          </label>
+                          <select
+                            value={it.unit || 'kg'}
+                            onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
+                            className="w-full min-w-0 px-1 py-1.5 text-xs text-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-teal-500 cursor-pointer"
+                          >
+                            <option value="kg">kg</option>
+                            <option value="g">g</option>
+                            <option value="pcs">pcs</option>
+                            <option value="pack">pack</option>
+                            <option value="bundle">bundle</option>
+                            <option value="can">can</option>
+                            <option value="bottle">bottle</option>
+                          </select>
+                        </div>
+
+                        <div className="min-w-0">
+                          <label className="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">
+                            Price (₱)
+                          </label>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            value={it.price !== undefined ? it.price : (it.unitPrice !== undefined ? it.unitPrice : '')}
+                            onChange={(e) => handleItemChange(idx, 'price', e.target.value)}
+                            placeholder="₱ Price"
+                            className="w-full min-w-0 px-1.5 py-1.5 text-xs text-center font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                          />
+                        </div>
+
+                        <div className="min-w-0">
+                          <label className="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400" title="Line Total">
+                            Total
+                          </label>
+                          <div className="w-full min-w-0 px-1 py-1.5 text-xs rounded-lg border text-center font-mono font-bold text-emerald-500 dark:text-emerald-400 truncate bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-800">
+                            ₱{(Number(it.quantity || 0) * Number(it.price !== undefined ? it.price : (it.unitPrice || 0))).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 

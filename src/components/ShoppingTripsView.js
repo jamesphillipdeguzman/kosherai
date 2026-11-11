@@ -50,6 +50,23 @@ export function renderEditTripModal(state = {}) {
     ? primaryItem.quantity
     : (primaryItem?.qty ?? 1);
   const currentUnit = primaryItem?.unit || 'kg';
+  const currentPrice = (primaryItem?.price !== undefined && primaryItem?.price !== null && primaryItem?.price !== '')
+    ? primaryItem.price
+    : ((primaryItem?.unitPrice !== undefined && primaryItem?.unitPrice !== null && primaryItem?.unitPrice !== '') ? primaryItem.unitPrice : 0);
+  const currentLineTotal = (primaryItem?.totalPrice !== undefined && primaryItem?.totalPrice !== null && primaryItem?.totalPrice !== '')
+    ? primaryItem.totalPrice
+    : ((primaryItem?.lineTotal !== undefined && primaryItem?.lineTotal !== null && primaryItem?.lineTotal !== '') ? primaryItem.lineTotal : (Number(currentQuantity) * Number(currentPrice)));
+
+  const displayItems = items.length > 0 ? items : [{
+    id: `item_${trip.id}_0`,
+    name: currentItemName,
+    quantity: currentQuantity,
+    unit: currentUnit,
+    price: currentPrice,
+    unitPrice: currentPrice,
+    totalPrice: currentLineTotal,
+    lineTotal: currentLineTotal
+  }];
 
   return `
     <div class="modal-overlay edit-trip-modal-overlay" id="edit-trip-overlay" style="position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center; background: rgba(2, 6, 23, 0.85); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); padding: 12px; box-sizing: border-box;">
@@ -156,92 +173,114 @@ export function renderEditTripModal(state = {}) {
               <input type="number" step="0.01" min="0" id="edit-total-amount" name="totalAmountPaid" class="form-input" value="${trip.totalAmountPaid}" required />
             </div>
 
-            <!-- Item Name / Extracted Item -->
+            <!-- Itemized Purchases -->
             <div class="form-group mb-1">
-              <label class="form-label" for="edit-item-name">Item Name / Extracted Item</label>
-              ${items.length > 1 ? `
-                <div class="edit-items-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; padding-right: 4px; margin-top: 4px;">
-                  ${items.map((item, idx) => {
-      const rowName = item?.name || item?.raw_receipt_text || item?.rawReceiptText || item?.itemName || '';
-      const rowQty = (item?.quantity !== undefined && item?.quantity !== null && item?.quantity !== '') ? item.quantity : (item?.qty ?? 1);
-      const rowUnit = item?.unit || 'kg';
-      return `
-                      <div class="edit-item-row flex items-center gap-2 w-full" data-item-id="${item.id}" style="display: flex; align-items: center; gap: 8px; width: 100%;">
-                        <!-- 1. Item Name Input (Takes up most of the space) -->
+              <div class="flex items-center justify-between mb-1.5" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                <label class="form-label font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300 m-0" for="edit-item-name">
+                  Itemized Purchases (<span id="edit-items-count">${displayItems.length}</span>)
+                </label>
+                <button type="button" id="add-edit-trip-item-btn" class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer bg-transparent border-none p-0" style="background: none; border: none; cursor: pointer;">
+                  ➕ Add Item Row
+                </button>
+              </div>
+
+              <div id="edit-trip-items-container" class="edit-items-list flex flex-col gap-2.5" style="display: flex; flex-direction: column; gap: 10px; max-height: 260px; overflow-y: auto; padding-right: 4px; margin-top: 4px;">
+                ${displayItems.map((item, idx) => {
+                  const rowId = item?.id || `edit_item_${idx}_${Date.now()}`;
+                  const rowName = item?.name || item?.raw_receipt_text || item?.rawReceiptText || item?.itemName || '';
+                  const rowQty = (item?.quantity !== undefined && item?.quantity !== null && item?.quantity !== '') ? item.quantity : (item?.qty ?? 1);
+                  const rowUnit = item?.unit || 'kg';
+                  const rowPrice = (item?.price !== undefined && item?.price !== null && item?.price !== '')
+                    ? item.price
+                    : ((item?.unitPrice !== undefined && item?.unitPrice !== null && item?.unitPrice !== '') ? item.unitPrice : 0);
+                  const rowLineTotal = (item?.totalPrice !== undefined && item?.totalPrice !== null && item?.totalPrice !== '')
+                    ? item.totalPrice
+                    : ((item?.lineTotal !== undefined && item?.lineTotal !== null && item?.lineTotal !== '') ? item.lineTotal : (Number(rowQty) * Number(rowPrice)));
+
+                  return `
+                    <div class="edit-item-row p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 flex flex-col gap-2 w-full" data-item-id="${rowId}">
+                      <!-- Row 1: Item Name Input + Remove Button -->
+                      <div class="flex items-center gap-2 w-full" style="display: flex; align-items: center; gap: 8px; width: 100%;">
                         <input
                           type="text"
                           ${idx === 0 ? 'id="edit-item-name"' : ''}
                           name="itemName"
-                          class="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-name"
+                          class="flex-1 min-w-0 px-3 py-1.5 border rounded-lg text-sm bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 form-input edit-item-name"
                           style="flex: 1 1 auto; min-width: 0; width: 100%;"
                           placeholder="e.g. Bangus, Garlic, Cucumber"
                           value="${escapeHtml(rowName)}"
                           required
                         />
-
-                        <!-- 2. Quantity Input (Fixed compact width) -->
-                        <input
-                          type="number"
-                          step="any"
-                          ${idx === 0 ? 'id="edit-item-qty"' : ''}
-                          name="itemQty"
-                          class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-qty"
-                          style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
-                          placeholder="Qty"
-                          value="${rowQty}"
-                        />
-
-                        <!-- 3. Unit Input / Selector (Fixed compact width) -->
-                        <input
-                          type="text"
-                          ${idx === 0 ? 'id="edit-item-unit"' : ''}
-                          name="itemUnit"
-                          class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-unit"
-                          style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
-                          placeholder="Unit (pc, kg)"
-                          value="${escapeHtml(rowUnit)}"
-                        />
+                        <button
+                          type="button"
+                          class="btn-remove-edit-item w-8 h-8 shrink-0 flex items-center justify-center rounded-lg bg-rose-950/40 text-rose-300 border border-rose-800/50 hover:bg-rose-900/60 transition-colors cursor-pointer text-xs"
+                          style="width: 32px; height: 32px; min-width: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer;"
+                          title="Remove item"
+                          aria-label="Remove item"
+                        >
+                          ✕
+                        </button>
                       </div>
-                    `;
-    }).join('')}
-                </div>
-              ` : `
-                <div class="flex items-center gap-2 w-full" style="display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px;">
-                  <!-- 1. Item Name Input (Takes up most of the space) -->
-                  <input
-                    type="text"
-                    id="edit-item-name"
-                    name="itemName"
-                    class="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-name"
-                    style="flex: 1 1 auto; min-width: 0; width: 100%;"
-                    placeholder="e.g. Bangus, Garlic, Cucumber"
-                    value="${escapeHtml(currentItemName)}"
-                  />
 
-                  <!-- 2. Quantity Input (Fixed compact width) -->
-                  <input
-                    type="number"
-                    step="any"
-                    id="edit-item-qty"
-                    name="itemQty"
-                    class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-qty"
-                    style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
-                    placeholder="Qty"
-                    value="${currentQuantity}"
-                  />
+                      <!-- Row 2: Qty, Unit, Price, Total -->
+                      <div class="grid grid-cols-4 gap-2 items-end w-full" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: flex-end; width: 100%;">
+                        <div class="min-w-0">
+                          <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Qty</label>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            ${idx === 0 ? 'id="edit-item-qty"' : ''}
+                            name="itemQty"
+                            class="w-full min-w-0 px-1.5 py-1.5 border rounded-lg text-xs text-center font-mono bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 form-input edit-item-qty"
+                            placeholder="Qty"
+                            value="${rowQty}"
+                          />
+                        </div>
 
-                  <!-- 3. Unit Input / Selector (Fixed compact width) -->
-                  <input
-                    type="text"
-                    id="edit-item-unit"
-                    name="itemUnit"
-                    class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-unit"
-                    style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
-                    placeholder="Unit (pc, kg)"
-                    value="${escapeHtml(currentUnit)}"
-                  />
-                </div>
-              `}
+                        <div class="min-w-0">
+                          <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Unit</label>
+                          <select
+                            ${idx === 0 ? 'id="edit-item-unit"' : ''}
+                            name="itemUnit"
+                            class="w-full min-w-0 px-1 py-1.5 border rounded-lg text-xs text-center bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 form-input edit-item-unit cursor-pointer"
+                          >
+                            <option value="kg" ${rowUnit === 'kg' ? 'selected' : ''}>kg</option>
+                            <option value="g" ${rowUnit === 'g' ? 'selected' : ''}>g</option>
+                            <option value="pcs" ${rowUnit === 'pcs' ? 'selected' : ''}>pcs</option>
+                            <option value="pack" ${rowUnit === 'pack' ? 'selected' : ''}>pack</option>
+                            <option value="bundle" ${rowUnit === 'bundle' ? 'selected' : ''}>bundle</option>
+                            <option value="can" ${rowUnit === 'can' ? 'selected' : ''}>can</option>
+                            <option value="bottle" ${rowUnit === 'bottle' ? 'selected' : ''}>bottle</option>
+                          </select>
+                        </div>
+
+                        <div class="min-w-0">
+                          <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Price (₱)</label>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            ${idx === 0 ? 'id="edit-item-price"' : ''}
+                            name="itemPrice"
+                            class="w-full min-w-0 px-1.5 py-1.5 border rounded-lg text-xs text-center font-mono bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 form-input edit-item-price"
+                            placeholder="₱ Price"
+                            value="${rowPrice || ''}"
+                          />
+                        </div>
+
+                        <div class="min-w-0">
+                          <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400" title="Line Total">Total</label>
+                          <div class="w-full min-w-0 px-1 py-1.5 rounded-lg border text-xs text-center font-mono font-bold text-emerald-500 dark:text-emerald-400 truncate bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-800 edit-item-total-display">
+                            ₱${Number(rowLineTotal).toFixed(2)}
+                          </div>
+                          <input type="hidden" name="itemTotalPrice" class="edit-item-total" value="${rowLineTotal}" />
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
               <p class="mt-1 text-[11px] leading-tight text-slate-500 dark:text-slate-400">
                 Modifies itemized grocery purchase records linked to this trip.
               </p>
@@ -286,6 +325,12 @@ export function renderTripCard(trip, isEditing = false, matchingItemsOverride = 
     ? primaryItem.quantity
     : (primaryItem?.qty ?? 1);
   const currentUnit = primaryItem?.unit || 'kg';
+  const currentPrice = (primaryItem?.price !== undefined && primaryItem?.price !== null && primaryItem?.price !== '')
+    ? primaryItem.price
+    : ((primaryItem?.unitPrice !== undefined && primaryItem?.unitPrice !== null && primaryItem?.unitPrice !== '') ? primaryItem.unitPrice : 0);
+  const currentLineTotal = (primaryItem?.totalPrice !== undefined && primaryItem?.totalPrice !== null && primaryItem?.totalPrice !== '')
+    ? primaryItem.totalPrice
+    : ((primaryItem?.lineTotal !== undefined && primaryItem?.lineTotal !== null && primaryItem?.lineTotal !== '') ? primaryItem.lineTotal : (Number(currentQuantity) * Number(currentPrice)));
 
   if (isEditing) {
     return `
@@ -329,35 +374,68 @@ export function renderTripCard(trip, isEditing = false, matchingItemsOverride = 
 
           <div class="form-group" style="margin-bottom: 10px;">
             <label class="form-label" for="edit-item-name-${trip.id}">Item Name / Extracted Item</label>
-            <div class="flex items-center gap-2 w-full" style="display: flex; align-items: center; gap: 8px; width: 100%;">
+            <div class="flex flex-col gap-2 w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+              <!-- Row 1: Item Name Input -->
               <input
                 type="text"
                 id="edit-item-name-${trip.id}"
                 name="itemName"
-                class="flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-name"
-                style="flex: 1 1 auto; min-width: 0; width: 100%;"
+                class="w-full px-3 py-1.5 border rounded-lg text-sm bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-name"
                 value="${escapeHtml(currentItemName)}"
                 placeholder="e.g. Bangus, Garlic, Cucumber"
               />
-              <input
-                type="number"
-                step="any"
-                id="edit-item-qty-${trip.id}"
-                name="itemQty"
-                class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-qty"
-                style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
-                value="${currentQuantity}"
-                placeholder="Qty"
-              />
-              <input
-                type="text"
-                id="edit-item-unit-${trip.id}"
-                name="itemUnit"
-                class="w-20 px-3 py-2 border rounded-lg text-sm text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-unit"
-                style="width: 80px; min-width: 80px; max-width: 80px; text-align: center;"
-                value="${escapeHtml(currentUnit)}"
-                placeholder="Unit (pc, kg)"
-              />
+              <!-- Row 2: Qty, Unit, Price, Total -->
+              <div class="grid grid-cols-4 gap-2 items-end w-full" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: flex-end; width: 100%;">
+                <div class="min-w-0">
+                  <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Qty</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    id="edit-item-qty-${trip.id}"
+                    name="itemQty"
+                    class="w-full min-w-0 px-1.5 py-1.5 border rounded-lg text-xs text-center font-mono bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-qty"
+                    value="${currentQuantity}"
+                    placeholder="Qty"
+                  />
+                </div>
+                <div class="min-w-0">
+                  <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Unit</label>
+                  <select
+                    id="edit-item-unit-${trip.id}"
+                    name="itemUnit"
+                    class="w-full min-w-0 px-1 py-1.5 border rounded-lg text-xs text-center bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-unit cursor-pointer"
+                  >
+                    <option value="kg" ${currentUnit === 'kg' ? 'selected' : ''}>kg</option>
+                    <option value="g" ${currentUnit === 'g' ? 'selected' : ''}>g</option>
+                    <option value="pcs" ${currentUnit === 'pcs' ? 'selected' : ''}>pcs</option>
+                    <option value="pack" ${currentUnit === 'pack' ? 'selected' : ''}>pack</option>
+                    <option value="bundle" ${currentUnit === 'bundle' ? 'selected' : ''}>bundle</option>
+                    <option value="can" ${currentUnit === 'can' ? 'selected' : ''}>can</option>
+                    <option value="bottle" ${currentUnit === 'bottle' ? 'selected' : ''}>bottle</option>
+                  </select>
+                </div>
+                <div class="min-w-0">
+                  <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Price (₱)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    id="edit-item-price-${trip.id}"
+                    name="itemPrice"
+                    class="w-full min-w-0 px-1.5 py-1.5 border rounded-lg text-xs text-center font-mono bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 form-input edit-item-price"
+                    value="${currentPrice || ''}"
+                    placeholder="₱ Price"
+                  />
+                </div>
+                <div class="min-w-0">
+                  <label class="block text-[10px] uppercase font-bold mb-1 text-slate-500 dark:text-slate-400">Total</label>
+                  <div class="w-full min-w-0 px-1 py-1.5 rounded-lg border text-xs text-center font-mono font-bold text-emerald-500 bg-slate-100 dark:bg-slate-950 border-slate-200 dark:border-slate-800 truncate edit-item-total-display">
+                    ₱${Number(currentLineTotal).toFixed(2)}
+                  </div>
+                  <input type="hidden" name="itemTotalPrice" class="edit-item-total" value="${currentLineTotal}" />
+                </div>
+              </div>
             </div>
           </div>
 
