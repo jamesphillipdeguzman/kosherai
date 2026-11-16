@@ -42,6 +42,9 @@ import {
   recordRecipeView,
   fetchRecipeDetails,
   postRecipeComment,
+  editRecipeComment,
+  deleteRecipeComment,
+  clearRecipeInteractionsCache,
   fetchAllRecipeInteractions,
   syncPendingRecipeInteractions
 } from './services/recipeInteractionsStorage.js';
@@ -192,6 +195,7 @@ const state = {
   recipeAnalysis: null,
   recipeCategoryFilter: 'ALL',
   activeCommentDrawerRecipe: null,
+  editingCommentId: null,
   commentUserName: (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_user_name') : '') || '',
   household_members: getHouseholdMembers(),
 
@@ -671,14 +675,18 @@ function attachEventHandlers() {
       const keysToClear = [
         'kosherai_current_user',
         'kosherai_user_session',
-        'better-auth.session_token'
+        'better-auth.session_token',
+        'kosherai_user_name'
       ];
       keysToClear.forEach(k => {
         try { localStorage.removeItem(k); } catch (_) {}
       });
+      clearRecipeInteractionsCache();
       sessionStorage.clear();
       state.user = null;
       state.isAdmin = false;
+      state.commentUserName = '';
+      state.editingCommentId = null;
       if (state.activeTab === 'manage') state.activeTab = 'checker';
       if (state.courseSubTab === 'manage') state.courseSubTab = 'dashboard';
       render();
@@ -2111,6 +2119,76 @@ Cracked black pepper`;
     });
   }
 
+  // Sign In prompt inside Comments Drawer
+  const commentsSignInBtn = document.querySelector('#comments-signin-btn');
+  if (commentsSignInBtn) {
+    commentsSignInBtn.addEventListener('click', () => {
+      state.authModalOpen = true;
+      state.authModalMode = 'login';
+      state.authModalError = '';
+      render();
+    });
+  }
+
+  // Edit Comment Trigger
+  document.querySelectorAll('[data-edit-comment-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.editingCommentId = btn.getAttribute('data-edit-comment-id');
+      render();
+    });
+  });
+
+  // Cancel Edit Comment
+  const cancelEditCommentBtn = document.querySelector('#cancel-edit-comment-btn');
+  if (cancelEditCommentBtn) {
+    cancelEditCommentBtn.addEventListener('click', () => {
+      state.editingCommentId = null;
+      render();
+    });
+  }
+
+  // Submit Edited Comment
+  const editCommentForm = document.querySelector('#edit-comment-form');
+  if (editCommentForm) {
+    editCommentForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const cid = editCommentForm.getAttribute('data-comment-id');
+      const rid = editCommentForm.getAttribute('data-recipe-id');
+      const textarea = document.querySelector('#edit-comment-textarea');
+      const updatedText = (textarea?.value || '').trim();
+      if (!cid || !rid || !updatedText) return;
+
+      try {
+        await editRecipeComment(rid, cid, updatedText);
+        state.editingCommentId = null;
+        showToast?.('Comment updated.');
+        render();
+      } catch (err) {
+        console.error('Failed to edit recipe comment:', err);
+        showToast?.(err?.message || 'Could not update comment.', 'error');
+      }
+    });
+  }
+
+  // Delete Comment
+  document.querySelectorAll('[data-delete-comment-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const cid = btn.getAttribute('data-delete-comment-id');
+      const rid = btn.getAttribute('data-recipe-id');
+      if (!cid || !rid) return;
+
+      try {
+        await deleteRecipeComment(rid, cid);
+        if (state.editingCommentId === cid) state.editingCommentId = null;
+        showToast?.('Comment deleted.');
+        render();
+      } catch (err) {
+        console.error('Failed to delete recipe comment:', err);
+        showToast?.(err?.message || 'Could not delete comment.', 'error');
+      }
+    });
+  });
+
   // Submit Recipe Comment / Tip
   const recipeCommentForm = document.querySelector('#recipe-comment-form');
   if (recipeCommentForm) {
@@ -2121,7 +2199,7 @@ Cracked black pepper`;
       const textInput = document.querySelector('#comment-text-input');
       const submitBtn = document.querySelector('#submit-comment-btn');
 
-      const userName = (authorInput?.value || '').trim() || 'Caregiver / Cook';
+      const userName = (authorInput?.value || state.user?.name || '').trim() || 'Caregiver / Cook';
       const comment = (textInput?.value || '').trim();
       if (!comment || !rid) return;
 
@@ -2139,9 +2217,16 @@ Cracked black pepper`;
         render();
       } catch (err) {
         console.error('Failed to post recipe comment:', err);
+        showToast?.(err?.message || 'Failed to post comment.', 'error');
+        if (err?.status === 401) {
+          state.authModalOpen = true;
+          state.authModalMode = 'login';
+          render();
+          return;
+        }
         if (submitBtn) {
           submitBtn.disabled = false;
-          submitBtn.innerHTML = '<span>Post Tip</span>';
+          submitBtn.innerHTML = '<span>Post Tip</span><span class="ml-1">↗</span>';
         }
       }
     });
@@ -4355,9 +4440,11 @@ window.addEventListener('kosherai-food-waste-synced', () => {
 window.addEventListener('kosherai:auth-changed', (e) => {
   const detail = e?.detail;
   const u = detail?.user || detail;
+  state.editingCommentId = null;
   if (u && typeof u === 'object') {
     state.user = u;
     state.isAdmin = Boolean(u.role === 'admin' || u.role === 'administrator');
+    state.commentUserName = u.name || '';
     state.authModalOpen = false;
     cleanAuthUrlIfAuthenticated(u);
     if (state.isAdmin && (state.activeTab === 'manage' || state.courseSubTab === 'manage' || state.adminImageModalOpen)) {
@@ -4366,6 +4453,14 @@ window.addEventListener('kosherai:auth-changed', (e) => {
   } else {
     state.user = null;
     state.isAdmin = false;
+    state.commentUserName = '';
+  }
+  fetchAllRecipeInteractions().then(() => render()).catch(() => {});
+  if (state.activeCommentDrawerRecipe?.id) {
+    const activeRid = state.activeCommentDrawerRecipe.id;
+    fetchRecipeDetails(activeRid).then(() => {
+      if (state.activeCommentDrawerRecipe?.id === activeRid) render();
+    }).catch(() => {});
   }
   render();
 });

@@ -2,7 +2,7 @@
 // Connects to Neon PostgreSQL using DATABASE_URL
 import { neon } from '@neondatabase/serverless';
 import 'dotenv/config';
-import { setCorsHeaders } from '../lib/auth.js';
+import { getAuthenticatedUser, isAdminUser, setCorsHeaders } from '../lib/auth.js';
 
 let isTablesInitialized = false;
 
@@ -25,16 +25,28 @@ export async function ensureRecipeInteractionsTables(sql) {
     CREATE TABLE IF NOT EXISTS recipe_comments (
       id TEXT PRIMARY KEY,
       recipe_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
       user_name TEXT DEFAULT 'Caregiver / Cook',
       comment TEXT NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `;
 
+  try {
+    await sql`ALTER TABLE recipe_comments ADD COLUMN IF NOT EXISTS user_id TEXT;`;
+  } catch (_) {}
+
   await sql`
     CREATE INDEX IF NOT EXISTS idx_recipe_comments_recipe_id 
     ON recipe_comments(recipe_id);
   `;
+
+  try {
+    await sql`
+      CREATE INDEX IF NOT EXISTS idx_recipe_comments_user_id 
+      ON recipe_comments(user_id);
+    `;
+  } catch (_) {}
 
   isTablesInitialized = true;
 }
@@ -110,9 +122,14 @@ export function isValidPostgresUrl(url) {
 }
 
 /**
- * Main HTTP Handler for /api/recipe-interactions
+ * Creates the HTTP Handler for /api/recipe-interactions (supports dependency injection for testing)
  */
-export default async function handler(req, res) {
+export function createRecipeInteractionsHandler(deps = {}) {
+  const createSql = deps.createSql || ((url) => neon(url));
+  const resolveAuthUser = deps.getAuthenticatedUser || getAuthenticatedUser;
+  const resolveIsAdmin = deps.isAdminUser || isAdminUser;
+
+  return async function handler(req, res) {
   setCorsHeaders(req, res);
   // CORS Preflight
   if (req.method === 'OPTIONS') {
@@ -160,13 +177,38 @@ export default async function handler(req, res) {
       });
     }
 
+    if (req.method === 'PATCH' || req.method === 'PUT') {
+      const body = await parseRequestBody(req);
+      return sendJson(res, 200, {
+        success: true,
+        offline: true,
+        action: 'edit_comment',
+        comment: {
+          id: body.id || body.commentId,
+          recipeId: body.recipeId,
+          comment: body.comment || ''
+        }
+      });
+    }
+
+    if (req.method === 'DELETE') {
+      const query = parseQueryParams(req);
+      const body = await parseRequestBody(req);
+      return sendJson(res, 200, {
+        success: true,
+        offline: true,
+        action: 'delete_comment',
+        deletedId: query.id || query.commentId || body.id || body.commentId
+      });
+    }
+
     return sendJson(res, 405, { error: 'METHOD_NOT_ALLOWED' });
   }
 
   // Connect to Neon Database
   let sql;
   try {
-    sql = neon(dbUrl);
+    sql = createSql(dbUrl);
     await ensureRecipeInteractionsTables(sql);
   } catch (initErr) {
     console.error('[recipe-interactions] Database connection/init error:', initErr.message);
@@ -192,7 +234,7 @@ export default async function handler(req, res) {
         `;
 
         const commentRows = await sql`
-          SELECT id, recipe_id AS "recipeId", user_name AS "userName", comment, created_at AS "createdAt"
+          SELECT id, recipe_id AS "recipeId", user_id AS "userId", user_name AS "userName", comment, created_at AS "createdAt"
           FROM recipe_comments
           WHERE recipe_id = ${recipeId}
           ORDER BY created_at DESC
@@ -207,6 +249,7 @@ export default async function handler(req, res) {
           comments: commentRows.map(c => ({
             id: c.id,
             recipeId: c.recipeId,
+            userId: c.userId || null,
             userName: c.userName || 'Caregiver / Cook',
             comment: c.comment,
             createdAt: c.createdAt
@@ -238,6 +281,15 @@ export default async function handler(req, res) {
           likes: Number(row.likes_count || 0),
           commentsCount: commentCountMap[row.recipe_id] || 0
         };
+      }
+      for (const c of commentCounts) {
+        if (!interactions[c.recipe_id]) {
+          interactions[c.recipe_id] = {
+            views: 0,
+            likes: 0,
+            commentsCount: Number(c.count)
+          };
+        }
       }
 
       return sendJson(res, 200, { interactions });
@@ -306,6 +358,14 @@ export default async function handler(req, res) {
 
       // Action 3: Post Comment
       if (action === 'comment') {
+        const authUser = await resolveAuthUser(req);
+        if (!authUser?.id) {
+          return sendJson(res, 401, {
+            error: 'UNAUTHORIZED',
+            message: 'You must be signed in to post a comment.'
+          });
+        }
+
         const rawComment = (body.comment || '').trim();
         if (!rawComment) {
           return sendJson(res, 400, {
@@ -315,16 +375,8 @@ export default async function handler(req, res) {
         }
 
         const commentId = body.id || `comment_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        
-        // Extract authenticated tenant user
-        let authUser = null;
-        try {
-          const { getAuthenticatedUser } = await import('../lib/auth.ts');
-          authUser = await getAuthenticatedUser(req);
-        } catch (_) {}
-
-        const userId = authUser?.id || null;
-        const userName = authUser?.name || (body.userName || 'Caregiver / Cook').trim() || 'Caregiver / Cook';
+        const userId = authUser.id;
+        const userName = (authUser.name || body.userName || 'Caregiver / Cook').trim() || 'Caregiver / Cook';
 
         const rows = await sql`
           INSERT INTO recipe_comments (id, recipe_id, user_id, user_name, comment, created_at)
@@ -368,5 +420,146 @@ export default async function handler(req, res) {
     }
   }
 
+  // ==================== EDIT COMMENT (PATCH / PUT) ====================
+  if (req.method === 'PATCH' || req.method === 'PUT') {
+    try {
+      const authUser = await resolveAuthUser(req);
+      if (!authUser?.id) {
+        return sendJson(res, 401, {
+          error: 'UNAUTHORIZED',
+          message: 'You must be signed in to edit a comment.'
+        });
+      }
+
+      const query = parseQueryParams(req);
+      const body = await parseRequestBody(req);
+      const commentId = body.id || body.commentId || query.id || query.commentId;
+      const rawComment = (body.comment || '').trim();
+
+      if (!commentId) {
+        return sendJson(res, 400, {
+          error: 'MISSING_COMMENT_ID',
+          message: 'Comment id is required.'
+        });
+      }
+      if (!rawComment) {
+        return sendJson(res, 400, {
+          error: 'MISSING_COMMENT_TEXT',
+          message: 'Comment text cannot be empty.'
+        });
+      }
+
+      const existingRows = await sql`
+        SELECT id, recipe_id AS "recipeId", user_id AS "userId"
+        FROM recipe_comments
+        WHERE id = ${commentId}
+        LIMIT 1;
+      `;
+      if (existingRows.length === 0) {
+        return sendJson(res, 404, {
+          error: 'COMMENT_NOT_FOUND',
+          message: 'Comment not found.'
+        });
+      }
+
+      const existing = existingRows[0];
+      const isOwner = Boolean(existing.userId && existing.userId === authUser.id);
+      const admin = await resolveIsAdmin(authUser);
+      if (!isOwner && !admin) {
+        return sendJson(res, 403, {
+          error: 'FORBIDDEN',
+          message: 'You are not authorized to edit this comment.'
+        });
+      }
+
+      const updatedRows = await sql`
+        UPDATE recipe_comments
+        SET comment = ${rawComment}
+        WHERE id = ${commentId}
+        RETURNING id, recipe_id AS "recipeId", user_id AS "userId", user_name AS "userName", comment, created_at AS "createdAt";
+      `;
+
+      return sendJson(res, 200, {
+        success: true,
+        action: 'edit_comment',
+        comment: updatedRows[0]
+      });
+    } catch (err) {
+      console.error('[recipe-interactions] PATCH error:', err.message);
+      return sendJson(res, 500, {
+        error: 'EDIT_COMMENT_FAILED',
+        message: err.message
+      });
+    }
+  }
+
+  // ==================== DELETE COMMENT ====================
+  if (req.method === 'DELETE') {
+    try {
+      const authUser = await resolveAuthUser(req);
+      if (!authUser?.id) {
+        return sendJson(res, 401, {
+          error: 'UNAUTHORIZED',
+          message: 'You must be signed in to delete a comment.'
+        });
+      }
+
+      const query = parseQueryParams(req);
+      const body = await parseRequestBody(req);
+      const commentId = query.id || query.commentId || body.id || body.commentId;
+
+      if (!commentId) {
+        return sendJson(res, 400, {
+          error: 'MISSING_COMMENT_ID',
+          message: 'Comment id is required.'
+        });
+      }
+
+      const existingRows = await sql`
+        SELECT id, recipe_id AS "recipeId", user_id AS "userId"
+        FROM recipe_comments
+        WHERE id = ${commentId}
+        LIMIT 1;
+      `;
+      if (existingRows.length === 0) {
+        return sendJson(res, 404, {
+          error: 'COMMENT_NOT_FOUND',
+          message: 'Comment not found.'
+        });
+      }
+
+      const existing = existingRows[0];
+      const isOwner = Boolean(existing.userId && existing.userId === authUser.id);
+      const admin = await resolveIsAdmin(authUser);
+      if (!isOwner && !admin) {
+        return sendJson(res, 403, {
+          error: 'FORBIDDEN',
+          message: 'You are not authorized to delete this comment.'
+        });
+      }
+
+      await sql`
+        DELETE FROM recipe_comments
+        WHERE id = ${commentId};
+      `;
+
+      return sendJson(res, 200, {
+        success: true,
+        action: 'delete_comment',
+        deletedId: commentId,
+        recipeId: existing.recipeId
+      });
+    } catch (err) {
+      console.error('[recipe-interactions] DELETE error:', err.message);
+      return sendJson(res, 500, {
+        error: 'DELETE_COMMENT_FAILED',
+        message: err.message
+      });
+    }
+  }
+
   return sendJson(res, 405, { error: 'METHOD_NOT_ALLOWED' });
+  };
 }
+
+export default createRecipeInteractionsHandler();

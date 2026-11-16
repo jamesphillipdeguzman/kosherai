@@ -232,6 +232,14 @@ export function handleTenantAccountChange(newUserId) {
       TENANT_STORAGE_KEYS.forEach(k => {
         try { localStorage.removeItem(k); } catch (_) {}
       });
+      [
+        'kosherai_recipe_interactions',
+        'kosherai_pending_recipe_actions',
+        'kosherai_liked_recipes',
+        'kosherai_user_name'
+      ].forEach(k => {
+        try { localStorage.removeItem(k); } catch (_) {}
+      });
       if (typeof window !== 'undefined' && window.indexedDB) {
         try { window.indexedDB.deleteDatabase('KosherAICourseDB'); } catch (_) {}
         try { window.indexedDB.deleteDatabase('kosherai_offline_db'); } catch (_) {}

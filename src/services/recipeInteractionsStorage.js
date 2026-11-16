@@ -207,7 +207,7 @@ export async function recordRecipeView(recipeId) {
   // Optimistic update
   setCachedRecipeInteraction(recipeId, { views: newViews });
 
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
   if (!isOnline || typeof fetch !== 'function') {
     queueRecipeAction({ action: 'view', recipeId });
     return newViews;
@@ -263,7 +263,7 @@ export async function toggleRecipeLike(recipeId) {
   setCachedRecipeInteraction(recipeId, { likes: newLikesCount });
 
   // 3. Dispatch to API or queue
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
   if (!isOnline || typeof fetch !== 'function') {
     queueRecipeAction({ action: 'like', recipeId, delta });
     return { isLiked: newLikedState, likes: newLikesCount };
@@ -292,6 +292,20 @@ export async function toggleRecipeLike(recipeId) {
 }
 
 /**
+ * Clears cached recipe interactions and pending actions (e.g. on sign-out or account switch)
+ */
+export function clearRecipeInteractionsCache() {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.removeItem(STORAGE_KEYS.INTERACTIONS_CACHE);
+    localStorage.removeItem(STORAGE_KEYS.PENDING_ACTIONS);
+    localStorage.removeItem(STORAGE_KEYS.LIKED_RECIPES);
+  } catch (err) {
+    console.warn('[recipeInteractions] Failed to clear cache:', err);
+  }
+}
+
+/**
  * Posts a community compliance tip / comment on a recipe
  * @param {string} recipeId
  * @param {string} userName
@@ -313,14 +327,15 @@ export async function postRecipeComment(recipeId, userName, comment) {
 
   // 1. Optimistic update in cache
   const current = getCachedRecipeInteraction(recipeId);
-  const updatedComments = [commentObj, ...(current.comments || [])];
+  const previousComments = Array.isArray(current.comments) ? current.comments : [];
+  const updatedComments = [commentObj, ...previousComments];
   setCachedRecipeInteraction(recipeId, {
     comments: updatedComments,
     commentsCount: updatedComments.length
   });
 
   // 2. Dispatch to API or queue
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
   if (!isOnline || typeof fetch !== 'function') {
     queueRecipeAction({ action: 'comment', ...commentObj });
     return commentObj;
@@ -343,15 +358,122 @@ export async function postRecipeComment(recipeId, userName, comment) {
     if (res && res.ok) {
       const data = await res.json();
       if (data && data.comment) {
+        const latest = getCachedRecipeInteraction(recipeId);
+        const reconciled = (latest.comments || []).map(c =>
+          c.id === commentObj.id ? data.comment : c
+        );
+        if (!reconciled.some(c => c.id === data.comment.id)) {
+          reconciled.unshift(data.comment);
+        }
+        setCachedRecipeInteraction(recipeId, {
+          comments: reconciled,
+          commentsCount: reconciled.length
+        });
         return data.comment;
       }
+      return commentObj;
     }
+
+    // Server rejected the request (e.g. 401 Unauthorized, 400, 500): rollback optimistic cache
+    setCachedRecipeInteraction(recipeId, {
+      comments: previousComments,
+      commentsCount: previousComments.length
+    });
+    let errData = {};
+    try {
+      errData = await res.json();
+    } catch (_) {}
+    const apiErr = new Error(errData?.message || 'Failed to post comment.');
+    apiErr.status = res?.status || 500;
+    apiErr.code = errData?.error || 'POST_COMMENT_FAILED';
+    throw apiErr;
   } catch (err) {
+    if (err && typeof err.status === 'number') {
+      throw err;
+    }
     console.warn('[recipeInteractions] postRecipeComment network error (queued):', err.message);
     queueRecipeAction({ action: 'comment', ...commentObj });
+    return commentObj;
+  }
+}
+
+/**
+ * Edits an existing recipe comment owned by the authenticated user (or admin)
+ * @param {string} recipeId
+ * @param {string} commentId
+ * @param {string} commentText
+ * @returns {Promise<object>} Updated comment
+ */
+export async function editRecipeComment(recipeId, commentId, commentText) {
+  if (!recipeId || !commentId || !commentText || !commentText.trim()) {
+    throw new Error('Recipe ID, comment ID, and comment text are required.');
   }
 
-  return commentObj;
+  const res = await fetch('/api/recipe-interactions', {
+    method: 'PATCH',
+    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+    credentials: 'include',
+    body: JSON.stringify({
+      id: commentId,
+      recipeId,
+      comment: commentText.trim()
+    })
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data?.message || 'Failed to edit comment.');
+    err.status = res.status;
+    err.code = data?.error || 'EDIT_COMMENT_FAILED';
+    throw err;
+  }
+
+  const updatedComment = data.comment || { id: commentId, recipeId, comment: commentText.trim() };
+  const current = getCachedRecipeInteraction(recipeId);
+  const updatedList = (current.comments || []).map(c =>
+    c.id === commentId ? { ...c, ...updatedComment } : c
+  );
+  setCachedRecipeInteraction(recipeId, {
+    comments: updatedList,
+    commentsCount: updatedList.length
+  });
+
+  return updatedComment;
+}
+
+/**
+ * Deletes an existing recipe comment owned by the authenticated user (or admin)
+ * @param {string} recipeId
+ * @param {string} commentId
+ * @returns {Promise<boolean>}
+ */
+export async function deleteRecipeComment(recipeId, commentId) {
+  if (!recipeId || !commentId) {
+    throw new Error('Recipe ID and comment ID are required.');
+  }
+
+  const res = await fetch(`/api/recipe-interactions?id=${encodeURIComponent(commentId)}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders({ 'Accept': 'application/json' }),
+    credentials: 'include'
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data?.message || 'Failed to delete comment.');
+    err.status = res.status;
+    err.code = data?.error || 'DELETE_COMMENT_FAILED';
+    throw err;
+  }
+
+  const current = getCachedRecipeInteraction(recipeId);
+  const updatedList = (current.comments || []).filter(c => c.id !== commentId);
+  setCachedRecipeInteraction(recipeId, {
+    comments: updatedList,
+    commentsCount: updatedList.length
+  });
+
+  return true;
 }
 
 /**
@@ -361,7 +483,7 @@ export async function syncPendingRecipeInteractions() {
   const pending = getPendingRecipeActions();
   if (!pending.length || typeof fetch !== 'function') return { synced: 0, remaining: pending.length };
 
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  const isOnline = typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean' ? navigator.onLine : true;
   if (!isOnline) return { synced: 0, remaining: pending.length };
 
   let synced = 0;
@@ -377,6 +499,8 @@ export async function syncPendingRecipeInteractions() {
       });
       if (res && res.ok) {
         synced++;
+      } else if (res && (res.status === 400 || res.status === 403 || res.status === 404)) {
+        // Drop permanent client/authorization errors so they don't block the queue
       } else {
         remaining.push(actionItem);
       }

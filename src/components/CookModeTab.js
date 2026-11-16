@@ -590,7 +590,9 @@ function escapeHtml(str) {
 export function renderRecipeCommentsDrawer(recipe, state = {}) {
   const interactions = getCachedRecipeInteraction(recipe.id);
   const comments = Array.isArray(interactions.comments) ? interactions.comments : [];
-  const currentName = state.commentUserName || (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_user_name') : '') || '';
+  const currentUser = state.user || null;
+  const currentName = currentUser?.name || state.commentUserName || (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_user_name') : '') || '';
+  const editingCommentId = state.editingCommentId || null;
 
   return `
     <div class="comments-drawer-overlay" id="comments-drawer-backdrop" data-close-comments-drawer="true">
@@ -634,7 +636,10 @@ export function renderRecipeCommentsDrawer(recipe, state = {}) {
             </div>
           ` : `
             <div class="comments-feed-list">
-              ${comments.map(c => `
+              ${comments.map(c => {
+                const canManage = Boolean(currentUser && ((c.userId && c.userId === currentUser.id) || state.isAdmin));
+                const isEditing = editingCommentId === c.id;
+                return `
                 <div class="comment-card" id="comment-${escapeHtml(c.id)}">
                   <div class="comment-card-header">
                     <div class="flex items-center gap-2">
@@ -643,21 +648,48 @@ export function renderRecipeCommentsDrawer(recipe, state = {}) {
                       </div>
                       <span class="comment-author">${escapeHtml(c.userName || 'Caregiver / Cook')}</span>
                     </div>
-                    <span class="comment-date">
-                      ${formatCommentDate(c.createdAt)}
-                    </span>
+                    <div class="flex items-center gap-2">
+                      <span class="comment-date">
+                        ${formatCommentDate(c.createdAt)}
+                      </span>
+                      ${canManage && !isEditing ? `
+                        <button type="button" class="text-[11px] font-semibold text-slate-500 hover:text-amber-600 dark:text-slate-400 dark:hover:text-amber-400 px-1" data-edit-comment-id="${escapeHtml(c.id)}" title="Edit comment">Edit</button>
+                        <button type="button" class="text-[11px] font-semibold text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 px-1" data-delete-comment-id="${escapeHtml(c.id)}" data-recipe-id="${escapeHtml(recipe.id)}" title="Delete comment">Delete</button>
+                      ` : ''}
+                    </div>
                   </div>
-                  <div class="comment-content">
-                    ${escapeHtml(c.comment)}
-                  </div>
+                  ${isEditing ? `
+                    <form id="edit-comment-form" data-comment-id="${escapeHtml(c.id)}" data-recipe-id="${escapeHtml(recipe.id)}" class="mt-2">
+                      <textarea id="edit-comment-textarea" class="form-input text-xs w-full py-1.5 px-2.5 rounded-lg resize-none" rows="2" required>${escapeHtml(c.comment)}</textarea>
+                      <div class="flex justify-end gap-2 mt-1.5">
+                        <button type="button" id="cancel-edit-comment-btn" class="text-xs px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300">Cancel</button>
+                        <button type="submit" class="btn-primary text-xs px-3 py-1">Save</button>
+                      </div>
+                    </form>
+                  ` : `
+                    <div class="comment-content">
+                      ${escapeHtml(c.comment)}
+                    </div>
+                  `}
                 </div>
-              `).join('')}
+              `;
+              }).join('')}
             </div>
           `}
         </div>
 
         <!-- Add Comment Form -->
         <div class="comments-drawer-footer">
+          ${!currentUser ? `
+            <div class="flex items-center justify-between gap-3 py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700">
+              <span class="text-xs text-slate-600 dark:text-slate-300">
+                Sign in to share a compliance tip or substitution review.
+              </span>
+              <button type="button" id="comments-signin-btn" class="btn-primary" style="padding: 6px 14px; font-size: 0.78rem; white-space: nowrap;">
+                Sign In
+              </button>
+            </div>
+          ` : `
           <form id="recipe-comment-form" data-recipe-id="${recipe.id}">
             <div class="mb-2">
               <label for="comment-author-input" class="sr-only">Your Name or Role</label>
@@ -694,6 +726,7 @@ export function renderRecipeCommentsDrawer(recipe, state = {}) {
               </button>
             </div>
           </form>
+          `}
         </div>
       </div>
     </div>
