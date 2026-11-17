@@ -12,7 +12,7 @@ export default function SettingsModal({
   isOpen = false,
   onClose,
   currentTheme = 'dark',
-  showProjectTab = true,
+  showProjectTab = false,
   activeDiet = 'lid',
   onSave
 }) {

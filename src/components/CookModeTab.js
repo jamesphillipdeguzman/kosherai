@@ -587,16 +587,97 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+export function renderCommentsDrawerStats(interactions = {}, commentsCount = 0) {
+  return `
+    <span>👁️ ${interactions.views || 0} views</span>
+    <span>❤️ ${interactions.likes || 0} likes</span>
+    <span>💬 ${commentsCount} community tips</span>
+  `;
+}
+
+export function renderCommentsDrawerBody(recipe, state = {}) {
+  const interactions = getCachedRecipeInteraction(recipe.id);
+  const comments = Array.isArray(interactions.comments) ? interactions.comments : [];
+  const currentUser = state.user || null;
+  const editingCommentId = state.editingCommentId || null;
+  const isInitialLoading = comments.length === 0 && state.commentsLoadingRecipeId === recipe.id;
+
+  return `
+    <div class="comments-section-title">
+      <span>💬 Community Compliance Tips & Substitution Reviews:</span>
+    </div>
+
+    ${isInitialLoading ? `
+      <div class="comments-loading-state" aria-live="polite" aria-busy="true">
+        <div class="animate-pulse space-y-3 mt-2">
+          <div class="h-16 rounded-xl bg-slate-200/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/60"></div>
+          <div class="h-16 rounded-xl bg-slate-200/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/40"></div>
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-3 text-center">Loading community tips...</p>
+      </div>
+    ` : comments.length === 0 ? `
+      <div class="comments-empty-state">
+        <span class="text-3xl mb-2">🧑‍🍳</span>
+        <p class="font-bold text-sm text-slate-800 dark:text-slate-200">No community tips posted yet!</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs text-center">
+          Be the first to share your ingredient swap, cooking technique, or protocol substitution for this dish.
+        </p>
+      </div>
+    ` : `
+      <div class="comments-feed-list">
+        ${comments.map(c => {
+          const canManage = Boolean(currentUser && ((c.userId && c.userId === currentUser.id) || state.isAdmin));
+          const isEditing = editingCommentId === c.id;
+          return `
+          <div class="comment-card" id="comment-${escapeHtml(c.id)}">
+            <div class="comment-card-header">
+              <div class="flex items-center gap-2">
+                <div class="comment-avatar">
+                  ${escapeHtml((c.userName || 'C')[0].toUpperCase())}
+                </div>
+                <span class="comment-author">${escapeHtml(c.userName || 'Caregiver / Cook')}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="comment-date">
+                  ${formatCommentDate(c.createdAt)}
+                </span>
+                ${canManage && !isEditing ? `
+                  <button type="button" class="text-[11px] font-semibold text-slate-500 hover:text-amber-600 dark:text-slate-400 dark:hover:text-amber-400 px-1" data-edit-comment-id="${escapeHtml(c.id)}" title="Edit comment">Edit</button>
+                  <button type="button" class="text-[11px] font-semibold text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 px-1" data-delete-comment-id="${escapeHtml(c.id)}" data-recipe-id="${escapeHtml(recipe.id)}" title="Delete comment">Delete</button>
+                ` : ''}
+              </div>
+            </div>
+            ${isEditing ? `
+              <form id="edit-comment-form" data-comment-id="${escapeHtml(c.id)}" data-recipe-id="${escapeHtml(recipe.id)}" class="mt-2">
+                <textarea id="edit-comment-textarea" class="form-input text-xs w-full py-1.5 px-2.5 rounded-lg resize-none" rows="2" required>${escapeHtml(c.comment)}</textarea>
+                <div class="flex justify-end gap-2 mt-1.5">
+                  <button type="button" id="cancel-edit-comment-btn" class="text-xs px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300">Cancel</button>
+                  <button type="submit" class="btn-primary text-xs px-3 py-1">Save</button>
+                </div>
+              </form>
+            ` : `
+              <div class="comment-content">
+                ${escapeHtml(c.comment)}
+              </div>
+            `}
+          </div>
+        `;
+        }).join('')}
+      </div>
+    `}
+  `;
+}
+
 export function renderRecipeCommentsDrawer(recipe, state = {}) {
   const interactions = getCachedRecipeInteraction(recipe.id);
   const comments = Array.isArray(interactions.comments) ? interactions.comments : [];
   const currentUser = state.user || null;
   const currentName = currentUser?.name || state.commentUserName || (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_user_name') : '') || '';
-  const editingCommentId = state.editingCommentId || null;
+  const noAnimClass = state.skipDrawerAnimation ? ' comments-drawer-no-anim' : '';
 
   return `
-    <div class="comments-drawer-overlay" id="comments-drawer-backdrop" data-close-comments-drawer="true">
-      <div class="comments-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="comments-drawer-title">
+    <div class="comments-drawer-overlay${noAnimClass}" id="comments-drawer-backdrop" data-recipe-id="${escapeHtml(recipe.id)}" data-close-comments-drawer="true">
+      <div class="comments-drawer-panel${noAnimClass}" role="dialog" aria-modal="true" aria-labelledby="comments-drawer-title">
         <!-- Drawer Header -->
         <div class="comments-drawer-header">
           <div style="min-width: 0;">
@@ -611,71 +692,16 @@ export function renderRecipeCommentsDrawer(recipe, state = {}) {
             <h2 id="comments-drawer-title" class="text-lg font-black text-slate-900 dark:text-white truncate">
               ${escapeHtml(recipe.title || recipe.name)}
             </h2>
-            <div class="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-1">
-              <span>👁️ ${interactions.views || 0} views</span>
-              <span>❤️ ${interactions.likes || 0} likes</span>
-              <span>💬 ${comments.length} community tips</span>
+            <div id="comments-drawer-stats" class="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-1">
+              ${renderCommentsDrawerStats(interactions, comments.length)}
             </div>
           </div>
           <button id="close-comments-drawer-btn" class="drawer-close-btn" aria-label="Close comments drawer">✕</button>
         </div>
 
         <!-- Scrollable Comments / Tips Feed -->
-        <div class="comments-drawer-body">
-          <div class="comments-section-title">
-            <span>💬 Community Compliance Tips & Substitution Reviews:</span>
-          </div>
-
-          ${comments.length === 0 ? `
-            <div class="comments-empty-state">
-              <span class="text-3xl mb-2">🧑‍🍳</span>
-              <p class="font-bold text-sm text-slate-800 dark:text-slate-200">No community tips posted yet!</p>
-              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs text-center">
-                Be the first to share your ingredient swap, cooking technique, or protocol substitution for this dish.
-              </p>
-            </div>
-          ` : `
-            <div class="comments-feed-list">
-              ${comments.map(c => {
-                const canManage = Boolean(currentUser && ((c.userId && c.userId === currentUser.id) || state.isAdmin));
-                const isEditing = editingCommentId === c.id;
-                return `
-                <div class="comment-card" id="comment-${escapeHtml(c.id)}">
-                  <div class="comment-card-header">
-                    <div class="flex items-center gap-2">
-                      <div class="comment-avatar">
-                        ${escapeHtml((c.userName || 'C')[0].toUpperCase())}
-                      </div>
-                      <span class="comment-author">${escapeHtml(c.userName || 'Caregiver / Cook')}</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <span class="comment-date">
-                        ${formatCommentDate(c.createdAt)}
-                      </span>
-                      ${canManage && !isEditing ? `
-                        <button type="button" class="text-[11px] font-semibold text-slate-500 hover:text-amber-600 dark:text-slate-400 dark:hover:text-amber-400 px-1" data-edit-comment-id="${escapeHtml(c.id)}" title="Edit comment">Edit</button>
-                        <button type="button" class="text-[11px] font-semibold text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 px-1" data-delete-comment-id="${escapeHtml(c.id)}" data-recipe-id="${escapeHtml(recipe.id)}" title="Delete comment">Delete</button>
-                      ` : ''}
-                    </div>
-                  </div>
-                  ${isEditing ? `
-                    <form id="edit-comment-form" data-comment-id="${escapeHtml(c.id)}" data-recipe-id="${escapeHtml(recipe.id)}" class="mt-2">
-                      <textarea id="edit-comment-textarea" class="form-input text-xs w-full py-1.5 px-2.5 rounded-lg resize-none" rows="2" required>${escapeHtml(c.comment)}</textarea>
-                      <div class="flex justify-end gap-2 mt-1.5">
-                        <button type="button" id="cancel-edit-comment-btn" class="text-xs px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300">Cancel</button>
-                        <button type="submit" class="btn-primary text-xs px-3 py-1">Save</button>
-                      </div>
-                    </form>
-                  ` : `
-                    <div class="comment-content">
-                      ${escapeHtml(c.comment)}
-                    </div>
-                  `}
-                </div>
-              `;
-              }).join('')}
-            </div>
-          `}
+        <div class="comments-drawer-body" id="comments-drawer-body">
+          ${renderCommentsDrawerBody(recipe, state)}
         </div>
 
         <!-- Add Comment Form -->

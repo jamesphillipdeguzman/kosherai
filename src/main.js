@@ -9,7 +9,7 @@ import { renderCheckerTab } from './components/CheckerTab.js';
 import { renderScannerTab, executeScanWorkflow, SAMPLE_LABELS, releaseScannerResources } from './components/ScannerTab.js';
 import { renderCheatSheetTab } from './components/CheatSheetTab.js';
 import { renderSubstitutesTab } from './components/SubstitutesTab.js';
-import { renderCookModeTab, lidRecipes, DIET_RECIPES } from './components/CookModeTab.js';
+import { renderCookModeTab, renderCommentsDrawerBody, renderCommentsDrawerStats, lidRecipes, DIET_RECIPES } from './components/CookModeTab.js';
 import { renderSettingsModal } from './components/SettingsModal.js';
 import { renderItemDetailModal } from './components/ItemDetailModal.js';
 import { renderIngredientImageAdminModal } from './components/IngredientImageAdminModal.js';
@@ -45,6 +45,7 @@ import {
   editRecipeComment,
   deleteRecipeComment,
   clearRecipeInteractionsCache,
+  getCachedRecipeInteraction,
   fetchAllRecipeInteractions,
   syncPendingRecipeInteractions
 } from './services/recipeInteractionsStorage.js';
@@ -129,9 +130,9 @@ if (initialTheme === 'light') {
   document.documentElement.classList.remove('light');
 }
 
-// 6-Week Project Tab Visibility Preference (Default Visible)
+// 6-Week Project Tab Visibility Preference (Default OFF)
 const savedShowProject = localStorage.getItem('kosherai_show_project_tab');
-const initialShowProjectTab = savedShowProject !== null ? savedShowProject === 'true' : true;
+const initialShowProjectTab = savedShowProject !== null ? savedShowProject === 'true' : false;
 
 // Lightweight 60fps scroll listener for ambient parallax sheen
 let scrollTicking = false;
@@ -195,6 +196,8 @@ const state = {
   recipeAnalysis: null,
   recipeCategoryFilter: 'ALL',
   activeCommentDrawerRecipe: null,
+  commentsLoadingRecipeId: null,
+  skipDrawerAnimation: false,
   editingCommentId: null,
   commentUserName: (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_user_name') : '') || '',
   household_members: getHouseholdMembers(),
@@ -325,6 +328,14 @@ function render() {
   if (!state.showProjectTab && state.appMode === 'course') {
     state.appMode = 'diet';
   }
+
+  // Prevent re-playing slide-in animation if the comments drawer is already mounted for the same recipe
+  const existingDrawerEl = typeof document !== 'undefined' ? document.querySelector('#comments-drawer-backdrop') : null;
+  state.skipDrawerAnimation = Boolean(
+    existingDrawerEl &&
+    state.activeCommentDrawerRecipe?.id &&
+    existingDrawerEl.getAttribute('data-recipe-id') === state.activeCommentDrawerRecipe.id
+  );
 
   // Filter Search Database for checker
   state.searchResults = searchDatabase(
@@ -2066,6 +2077,105 @@ Cracked black pepper`;
     });
   });
 
+  function bindCommentsBodyListeners(root = document) {
+    // Edit Comment Trigger
+    root.querySelectorAll('[data-edit-comment-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.editingCommentId = btn.getAttribute('data-edit-comment-id');
+        if (!updateCommentsDrawerInPlace(state.activeCommentDrawerRecipe)) render();
+      });
+    });
+
+    // Cancel Edit Comment
+    const cancelEditCommentBtn = root.querySelector('#cancel-edit-comment-btn');
+    if (cancelEditCommentBtn) {
+      cancelEditCommentBtn.addEventListener('click', () => {
+        state.editingCommentId = null;
+        if (!updateCommentsDrawerInPlace(state.activeCommentDrawerRecipe)) render();
+      });
+    }
+
+    // Submit Edited Comment
+    const editCommentForm = root.querySelector('#edit-comment-form');
+    if (editCommentForm) {
+      editCommentForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const cid = editCommentForm.getAttribute('data-comment-id');
+        const rid = editCommentForm.getAttribute('data-recipe-id');
+        const textarea = root.querySelector('#edit-comment-textarea');
+        const updatedText = (textarea?.value || '').trim();
+        if (!cid || !rid || !updatedText) return;
+
+        try {
+          await editRecipeComment(rid, cid, updatedText);
+          state.editingCommentId = null;
+          showToast?.('Comment updated.');
+          if (!updateCommentsDrawerInPlace(state.activeCommentDrawerRecipe)) render();
+        } catch (err) {
+          console.error('Failed to edit recipe comment:', err);
+          showToast?.(err?.message || 'Could not update comment.', 'error');
+        }
+      });
+    }
+
+    // Delete Comment
+    root.querySelectorAll('[data-delete-comment-id]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const cid = btn.getAttribute('data-delete-comment-id');
+        const rid = btn.getAttribute('data-recipe-id');
+        if (!cid || !rid) return;
+
+        try {
+          await deleteRecipeComment(rid, cid);
+          if (state.editingCommentId === cid) state.editingCommentId = null;
+          showToast?.('Comment deleted.');
+          if (!updateCommentsDrawerInPlace(state.activeCommentDrawerRecipe)) render();
+        } catch (err) {
+          console.error('Failed to delete recipe comment:', err);
+          showToast?.(err?.message || 'Could not delete comment.', 'error');
+        }
+      });
+    });
+  }
+
+  function updateCommentsDrawerInPlace(recipe) {
+    if (!recipe || typeof document === 'undefined') return false;
+    const backdrop = document.querySelector('#comments-drawer-backdrop');
+    if (!backdrop || backdrop.getAttribute('data-recipe-id') !== recipe.id) return false;
+
+    const interactions = getCachedRecipeInteraction(recipe.id);
+    const commentsCount = Array.isArray(interactions.comments) ? interactions.comments.length : 0;
+
+    const statsEl = backdrop.querySelector('#comments-drawer-stats');
+    if (statsEl) {
+      const nextStatsHtml = renderCommentsDrawerStats(interactions, commentsCount);
+      if (statsEl.innerHTML !== nextStatsHtml) {
+        statsEl.innerHTML = nextStatsHtml;
+      }
+    }
+
+    const bodyEl = backdrop.querySelector('#comments-drawer-body');
+    if (bodyEl) {
+      const nextBodyHtml = renderCommentsDrawerBody(recipe, state);
+      if (bodyEl.innerHTML !== nextBodyHtml) {
+        const prevScrollTop = bodyEl.scrollTop;
+        bodyEl.innerHTML = nextBodyHtml;
+        bodyEl.scrollTop = prevScrollTop;
+        bindCommentsBodyListeners(bodyEl);
+      }
+    }
+
+    // Also update the comment count label on the recipe card in-place without full re-render
+    document.querySelectorAll(`[data-comments-recipe-id="${recipe.id}"]`).forEach(cardBtn => {
+      const countSpan = cardBtn.querySelector('.interaction-count') || cardBtn.querySelector('span:last-child');
+      if (countSpan && /^\d+$/.test(countSpan.textContent.trim())) {
+        countSpan.textContent = String(commentsCount);
+      }
+    });
+
+    return true;
+  }
+
   // Recipe Comments Drawer Trigger
   document.querySelectorAll('[data-comments-recipe-id]').forEach(btn => {
     btn.addEventListener('click', async (e) => {
@@ -2088,14 +2198,32 @@ Cracked black pepper`;
       }
 
       if (recipe) {
+        const cached = getCachedRecipeInteraction(rid);
+        const hasCachedComments = Array.isArray(cached.comments) && cached.comments.length > 0;
         state.activeCommentDrawerRecipe = recipe;
+        state.commentsLoadingRecipeId = hasCachedComments ? null : rid;
+        state.editingCommentId = null;
+
         recordRecipeView(rid);
         render();
+
         fetchRecipeDetails(rid).then(() => {
-          if (state.activeCommentDrawerRecipe?.id === rid) {
-            render();
+          if (state.commentsLoadingRecipeId === rid) {
+            state.commentsLoadingRecipeId = null;
           }
-        }).catch(() => {});
+          if (state.activeCommentDrawerRecipe?.id === rid) {
+            if (!updateCommentsDrawerInPlace(recipe)) {
+              render();
+            }
+          }
+        }).catch(() => {
+          if (state.commentsLoadingRecipeId === rid) {
+            state.commentsLoadingRecipeId = null;
+            if (state.activeCommentDrawerRecipe?.id === rid) {
+              updateCommentsDrawerInPlace(recipe);
+            }
+          }
+        });
       }
     });
   });
@@ -2105,6 +2233,8 @@ Cracked black pepper`;
   if (closeCommentsDrawerBtn) {
     closeCommentsDrawerBtn.addEventListener('click', () => {
       state.activeCommentDrawerRecipe = null;
+      state.commentsLoadingRecipeId = null;
+      state.editingCommentId = null;
       render();
     });
   }
@@ -2114,6 +2244,8 @@ Cracked black pepper`;
     commentsDrawerBackdrop.addEventListener('click', (e) => {
       if (e.target.getAttribute('data-close-comments-drawer') === 'true') {
         state.activeCommentDrawerRecipe = null;
+        state.commentsLoadingRecipeId = null;
+        state.editingCommentId = null;
         render();
       }
     });
@@ -2130,64 +2262,7 @@ Cracked black pepper`;
     });
   }
 
-  // Edit Comment Trigger
-  document.querySelectorAll('[data-edit-comment-id]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.editingCommentId = btn.getAttribute('data-edit-comment-id');
-      render();
-    });
-  });
-
-  // Cancel Edit Comment
-  const cancelEditCommentBtn = document.querySelector('#cancel-edit-comment-btn');
-  if (cancelEditCommentBtn) {
-    cancelEditCommentBtn.addEventListener('click', () => {
-      state.editingCommentId = null;
-      render();
-    });
-  }
-
-  // Submit Edited Comment
-  const editCommentForm = document.querySelector('#edit-comment-form');
-  if (editCommentForm) {
-    editCommentForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const cid = editCommentForm.getAttribute('data-comment-id');
-      const rid = editCommentForm.getAttribute('data-recipe-id');
-      const textarea = document.querySelector('#edit-comment-textarea');
-      const updatedText = (textarea?.value || '').trim();
-      if (!cid || !rid || !updatedText) return;
-
-      try {
-        await editRecipeComment(rid, cid, updatedText);
-        state.editingCommentId = null;
-        showToast?.('Comment updated.');
-        render();
-      } catch (err) {
-        console.error('Failed to edit recipe comment:', err);
-        showToast?.(err?.message || 'Could not update comment.', 'error');
-      }
-    });
-  }
-
-  // Delete Comment
-  document.querySelectorAll('[data-delete-comment-id]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const cid = btn.getAttribute('data-delete-comment-id');
-      const rid = btn.getAttribute('data-recipe-id');
-      if (!cid || !rid) return;
-
-      try {
-        await deleteRecipeComment(rid, cid);
-        if (state.editingCommentId === cid) state.editingCommentId = null;
-        showToast?.('Comment deleted.');
-        render();
-      } catch (err) {
-        console.error('Failed to delete recipe comment:', err);
-        showToast?.(err?.message || 'Could not delete comment.', 'error');
-      }
-    });
-  });
+  bindCommentsBodyListeners(document);
 
   // Submit Recipe Comment / Tip
   const recipeCommentForm = document.querySelector('#recipe-comment-form');
@@ -2214,7 +2289,13 @@ Cracked black pepper`;
       try {
         await postRecipeComment(rid, userName, comment);
         if (textInput) textInput.value = '';
-        render();
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span>Post Tip</span><span class="ml-1">↗</span>';
+        }
+        if (!updateCommentsDrawerInPlace(state.activeCommentDrawerRecipe)) {
+          render();
+        }
       } catch (err) {
         console.error('Failed to post recipe comment:', err);
         showToast?.(err?.message || 'Failed to post comment.', 'error');

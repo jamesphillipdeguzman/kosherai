@@ -155,8 +155,11 @@ export async function fetchAllRecipeInteractions() {
   }
 }
 
+const inFlightRecipeDetailFetches = new Map();
+
 /**
  * Fetches views, likes, and full comments list for a specific recipe
+ * Deduplicates concurrent in-flight requests for the same recipeId.
  * @param {string} recipeId
  * @returns {Promise<{ views: number, likes: number, comments: any[] }>}
  */
@@ -164,34 +167,46 @@ export async function fetchRecipeDetails(recipeId) {
   const localData = getCachedRecipeInteraction(recipeId);
   if (!recipeId || typeof fetch !== 'function') return localData;
 
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
-
-    const res = await fetch(`/api/recipe-interactions?recipeId=${encodeURIComponent(recipeId)}`, {
-      method: 'GET',
-      headers: getAuthHeaders({ 'Accept': 'application/json' }),
-      credentials: 'include',
-      signal: controller.signal
-    });
-    clearTimeout(timer);
-
-    if (res && res.ok) {
-      const data = await res.json();
-      const updated = {
-        views: data.views !== undefined ? data.views : localData.views,
-        likes: data.likes !== undefined ? data.likes : localData.likes,
-        commentsCount: Array.isArray(data.comments) ? data.comments.length : localData.commentsCount,
-        comments: Array.isArray(data.comments) ? data.comments : localData.comments
-      };
-      setCachedRecipeInteraction(recipeId, updated);
-      return updated;
-    }
-    return localData;
-  } catch (err) {
-    console.warn(`[recipeInteractions] fetchRecipeDetails notice for ${recipeId}:`, err.message);
-    return localData;
+  if (inFlightRecipeDetailFetches.has(recipeId)) {
+    return inFlightRecipeDetailFetches.get(recipeId);
   }
+
+  const fetchPromise = (async () => {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+
+      const res = await fetch(`/api/recipe-interactions?recipeId=${encodeURIComponent(recipeId)}`, {
+        method: 'GET',
+        headers: getAuthHeaders({ 'Accept': 'application/json' }),
+        credentials: 'include',
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+
+      if (res && res.ok) {
+        const data = await res.json();
+        const latestLocal = getCachedRecipeInteraction(recipeId);
+        const updated = {
+          views: data.views !== undefined ? data.views : latestLocal.views,
+          likes: data.likes !== undefined ? data.likes : latestLocal.likes,
+          commentsCount: Array.isArray(data.comments) ? data.comments.length : latestLocal.commentsCount,
+          comments: Array.isArray(data.comments) ? data.comments : latestLocal.comments
+        };
+        setCachedRecipeInteraction(recipeId, updated);
+        return updated;
+      }
+      return getCachedRecipeInteraction(recipeId);
+    } catch (err) {
+      console.warn(`[recipeInteractions] fetchRecipeDetails notice for ${recipeId}:`, err.message);
+      return getCachedRecipeInteraction(recipeId);
+    } finally {
+      inFlightRecipeDetailFetches.delete(recipeId);
+    }
+  })();
+
+  inFlightRecipeDetailFetches.set(recipeId, fetchPromise);
+  return fetchPromise;
 }
 
 /**

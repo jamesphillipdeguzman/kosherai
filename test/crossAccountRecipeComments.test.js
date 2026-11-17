@@ -443,6 +443,79 @@ try {
   assert.strictEqual(getCachedRecipeInteraction(RECIPE_ID).comments.length, 0);
 
   console.log('  ✅ Frontend service & CookModeTab UI ownership verified.');
+
+  // 10. 6-Week Project Toggle Default OFF & Preference Preservation
+  console.log('\nTest 10: Sustaining Human Life (6-Week Project) toggle defaults to OFF & preserves saved preferences');
+  {
+    const { getShowProjectTabPreference } = await import('../src/services/storage.js');
+    const { renderSettingsModal } = await import('../src/components/SettingsModal.js');
+    const { renderHeader } = await import('../src/components/Header.js');
+
+    // Fresh install (key unset)
+    localStorage.removeItem('kosherai_show_project_tab');
+    assert.strictEqual(getShowProjectTabPreference(), false, 'Default 6-Week Project preference must be false');
+
+    // Explicit user opt-in preserved
+    localStorage.setItem('kosherai_show_project_tab', 'true');
+    assert.strictEqual(getShowProjectTabPreference(), true, 'Explicit true preference must be preserved');
+
+    // Explicit user opt-out preserved
+    localStorage.setItem('kosherai_show_project_tab', 'false');
+    assert.strictEqual(getShowProjectTabPreference(), false, 'Explicit false preference must be preserved');
+
+    // Default SettingsModal and Header parameters render toggle OFF
+    const defaultModalHtml = renderSettingsModal({}, 'dark');
+    const toggleMatch = defaultModalHtml.match(/<input[^>]*id="toggle-project-tab-input"[^>]*>/);
+    assert.ok(toggleMatch && !toggleMatch[0].includes('checked'), 'SettingsModal toggle must be unchecked by default');
+
+    const defaultHeaderHtml = renderHeader(true, 'diet');
+    assert.ok(!defaultHeaderHtml.includes('data-app-mode="course"'), 'Header must not show 6-Week Project mode button by default');
+  }
+  console.log('  ✅ 6-Week Project toggle default OFF and preference preservation verified.');
+
+  // 11. Recipe Comments Drawer Anti-Flicker & Fetch Deduplication
+  console.log('\nTest 11: Comments drawer anti-flicker (cached immediate render, loading state, no-anim, dedupe)');
+  {
+    const { setCachedRecipeInteraction } = await import('../src/services/recipeInteractionsStorage.js');
+    clearRecipeInteractionsCache();
+
+    // Uncached + loading -> shows loading skeleton, NOT empty-state flash
+    const loadingHtml = renderRecipeCommentsDrawer(
+      { id: RECIPE_ID, title: 'Tinola' },
+      { user: ACCOUNT_A, commentsLoadingRecipeId: RECIPE_ID }
+    );
+    assert.ok(loadingHtml.includes('comments-loading-state'), 'Uncached initial load must render loading skeleton');
+    assert.ok(!loadingHtml.includes('comments-empty-state'), 'Uncached initial load must not flash empty state');
+
+    // Cached comments + loading -> immediately renders cached comments without loading skeleton
+    setCachedRecipeInteraction(RECIPE_ID, {
+      views: 3,
+      likes: 1,
+      commentsCount: 1,
+      comments: [{ id: 'c_cached_1', recipeId: RECIPE_ID, userId: ACCOUNT_A.id, userName: ACCOUNT_A.name, comment: 'Cached tip', createdAt: new Date().toISOString() }]
+    });
+    const cachedHtml = renderRecipeCommentsDrawer(
+      { id: RECIPE_ID, title: 'Tinola' },
+      { user: ACCOUNT_A, commentsLoadingRecipeId: RECIPE_ID, skipDrawerAnimation: true }
+    );
+    assert.ok(cachedHtml.includes('Cached tip'), 'Cached comments must render immediately');
+    assert.ok(!cachedHtml.includes('comments-loading-state'), 'Cached comments must not be replaced by loading skeleton');
+    assert.ok(cachedHtml.includes('comments-drawer-no-anim'), 'skipDrawerAnimation must add no-anim class');
+
+    // Concurrent fetchRecipeDetails deduplication
+    let fetchCount = 0;
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      fetchCount++;
+      await new Promise(r => setTimeout(r, 20));
+      return origFetch(url, opts);
+    };
+    await Promise.all([fetchRecipeDetails(RECIPE_ID), fetchRecipeDetails(RECIPE_ID)]);
+    assert.strictEqual(fetchCount, 1, 'Concurrent fetchRecipeDetails calls for same recipeId must deduplicate');
+    globalThis.fetch = origFetch;
+  }
+  console.log('  ✅ Comments drawer anti-flicker & fetch deduplication verified.');
+
   console.log('\n🎉 ALL CROSS-ACCOUNT RECIPE COMMENTS TESTS PASSED!');
 } finally {
   if (origDbUrl === undefined) {

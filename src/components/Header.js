@@ -18,7 +18,7 @@ function escapeAttr(str) {
     .replace(/"/g, '&quot;');
 }
 
-export function renderHeader(isOnline = true, appMode = 'diet', showProjectTab = true, activeDiet = 'lid', theme = 'dark', user = null, isSyncing = false, justSynced = false) {
+export function renderHeader(isOnline = true, appMode = 'diet', showProjectTab = false, activeDiet = 'lid', theme = 'dark', user = null, isSyncing = false, justSynced = false) {
   let onlineVal = isOnline;
   let modeVal = appMode;
   let showProjVal = showProjectTab;
@@ -31,7 +31,7 @@ export function renderHeader(isOnline = true, appMode = 'diet', showProjectTab =
   if (isOnline && typeof isOnline === 'object') {
     onlineVal = isOnline.isOnline !== undefined ? isOnline.isOnline : true;
     modeVal = isOnline.appMode || 'diet';
-    showProjVal = isOnline.showProjectTab !== undefined ? isOnline.showProjectTab : true;
+    showProjVal = isOnline.showProjectTab !== undefined ? isOnline.showProjectTab : false;
     dietVal = isOnline.activeDiet || 'lid';
     themeVal = isOnline.theme || 'dark';
     userVal = isOnline.user || isOnline.currentUser || null;

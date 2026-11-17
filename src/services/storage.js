@@ -129,6 +129,16 @@ export function setHouseholdMembers(count) {
   return clamped;
 }
 
+export function getShowProjectTabPreference() {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    const saved = localStorage.getItem('kosherai_show_project_tab');
+    return saved !== null ? saved === 'true' : false;
+  } catch (_) {
+    return false;
+  }
+}
+
 export function getSettings() {
   let parsed = {};
   try {
