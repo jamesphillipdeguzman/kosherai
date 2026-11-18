@@ -213,6 +213,7 @@ const state = {
   tripsWeekFilter: 'all',
   grocerySearch: '',
   mealPlanWeek: 2,
+  selectedProjectWeek: null,
   insightsPeriod: 'last_30_days',
   // 5 Independently Collapsible Insight Categories (Defaults to Collapsed)
   insightsSections: {
@@ -4155,17 +4156,44 @@ Cracked black pepper`;
   const openMealPlanModalBtn = document.querySelector('#open-mealplan-modal-btn');
   const closeMealPlanModalBtn = document.querySelector('#close-mealplan-modal-btn');
   const cancelMealPlanModalBtn = document.querySelector('#cancel-mealplan-modal-btn');
+  const planWeekSelect = document.querySelector('#plan-week');
 
-  if (openMealPlanModalBtn) openMealPlanModalBtn.addEventListener('click', () => { state.mealPlanModalOpen = true; render(); });
-  if (closeMealPlanModalBtn) closeMealPlanModalBtn.addEventListener('click', () => { state.mealPlanModalOpen = false; render(); });
-  if (cancelMealPlanModalBtn) cancelMealPlanModalBtn.addEventListener('click', () => { state.mealPlanModalOpen = false; render(); });
+  if (openMealPlanModalBtn) {
+    openMealPlanModalBtn.addEventListener('click', () => {
+      state.selectedProjectWeek = state.mealPlanWeek || 2;
+      state.mealPlanModalOpen = true;
+      render();
+    });
+  }
+  if (closeMealPlanModalBtn) {
+    closeMealPlanModalBtn.addEventListener('click', () => {
+      state.mealPlanModalOpen = false;
+      state.selectedProjectWeek = null;
+      render();
+    });
+  }
+  if (cancelMealPlanModalBtn) {
+    cancelMealPlanModalBtn.addEventListener('click', () => {
+      state.mealPlanModalOpen = false;
+      state.selectedProjectWeek = null;
+      render();
+    });
+  }
+  if (planWeekSelect) {
+    planWeekSelect.addEventListener('change', (e) => {
+      const chosen = parseInt(e.target.value, 10);
+      if (chosen >= 2 && chosen <= 6) {
+        state.selectedProjectWeek = chosen;
+      }
+    });
+  }
 
   // Meal Plan Form Submit
   const mealPlanForm = document.querySelector('#mealplan-form');
   if (mealPlanForm) {
     mealPlanForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const projectWeek = parseInt(document.querySelector('#plan-week')?.value || 2, 10);
+      const projectWeek = parseInt(document.querySelector('#plan-week')?.value || state.selectedProjectWeek || state.mealPlanWeek || 2, 10);
       const dayOfWeek = document.querySelector('#plan-day')?.value || 'Saturday';
       const mealType = document.querySelector('#plan-meal-type')?.value || 'Dinner';
       const dishName = document.querySelector('#plan-dish-name')?.value || 'Planned Meal';
@@ -4186,6 +4214,7 @@ Cracked black pepper`;
       });
 
       state.mealPlanWeek = projectWeek;
+      state.selectedProjectWeek = null;
       state.mealPlanModalOpen = false;
       render();
     });
@@ -4206,6 +4235,7 @@ Cracked black pepper`;
   document.querySelectorAll('.quick-add-recipe-to-plan-btn[data-recipe-title]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const dish = e.currentTarget.getAttribute('data-recipe-title');
+      state.selectedProjectWeek = state.mealPlanWeek || 2;
       state.mealPlanModalOpen = true;
       render();
       const input = document.querySelector('#plan-dish-name');
@@ -4217,6 +4247,7 @@ Cracked black pepper`;
   document.querySelectorAll('.quick-plan-day-btn[data-plan-day]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const day = e.currentTarget.getAttribute('data-plan-day');
+      state.selectedProjectWeek = state.mealPlanWeek || 2;
       state.mealPlanModalOpen = true;
       render();
       const daySelect = document.querySelector('#plan-day');

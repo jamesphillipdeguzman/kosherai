@@ -257,6 +257,50 @@ console.log('\n--- Section 6: Functional Preservation & Event Listener Wiring --
   console.log('  ✅ Section 6 Passed: All event handlers, modal bindings, and data attributes preserved and extended.');
 }
 
+// =========================================================================
+// Test 7: Project Week Synchronization & Quick LID Meal Chips Dark Mode
+// =========================================================================
+console.log('\n--- Section 7: Project Week Sync & Quick LID Meal Chips ---');
+{
+  const { renderCourseProjectView } = await import('../src/components/CourseProjectView.js');
+
+  // 7.1 Modal defaults to activeWeek (e.g. Week 3) when opened
+  const modalWeek3Html = renderCourseProjectView({
+    courseSubTab: 'mealplan',
+    mealPlanWeek: 3,
+    mealPlanModalOpen: true,
+    activeDiet: 'lid'
+  });
+  assert.ok(
+    /<option value="3"\s+selected/.test(modalWeek3Html),
+    'Project Week dropdown must pre-select activeWeek (Week 3)'
+  );
+
+  // 7.2 Manual selectedProjectWeek override preserved while modal is open
+  const modalWeek5Html = renderCourseProjectView({
+    courseSubTab: 'mealplan',
+    mealPlanWeek: 3,
+    selectedProjectWeek: 5,
+    mealPlanModalOpen: true,
+    activeDiet: 'lid'
+  });
+  assert.ok(
+    /<option value="5"\s+selected/.test(modalWeek5Html),
+    'Project Week dropdown must reflect manual selectedProjectWeek (Week 5)'
+  );
+
+  // 7.3 Quick LID Meal chips have dark-mode classes & CSS rules
+  const expectedChipClasses = 'bg-slate-800/90 hover:bg-slate-700 text-slate-100 border border-slate-700 hover:border-emerald-500/50 rounded-lg px-3 py-1.5 text-xs font-medium transition flex items-center gap-2';
+  assert.ok(modalWeek3Html.includes(expectedChipClasses), 'Quick LID meal chips must include dark-mode styling classes');
+  assert.ok(styleCss.includes('.quick-dish-chip'), 'style.css must define .quick-dish-chip dark-mode styles');
+
+  // 7.4 main.js syncs selectedProjectWeek on modal open, change, and close
+  assert.ok(mainJs.includes('state.selectedProjectWeek = state.mealPlanWeek || 2'), 'main.js must sync selectedProjectWeek from activeWeek on modal open');
+  assert.ok(mainJs.includes('state.selectedProjectWeek = null'), 'main.js must clear selectedProjectWeek on close/submit');
+
+  console.log('  ✅ Section 7 Passed: Project Week sync and Quick LID meal chip dark-mode styling verified.');
+}
+
 console.log('\n======================================================================');
 console.log('🎉 ALL MEAL PLAN & INVENTORY MODERNIZATION TESTS PASSED!');
 console.log('======================================================================\n');

@@ -1494,6 +1494,15 @@ function renderMealPlanModal(state) {
   const activeDiet = state.activeDiet || 'lid';
   const dietProfile = getDietProfile(activeDiet);
   const activeMeals = DIET_RECIPES[activeDiet]?.meals || lidRecipes;
+  const rawWeek = Number(state.selectedProjectWeek ?? state.mealPlanWeek ?? 2);
+  const selectedProjectWeek = rawWeek >= 2 && rawWeek <= 6 ? rawWeek : 2;
+  const weekOptions = [
+    { value: 2, label: 'Week 2 (Intervention Launch)' },
+    { value: 3, label: 'Week 3 (Evaluation)' },
+    { value: 4, label: 'Week 4 (Evaluation)' },
+    { value: 5, label: 'Week 5 (Evaluation)' },
+    { value: 6, label: 'Week 6 (Evaluation)' }
+  ];
 
   return `
     <div class="modal-overlay" id="mealplan-modal-overlay">
@@ -1508,11 +1517,9 @@ function renderMealPlanModal(state) {
             <div class="form-group">
               <label class="form-label" for="plan-week">Project Week</label>
               <select id="plan-week" class="form-input">
-                <option value="2">Week 2 (Intervention Launch)</option>
-                <option value="3">Week 3 (Evaluation)</option>
-                <option value="4">Week 4 (Evaluation)</option>
-                <option value="5">Week 5 (Evaluation)</option>
-                <option value="6">Week 6 (Evaluation)</option>
+                ${weekOptions.map(w => `
+                  <option value="${w.value}" ${selectedProjectWeek === w.value ? 'selected' : ''}>${w.label}</option>
+                `).join('')}
               </select>
             </div>
             <div class="form-group">
@@ -1550,8 +1557,13 @@ function renderMealPlanModal(state) {
             <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px;">Quick ${escapeHtml(dietProfile.shortName)} Meals:</div>
             <div style="display: flex; gap: 6px; flex-wrap: wrap;">
               ${activeMeals.slice(0, 4).map(r => `
-                <button type="button" class="quick-dish-chip" data-recipe-title="${escapeHtml(r.name || r.title)}">
-                  🟢 ${escapeHtml(r.name || r.title)}
+                <button
+                  type="button"
+                  class="quick-dish-chip bg-slate-800/90 hover:bg-slate-700 text-slate-100 border border-slate-700 hover:border-emerald-500/50 rounded-lg px-3 py-1.5 text-xs font-medium transition flex items-center gap-2"
+                  data-recipe-title="${escapeHtml(r.name || r.title)}"
+                >
+                  <span aria-hidden="true">🟢</span>
+                  <span>${escapeHtml(r.name || r.title)}</span>
                 </button>
               `).join('')}
             </div>
