@@ -78,17 +78,27 @@ export function renderBottomNav(activeTabOrOptions = 'checker', maybeAppMode = '
     ...(isAdmin ? [manageTab] : [])
   ];
 
-  const tabs = appMode === 'course' ? courseTabs : dietTabs;
+  const homeTab = {
+    id: 'home',
+    label: 'Home',
+    mode: 'home',
+    icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>`
+  };
+
+  const tabs = appMode === 'course'
+    ? courseTabs
+    : (appMode === 'home' ? [homeTab, ...dietTabs.slice(0, 4)] : dietTabs);
 
   return `
     <nav class="bottom-nav bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-t border-slate-200 dark:border-slate-800" aria-label="Main Navigation">
       ${tabs.map(tab => {
-        const isActive = activeTab === tab.id;
+        const isActive = appMode === 'home' ? tab.id === 'home' : activeTab === tab.id;
+        const targetMode = tab.mode || (appMode === 'home' ? 'diet' : appMode);
         const stateClasses = isActive
           ? 'active text-teal-600 dark:text-teal-400 font-semibold'
           : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200';
         return `
-          <button class="nav-tab-btn ${stateClasses}" data-tab="${tab.id}" data-mode="${appMode}" aria-label="${tab.label}">
+          <button class="nav-tab-btn ${stateClasses}" data-tab="${tab.id}" data-mode="${targetMode}" aria-label="${tab.label}">
             <div class="nav-icon-wrapper">
               ${tab.icon}
             </div>

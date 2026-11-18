@@ -165,35 +165,38 @@ export function renderHeader(isOnline = true, appMode = 'diet', showProjectTab =
     <div class="app-container" style="padding-top: 10px; padding-bottom: 0;">
       <!-- Centered Mode Selector Area with Dynamic Tagline -->
       <div class="header-mode-toggle-wrap flex flex-col items-center justify-center pt-1 pb-1 text-center px-4">
-        ${showProjectTab ? `
-          <!-- Segmented Pill Controls -->
-          <div class="mode-switcher-bar inline-flex items-center gap-2 p-1 rounded-full bg-slate-900/60 dark:bg-slate-900/80 border border-slate-700/60 dark:border-slate-800 shadow-sm" role="tablist" aria-label="Application View Mode">
-            <button class="mode-tab-btn ${appMode === 'diet' ? 'active' : ''} px-4 py-1.5 rounded-full text-xs font-semibold ${
-              appMode === 'diet' 
-                ? 'border border-teal-500/40 bg-teal-500/10 text-teal-300 shadow-sm' 
+        <!-- Segmented Pill Controls (Home first, then Diet Protocol, then optional 6-Week Project) -->
+        <div class="mode-switcher-bar inline-flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 p-1 rounded-full bg-slate-900/60 dark:bg-slate-900/80 border border-slate-700/60 dark:border-slate-800 shadow-sm" role="tablist" aria-label="Application View Mode">
+          <button class="mode-tab-btn ${modeVal === 'home' ? 'active' : ''} px-4 py-1.5 rounded-full text-xs font-semibold ${
+            modeVal === 'home'
+              ? 'border border-teal-500/40 bg-teal-500/10 text-teal-300 shadow-sm'
+              : 'text-slate-400 hover:text-slate-200'
+          }" data-app-mode="home" role="tab" aria-selected="${modeVal === 'home'}">
+            🏠 Home
+          </button>
+          <button class="mode-tab-btn ${modeVal === 'diet' ? 'active' : ''} px-4 py-1.5 rounded-full text-xs font-semibold ${
+            modeVal === 'diet'
+              ? 'border border-teal-500/40 bg-teal-500/10 text-teal-300 shadow-sm'
+              : 'text-slate-400 hover:text-slate-200'
+          }" data-app-mode="diet" role="tab" aria-selected="${modeVal === 'diet'}">
+            ${currentProfile.icon} ${currentProfile.shortName}
+          </button>
+          ${showProjVal ? `
+            <button class="mode-tab-btn course-mode ${modeVal === 'course' ? 'active' : ''} px-4 py-1.5 rounded-full text-xs font-medium ${
+              modeVal === 'course'
+                ? 'border border-teal-500/40 bg-teal-500/10 text-teal-300 shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
-            }" data-app-mode="diet" role="tab" aria-selected="${appMode === 'diet'}">
-              ${currentProfile.icon} ${currentProfile.shortName}
-            </button>
-            <button class="mode-tab-btn course-mode ${appMode === 'course' ? 'active' : ''} px-4 py-1.5 rounded-full text-xs font-medium ${
-              appMode === 'course' 
-                ? 'border border-teal-500/40 bg-teal-500/10 text-teal-300 shadow-sm' 
-                : 'text-slate-400 hover:text-slate-200'
-            }" data-app-mode="course" role="tab" aria-selected="${appMode === 'course'}">
+            }" data-app-mode="course" role="tab" aria-selected="${modeVal === 'course'}">
               📊 6-Week Project (Oct 31)
             </button>
-          </div>
-        ` : `
-          <div class="inline-flex items-center gap-2 p-1 rounded-full bg-slate-900/60 border border-slate-800">
-            <button class="mode-tab-btn active px-4 py-1.5 rounded-full text-xs font-semibold border border-teal-500/40 bg-teal-500/10 text-teal-300 shadow-sm" data-app-mode="diet" role="tab">
-              ${currentProfile.icon} ${currentProfile.shortName}
-            </button>
-          </div>
-        `}
+          ` : ''}
+        </div>
 
         <!-- Dynamic Tagline -->
         <p class="active-diet-tagline mt-2 text-xs text-slate-500 dark:text-slate-400 max-w-xl text-center leading-relaxed">
-          ${activeDescription}
+          ${modeVal === 'home'
+            ? 'Smart food budgeting, meal planning, and waste reduction for every Filipino household.'
+            : activeDescription}
         </p>
       </div>
 

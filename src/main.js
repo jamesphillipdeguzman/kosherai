@@ -4,6 +4,7 @@
 import './style.css';
 import './styles/admin-ingredient-gallery.css';
 import { renderHeader } from './components/Header.js';
+import { renderHomeTab } from './components/HomeTab.js';
 import { renderBottomNav } from './components/BottomNav.js';
 import { renderCheckerTab } from './components/CheckerTab.js';
 import { renderScannerTab, executeScanWorkflow, SAMPLE_LABELS, releaseScannerResources } from './components/ScannerTab.js';
@@ -152,8 +153,8 @@ const state = {
   showProjectTab: initialShowProjectTab,
   activeDiet: getActiveDiet(),
 
-  // App Mode Switcher: 'diet' (LID Clinical Protocol) | 'course' (Six-Week Sustainability Project)
-  appMode: (initialShowProjectTab ? (localStorage.getItem('kosherai_app_mode') || 'course') : 'diet'),
+  // App Mode Switcher: 'home' (Landing) | 'diet' (Dietary Protocol Companion) | 'course' (Six-Week Sustainability Project)
+  appMode: 'home',
 
   // Clinical Diet Companion Tabs
   activeTab: 'checker', // 'checker' | 'scanner' | 'cheatsheet' | 'substitutes' | 'cook'
@@ -346,7 +347,9 @@ function render() {
   );
 
   let activeContentHtml = '';
-  if (state.appMode === 'course') {
+  if (state.appMode === 'home') {
+    activeContentHtml = renderHomeTab(state);
+  } else if (state.appMode === 'course') {
     if (state.courseSubTab === 'manage' && state.isAdmin) {
       activeContentHtml = renderIngredientImageAdminModal({
         activeProtocol: state.adminImageProtocol || state.activeDiet || 'lid',
@@ -435,7 +438,7 @@ function render() {
 
     ${renderHeader(state.isOnline, state.appMode, state.showProjectTab, state.activeDiet, state.theme, null, state.isSyncing, state.justSynced)}
     
-    <main class="app-container pt-24 ${state.appMode === 'course' ? 'course-mode-container w-full max-w-7xl mx-auto px-3 sm:px-5 lg:px-6' : ''}">
+    <main class="app-container pt-24 ${state.appMode === 'course' || state.appMode === 'home' ? 'course-mode-container w-full max-w-7xl mx-auto px-3 sm:px-5 lg:px-6' : ''}">
       ${activeContentHtml}
     </main>
 
@@ -586,7 +589,12 @@ function attachEventHandlers() {
       const tab = e.currentTarget.getAttribute('data-tab');
       const mode = e.currentTarget.getAttribute('data-mode') || state.appMode;
 
-      if (mode === 'course') {
+      if (tab === 'home' || mode === 'home') {
+        state.appMode = 'home';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        render();
+      } else if (mode === 'course') {
+        state.appMode = 'course';
         state.courseSubTab = tab;
         window.scrollTo({ top: 0, behavior: 'smooth' });
         render();
@@ -594,6 +602,7 @@ function attachEventHandlers() {
           loadAdminImageData(state.adminImageProtocol || state.activeDiet || 'lid');
         }
       } else if (tab) {
+        state.appMode = 'diet';
         state.activeTab = tab;
         if (tab === 'cook') {
           state.checklistExpanded = false;
@@ -605,6 +614,53 @@ function attachEventHandlers() {
         } else if (tab === 'manage') {
           loadAdminImageData(state.adminImageProtocol || state.activeDiet || 'lid');
         }
+      }
+    });
+  });
+
+  // Home Tab Navigation (Explore Kitchen CTA, Benefit Cards, Module Links, Specialized Dietary Support)
+  document.querySelectorAll('[data-home-explore-kitchen="true"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (state.showProjectTab) {
+        state.appMode = 'course';
+        state.courseSubTab = 'dashboard';
+      } else {
+        state.appMode = 'diet';
+        state.activeTab = 'checker';
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-home-course-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetSub = btn.getAttribute('data-home-course-tab');
+      if (!targetSub) return;
+      if (!state.showProjectTab) {
+        state.showProjectTab = true;
+        try { localStorage.setItem('kosherai_show_project_tab', 'true'); } catch {}
+      }
+      state.appMode = 'course';
+      state.courseSubTab = targetSub;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-home-diet-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetTab = btn.getAttribute('data-home-diet-tab');
+      if (!targetTab) return;
+      state.appMode = 'diet';
+      state.activeTab = targetTab;
+      if (targetTab === 'cook') {
+        state.checklistExpanded = false;
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      render();
+      if (targetTab === 'scanner') {
+        refreshScanHistory();
       }
     });
   });
