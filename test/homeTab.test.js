@@ -51,11 +51,21 @@ console.log('\nTest 3: HomeTab renders Hero, 4 Benefits, 3 Steps, Feature Links,
 
   // Hero
   assert.ok(homeHtml.includes('/hero.jpg'), 'Hero must use /hero.jpg');
-  assert.ok(homeHtml.includes('/favicon.svg'), 'Hero must incorporate KosherAI logo');
-  assert.ok(homeHtml.includes('Eat Smart. Spend Wisely.'), 'Hero must display main headline');
-  assert.ok(homeHtml.includes('Waste Less.'), 'Hero must display Waste Less.');
+  assert.ok(homeHtml.includes('home-hero-bleed'), 'Hero must use full-bleed wrapper');
+  assert.ok(homeHtml.includes('home-hero-bg-img'), 'Hero must use background image class');
+  assert.ok(homeHtml.includes('home-hero-gradient'), 'Hero must include gradient overlay');
+  assert.ok(homeHtml.includes('home-hero-glow'), 'Hero must include subtle radial glow');
+  assert.ok(homeHtml.includes('SMART KITCHEN COMPANION'), 'Hero must display brand subtitle');
+  assert.ok(homeHtml.includes('Eat Smart.'), 'Hero must display line 1');
+  assert.ok(homeHtml.includes('Spend Wisely.'), 'Hero must display line 2');
+  assert.ok(homeHtml.includes('Waste Less.'), 'Hero must display line 3');
+  assert.ok(homeHtml.includes('Smarter Food Choices for Every Filipino Household.'), 'Hero must display supporting subtitle');
+  assert.ok(homeHtml.includes('Smart Food Budgeting') && homeHtml.includes('Food Waste Reduction') && homeHtml.includes('Healthy Eating'), 'Hero must display 3 feature pills');
   assert.ok(homeHtml.includes('Explore Your Kitchen'), 'Hero must include Explore Your Kitchen CTA');
-  assert.ok(homeHtml.includes('data-home-explore-kitchen="true"'), 'CTA must have navigation attribute');
+  assert.ok(homeHtml.includes('Browse Recipes'), 'Hero must include Browse Recipes CTA');
+  assert.ok(homeHtml.includes('data-home-explore-kitchen="true"'), 'Primary CTA must have navigation attribute');
+  assert.ok(homeHtml.includes('data-home-diet-tab="cook"'), 'Secondary CTA must navigate to cook recipes');
+  assert.ok(homeHtml.includes('Specialized dietary support, including low-iodine diets.'), 'Hero must include footer note');
 
   // Four Core Benefits
   for (const title of ['Smart Food Budgeting', 'Reduce Food Waste', 'Healthy Meal Planning', 'Specialized Dietary Support']) {
@@ -63,13 +73,12 @@ console.log('\nTest 3: HomeTab renders Hero, 4 Benefits, 3 Steps, Feature Links,
   }
 
   // Three Steps
-  for (const step of ['Plan', 'Track', 'Improve']) {
+  for (const step of ['01 — PLAN', '02 — TRACK', '03 — IMPROVE']) {
     assert.ok(homeHtml.includes(step), `Step "${step}" must be rendered`);
   }
 
   // Existing Features Access
   for (const feature of [
-    'Dashboard &amp; Insights',
     'Dashboard & Insights',
     'Shopping Trips & Receipts',
     'Grocery Purchases',
@@ -77,13 +86,12 @@ console.log('\nTest 3: HomeTab renders Hero, 4 Benefits, 3 Steps, Feature Links,
     'Weekly Meal Planner',
     'CSV Export & Reports'
   ]) {
-    if (feature === 'Dashboard &amp; Insights') continue;
     assert.ok(homeHtml.includes(feature), `Feature link "${feature}" must be rendered`);
   }
 
-  // Secondary Specialized Dietary Support
-  assert.ok(homeHtml.includes('low-iodine diets'), 'Secondary section must mention low-iodine diets');
-  assert.ok(homeHtml.includes('does not replace professional medical advice'), 'Must include non-medical disclaimer');
+  // Specialized Dietary Support mention
+  assert.ok(homeHtml.includes('low-iodine diets'), 'Specialized dietary card must mention low-iodine diets');
+  assert.ok(fs.existsSync(path.resolve('src/styles/home.css')), 'src/styles/home.css must exist');
 }
 console.log('  ✅ HomeTab sections and destinations verified.');
 

@@ -1,5 +1,6 @@
 /* KosherAI - Medical Aesthetic & Responsive Design System */
 @import './styles/admin-ingredient-gallery.css';
+@import './styles/home.css';
 
 :root,
 html.dark {

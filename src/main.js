@@ -438,7 +438,7 @@ function render() {
 
     ${renderHeader(state.isOnline, state.appMode, state.showProjectTab, state.activeDiet, state.theme, null, state.isSyncing, state.justSynced)}
     
-    <main class="app-container pt-24 ${state.appMode === 'course' || state.appMode === 'home' ? 'course-mode-container w-full max-w-7xl mx-auto px-3 sm:px-5 lg:px-6' : ''}">
+    <main class="app-container ${state.appMode === 'home' ? 'home-main-container' : (state.appMode === 'course' ? 'pt-24 course-mode-container w-full max-w-7xl mx-auto px-3 sm:px-5 lg:px-6' : 'pt-24')}">
       ${activeContentHtml}
     </main>
 
@@ -618,18 +618,26 @@ function attachEventHandlers() {
     });
   });
 
-  // Home Tab Navigation (Explore Kitchen CTA, Benefit Cards, Module Links, Specialized Dietary Support)
+  // Home Tab Navigation (Explore Kitchen CTA, Discover CTA, Benefit Cards, Module Links)
   document.querySelectorAll('[data-home-explore-kitchen="true"]').forEach(btn => {
     btn.addEventListener('click', () => {
-      if (state.showProjectTab) {
-        state.appMode = 'course';
-        state.courseSubTab = 'dashboard';
-      } else {
-        state.appMode = 'diet';
-        state.activeTab = 'checker';
+      if (!state.showProjectTab) {
+        state.showProjectTab = true;
+        try { localStorage.setItem('kosherai_show_project_tab', 'true'); } catch {}
       }
+      state.appMode = 'course';
+      state.courseSubTab = 'dashboard';
       window.scrollTo({ top: 0, behavior: 'smooth' });
       render();
+    });
+  });
+
+  document.querySelectorAll('[data-home-scroll-benefits="true"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById('home-benefits-section');
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     });
   });
 
