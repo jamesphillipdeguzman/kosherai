@@ -7,6 +7,8 @@ import {
   getProjectConfig,
   getProjectWeekSchedule,
   getProjectComparison,
+  formatProjectDateDisplay,
+  getWeeklyCycleLabel,
   deleteShoppingTrip
 } from '../services/courseProjectStorage.js';
 import { normalizeWeek } from '../utils/weekNormalization.js';
@@ -105,9 +107,9 @@ export default function SixWeekStudyView({
             <div>
               <div className="text-[10px] text-slate-500 uppercase font-bold">Project Start</div>
               <div className="font-mono text-xs font-extrabold text-teal-600 dark:text-teal-400">
-                {config.startDate || 'Oct 31, 2026'}
+                {formatProjectDateDisplay(config.startDate)}
               </div>
-              <div className="text-[10px] text-emerald-600 font-semibold">Sat – Fri Cycle</div>
+              <div className="text-[10px] text-emerald-600 font-semibold">{getWeeklyCycleLabel(config.startDate)}</div>
             </div>
           </div>
         </div>

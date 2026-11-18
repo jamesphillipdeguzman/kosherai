@@ -6,6 +6,8 @@ import {
   saveCourseConfig,
   getProjectWeekSchedule,
   getProjectWeekForDate,
+  formatProjectDateDisplay,
+  getWeeklyCycleLabel,
   getShoppingTrips,
   getGroceryItems,
   getExpenses,
@@ -105,8 +107,8 @@ export function renderCourseProjectView(state = {}) {
             <span class="badge-icon">📅</span>
             <div>
               <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Project Start</div>
-              <div style="font-weight: 800; font-family: var(--font-mono); color: var(--accent-cyan);">Oct 31, 2026</div>
-              <div style="font-size: 0.72rem; color: #34d399;">Sat – Fri Weekly Cycle</div>
+              <div style="font-weight: 800; font-family: var(--font-mono); color: var(--accent-cyan);">${formatProjectDateDisplay(config.startDate)}</div>
+              <div style="font-size: 0.72rem; color: #34d399;">${getWeeklyCycleLabel(config.startDate)}</div>
             </div>
           </div>
         </div>
@@ -126,7 +128,7 @@ export function renderCourseProjectView(state = {}) {
     const weekStats = comparison.weeklyData.find(d => d.weekNumber === w.weekNumber);
     const hasData = weekStats && weekStats.hasRecords;
     const weekTripsCount = trips.filter(t => {
-      const tripWeek = t.projectWeek ? Number(t.projectWeek) : getProjectWeekForDate(t.date, config.startDate);
+      const tripWeek = t.date ? getProjectWeekForDate(t.date, config.startDate) : Number(t.projectWeek || 1);
       return tripWeek === w.weekNumber;
     }).length;
     const pillClasses = isCurrent
@@ -136,7 +138,7 @@ export function renderCourseProjectView(state = {}) {
               <button type="button" class="week-step-pill study-week-card ${pillClasses} ${hasData || weekTripsCount > 0 ? 'has-data' : ''}" data-week-select="${w.weekNumber}" title="Filter study to Week ${w.weekNumber}">
                 <div class="week-pill-num">W${w.weekNumber}</div>
                 <div class="week-pill-type">${w.isBaseline ? 'Baseline' : (w.weekNumber === 2 ? 'Intervene' : 'Evaluate')}</div>
-                <div class="week-pill-dates">${w.startDate.slice(5)} • ${weekTripsCount} ${weekTripsCount === 1 ? 'trip' : 'trips'}</div>
+                <div class="week-pill-dates">${w.shortRange || w.startDate.slice(5)} • ${weekTripsCount} ${weekTripsCount === 1 ? 'trip' : 'trips'}</div>
               </button>
             `;
   }).join('')}
@@ -230,6 +232,7 @@ function renderSubTabContent(subTab, state, comparison, config) {
 // =========================================================================
 function renderDashboardTab(comparison, config, state) {
   const { weeklyData, totals, baselineExpense, baselineWasteKg } = comparison;
+  const schedule = getProjectWeekSchedule(config.startDate);
   const week1 = weeklyData[0];
 
   return `
@@ -256,7 +259,7 @@ function renderDashboardTab(comparison, config, state) {
         <div class="kpi-card baseline-card">
           <div class="kpi-card-header">
             <span class="kpi-label">Week 1 Baseline Expense</span>
-            <span class="kpi-tag">Oct 31 – Nov 6</span>
+            <span class="kpi-tag">${schedule[0]?.shortRange || ''}</span>
           </div>
           <div class="kpi-value">₱${formatNumber(baselineExpense)}</div>
           <div class="kpi-subtext">
@@ -348,7 +351,7 @@ function renderDashboardTab(comparison, config, state) {
                       <div class="sub-label ${w.isBaseline ? 'text-amber' : 'text-cyan'}">${w.type}</div>
                     </td>
                     <td style="font-family: var(--font-mono); font-size: 0.8rem;">
-                      ${w.startDate.slice(5)} – ${w.endDate.slice(5)}
+                      ${schedule[w.weekNumber - 1]?.shortRange || `${w.startDate.slice(5)} – ${w.endDate.slice(5)}`}
                     </td>
                     <td style="font-family: var(--font-mono);">
                       ₱${formatNumber(w.targetBudget)}
@@ -1615,7 +1618,7 @@ function renderProjectConfigModal(config) {
 
         <form id="project-config-form">
           <div class="form-group">
-            <label class="form-label" for="cfg-start-date">Project Start Date (Saturday)</label>
+            <label class="form-label" for="cfg-start-date">Project Start Date</label>
             <input type="date" id="cfg-start-date" class="form-input" value="${config.startDate}" required />
             <div class="form-help">Baseline Week 1 starts on this date (default: Oct 31, 2026).</div>
           </div>

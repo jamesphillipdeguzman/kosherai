@@ -580,7 +580,9 @@ export function renderShoppingTripsView(state = {}) {
   const weekTrips = selectedWeek === 'all'
     ? allTrips
     : allTrips.filter(t => {
-        const tripWeek = t.projectWeek ? Number(t.projectWeek) : (typeof getProjectWeekForDate === 'function' ? getProjectWeekForDate(t.date, config.startDate) : 1);
+        const tripWeek = t.date && typeof getProjectWeekForDate === 'function'
+          ? getProjectWeekForDate(t.date, config.startDate)
+          : Number(t.projectWeek || 1);
         return tripWeek === selectedWeek;
       });
 

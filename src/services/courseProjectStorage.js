@@ -260,30 +260,56 @@ export function formatDateYMD(d) {
   return `${year}-${month}-${day}`;
 }
 
+export function parseLocalDateYMD(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const clean = dateStr.trim().split('T')[0];
+  const parts = clean.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  const [year, month, day] = parts;
+  const d = new Date(year, month - 1, day);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+export function formatShortDate(d) {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[d.getMonth()]} ${d.getDate()}`;
+}
+
+export function formatProjectDateDisplay(dateStr = PROJECT_CONFIG.START_DATE) {
+  const d = parseLocalDateYMD(dateStr) || parseLocalDateYMD(PROJECT_CONFIG.START_DATE);
+  if (!d) return String(dateStr || '');
+  return `${formatShortDate(d)}, ${d.getFullYear()}`;
+}
+
+export function getWeeklyCycleLabel(startDateStr = PROJECT_CONFIG.START_DATE) {
+  const start = parseLocalDateYMD(startDateStr) || parseLocalDateYMD(PROJECT_CONFIG.START_DATE);
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return `${days[start.getDay()]} – ${days[end.getDay()]} Weekly Cycle`;
+}
+
 /**
- * Returns date bounds for all 6 project weeks starting Saturday, Oct 31, 2026
+ * Returns date bounds for all 6 project weeks starting from startDateStr
  */
 export function getProjectWeekSchedule(startDateStr = PROJECT_CONFIG.START_DATE) {
   const schedule = [];
-  const parts = startDateStr.split('-').map(Number);
-  const start = new Date(parts[0], parts[1] - 1, parts[2]);
+  const start = parseLocalDateYMD(startDateStr) || parseLocalDateYMD(PROJECT_CONFIG.START_DATE);
 
   for (let w = 1; w <= PROJECT_CONFIG.TOTAL_WEEKS; w++) {
-    const weekStart = new Date(start);
-    weekStart.setDate(start.getDate() + (w - 1) * 7);
-
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
+    const weekStart = new Date(start.getFullYear(), start.getMonth(), start.getDate() + (w - 1) * 7);
+    const weekEnd = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6);
 
     const startYmd = formatDateYMD(weekStart);
     const endYmd = formatDateYMD(weekEnd);
+    const shortRange = `${formatShortDate(weekStart)} – ${formatShortDate(weekEnd)}`;
 
     schedule.push({
       weekNumber: w,
       type: w === 1 ? 'Baseline' : (w === 2 ? 'Intervention Launch' : 'Evaluation'),
       startDate: startYmd,
       endDate: endYmd,
-      label: `Week ${w} (${formatShortDate(weekStart)} – ${formatShortDate(weekEnd)})`,
+      shortRange,
+      label: `Week ${w} (${shortRange})`,
       isBaseline: w === 1,
       isIntervention: w >= 2
     });
@@ -292,23 +318,17 @@ export function getProjectWeekSchedule(startDateStr = PROJECT_CONFIG.START_DATE)
   return schedule;
 }
 
-function formatShortDate(d) {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[d.getMonth()]} ${d.getDate()}`;
-}
-
 /**
  * Determines project week number (1 to 6) based on purchase or event date
  */
 export function getProjectWeekForDate(dateStr, startDateStr = PROJECT_CONFIG.START_DATE) {
   if (!dateStr) return 1;
-  const targetParts = dateStr.split('-').map(Number);
-  const startParts = startDateStr.split('-').map(Number);
-  const target = new Date(targetParts[0], targetParts[1] - 1, targetParts[2]);
-  const start = new Date(startParts[0], startParts[1] - 1, startParts[2]);
+  const target = parseLocalDateYMD(dateStr);
+  const start = parseLocalDateYMD(startDateStr) || parseLocalDateYMD(PROJECT_CONFIG.START_DATE);
+  if (!target || !start) return 1;
 
   const diffTime = target.getTime() - start.getTime();
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) return 1; // Prior to start date treated as Week 1 baseline
   const week = Math.floor(diffDays / 7) + 1;
@@ -350,6 +370,29 @@ export function saveCourseConfig(newConfig) {
     const current = getCourseConfig();
     const updated = { ...current, ...newConfig };
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(updated));
+
+    // When startDate changes, recalculate stored projectWeek on existing records so all views stay synchronized
+    if (newConfig?.startDate && newConfig.startDate !== current.startDate) {
+      const recalcList = (key, dateField = 'date') => {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return;
+          const arr = JSON.parse(raw);
+          if (!Array.isArray(arr)) return;
+          const next = arr.map(item => {
+            const d = item?.[dateField] || item?.purchaseDate || item?.date;
+            if (!d) return item;
+            return { ...item, projectWeek: getProjectWeekForDate(d, updated.startDate) };
+          });
+          localStorage.setItem(key, JSON.stringify(next));
+        } catch (_) {}
+      };
+      recalcList(STORAGE_KEYS.TRIPS, 'date');
+      recalcList(STORAGE_KEYS.EXPENSES, 'date');
+      recalcList(STORAGE_KEYS.FOOD_WASTE, 'date');
+      recalcList(STORAGE_KEYS.GROCERY_ITEMS, 'purchaseDate');
+    }
+
     return updated;
   } catch (e) {
     console.error('Failed to save course config:', e);
@@ -2414,12 +2457,18 @@ export function getSixWeekComparison() {
 
   const baselineBudget = Number(config.baselineBudget || PROJECT_CONFIG.DEFAULT_BASELINE_BUDGET);
 
-  // Group by week 1 to 6
+  // Group by week 1 to 6 using configured startDate for dated records
+  const resolveRecordWeek = (rec) => {
+    const d = rec?.date || rec?.purchaseDate;
+    if (d) return getProjectWeekForDate(d, config.startDate);
+    return Number(rec?.projectWeek || 1);
+  };
+
   const weeklyData = schedule.map(weekInfo => {
     const w = weekInfo.weekNumber;
-    const weekExpenses = expenses.filter(e => Number(e.projectWeek) === w);
-    const weekTrips = trips.filter(t => Number(t.projectWeek) === w);
-    const weekWaste = wasteRecords.filter(r => Number(r.projectWeek) === w);
+    const weekExpenses = expenses.filter(e => resolveRecordWeek(e) === w);
+    const weekTrips = trips.filter(t => resolveRecordWeek(t) === w);
+    const weekWaste = wasteRecords.filter(r => resolveRecordWeek(r) === w);
     const weekPlans = mealPlans.filter(p => Number(p.projectWeek) === w);
 
     const totalExpense = weekExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
