@@ -185,13 +185,26 @@ export function renderHeader(isOnline = true, appMode = 'diet', showProjectTab =
               📊 6-Week Project (Oct 31)
             </button>
           ` : ''}
+          <button class="mode-tab-btn ${modeVal === 'guide' ? 'active' : ''} inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold ${
+            modeVal === 'guide'
+              ? 'border border-teal-500/40 bg-teal-500/10 text-teal-300 shadow-sm'
+              : 'text-slate-400 hover:text-slate-200'
+          }" data-app-mode="guide" role="tab" aria-selected="${modeVal === 'guide'}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+            </svg>
+            <span>Tool Guide</span>
+          </button>
         </div>
 
         <!-- Dynamic Tagline -->
         <p class="active-diet-tagline mt-2 text-xs text-slate-500 dark:text-slate-400 max-w-xl text-center leading-relaxed">
           ${modeVal === 'home'
             ? 'Smart food budgeting, meal planning, and waste reduction for every Filipino household.'
-            : activeDescription}
+            : (modeVal === 'guide'
+              ? 'Interactive documentation of KosherAI data collection, processing workflow, and live analytics.'
+              : activeDescription)}
         </p>
       </div>
 

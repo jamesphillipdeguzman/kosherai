@@ -1,0 +1,280 @@
+/* KosherAI Tool Guide Documentation & Workflow Design System */
+
+.tool-guide-page {
+  --guide-bg: #071018;
+  --guide-card-bg: #0D1B26;
+  --guide-subtle-bg: #0a1620;
+  --guide-border: rgba(30, 41, 59, 0.85);
+  --guide-heading: #ffffff;
+  --guide-body: #cbd5e1;
+  --guide-muted: #94a3b8;
+  --guide-accent: #34d399;
+  --guide-accent-bg: rgba(16, 185, 129, 0.12);
+  --guide-accent-border: rgba(52, 211, 153, 0.3);
+  max-width: 80rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: 12px 16px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  color: var(--guide-body);
+}
+
+@media (min-width: 640px) {
+  .tool-guide-page {
+    padding: 16px 24px 72px;
+  }
+}
+
+html.light .tool-guide-page {
+  --guide-bg: #f8fafc;
+  --guide-card-bg: #ffffff;
+  --guide-subtle-bg: #f1f5f9;
+  --guide-border: #e2e8f0;
+  --guide-heading: #0f172a;
+  --guide-body: #475569;
+  --guide-muted: #64748b;
+  --guide-accent: #059669;
+  --guide-accent-bg: #ecfdf5;
+  --guide-accent-border: #a7f3d0;
+}
+
+.guide-hero-card,
+.guide-section-card {
+  background-color: var(--guide-card-bg);
+  border: 1px solid var(--guide-border);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+@media (min-width: 768px) {
+  .guide-hero-card,
+  .guide-section-card {
+    padding: 32px;
+  }
+}
+
+.guide-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  background-color: var(--guide-accent-bg);
+  border: 1px solid var(--guide-accent-border);
+  color: var(--guide-accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.guide-title {
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--guide-heading);
+  margin: 12px 0 8px;
+}
+
+@media (min-width: 640px) {
+  .guide-title {
+    font-size: 2rem;
+  }
+}
+
+.guide-section-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--guide-heading);
+  margin: 0 0 6px;
+}
+
+.guide-lead {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--guide-body);
+  margin: 0;
+}
+
+.guide-nav {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.guide-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.guide-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 9999px;
+  background-color: var(--guide-card-bg);
+  border: 1px solid var(--guide-border);
+  color: var(--guide-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.guide-nav-link:hover {
+  border-color: var(--guide-accent);
+  color: var(--guide-accent);
+}
+
+/* Grids */
+.guide-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .guide-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.guide-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .guide-grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .guide-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.guide-subcard {
+  background-color: var(--guide-subtle-bg);
+  border: 1px solid var(--guide-border);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.guide-subcard h3 {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--guide-heading);
+  margin: 0;
+}
+
+.guide-subcard p {
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: var(--guide-body);
+  margin: 0;
+}
+
+.guide-code-tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background-color: var(--guide-accent-bg);
+  color: var(--guide-accent);
+  border: 1px solid var(--guide-accent-border);
+}
+
+/* Data Processing Flowchart */
+.guide-flowchart {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+@media (min-width: 768px) {
+  .guide-flowchart {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .guide-flowchart {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.guide-flow-node {
+  position: relative;
+  background-color: var(--guide-subtle-bg);
+  border: 1px solid var(--guide-border);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.guide-flow-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--guide-accent);
+}
+
+.guide-flow-node h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--guide-heading);
+  margin: 0;
+}
+
+.guide-flow-node p {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--guide-body);
+  margin: 0;
+}
+
+.guide-feature-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 7px 12px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background-color: var(--guide-accent-bg);
+  color: var(--guide-accent);
+  border: 1px solid var(--guide-accent-border);
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.guide-feature-btn:hover {
+  transform: translateY(-1px);
+  opacity: 0.92;
+}

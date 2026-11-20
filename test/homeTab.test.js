@@ -21,7 +21,8 @@ console.log('Test 1: Header renders Home as first top-level tab');
 
   const htmlProjectOn = renderHeader(true, 'home', true, 'lid', 'dark');
   const modeMatches = [...htmlProjectOn.matchAll(/data-app-mode="([^"]+)"/g)].map(m => m[1]);
-  assert.deepStrictEqual(modeMatches, ['home', 'diet', 'course'], 'Mode tabs order must be home, diet, course');
+  assert.deepStrictEqual(modeMatches, ['home', 'diet', 'course', 'guide'], 'Mode tabs order must be home, diet, course, guide');
+  assert.ok(htmlProjectOn.includes('Tool Guide'), 'Header must display Tool Guide as 4th primary tab');
 }
 console.log('  ✅ Header Home tab placement and order verified.');
 
@@ -113,5 +114,32 @@ console.log('\nTest 4: main.js defaults appMode to home and renders HomeTab');
   assert.ok(fs.existsSync(path.resolve('public/hero.jpg')), 'public/hero.jpg must exist');
 }
 console.log('  ✅ main.js default Home landing verified.');
+
+// ----------------------------------------------------
+// Test 5: ToolGuideTab Documentation, Flowchart & Live Visualizations
+// ----------------------------------------------------
+console.log('\nTest 5: ToolGuideTab renders About, Collection, Workflow, Visualizations & Feature Guides');
+{
+  if (typeof globalThis.localStorage === 'undefined') {
+    const store = new Map();
+    globalThis.localStorage = {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => store.set(k, String(v)),
+      removeItem: (k) => store.delete(k),
+      clear: () => store.clear()
+    };
+  }
+  const { renderToolGuideTab } = await import('../src/components/ToolGuideTab.js');
+  const guideHtml = renderToolGuideTab({});
+  assert.ok(guideHtml.includes('A. About KosherAI'), 'Must include About section');
+  assert.ok(guideHtml.includes('B. Data Collection Process'), 'Must include Data Collection section');
+  assert.ok(guideHtml.includes('C. Data Processing Workflow'), 'Must include Processing Workflow section');
+  assert.ok(guideHtml.includes('D. Data Visualization'), 'Must include Data Visualization section');
+  assert.ok(guideHtml.includes('E. Feature Guides'), 'Must include Feature Guides section');
+  assert.ok(guideHtml.includes('User Input') && guideHtml.includes('User Insights'), 'Flowchart stages must be present');
+  assert.ok(guideHtml.includes('Weekly Expenses vs.'), 'Live bar chart visualization must be rendered');
+  assert.ok(guideHtml.includes('data-home-course-tab="scan"'), 'Feature guide must link to Scan Food');
+}
+console.log('  ✅ ToolGuideTab verified.');
 
 console.log('\n🎉 ALL HOME TAB TESTS PASSED!');

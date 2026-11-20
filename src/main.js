@@ -5,6 +5,7 @@ import './style.css';
 import './styles/admin-ingredient-gallery.css';
 import { renderHeader } from './components/Header.js';
 import { renderHomeTab } from './components/HomeTab.js';
+import { renderToolGuideTab } from './components/ToolGuideTab.js';
 import { renderBottomNav } from './components/BottomNav.js';
 import { renderFooter } from './components/Footer.js';
 import { renderCheckerTab } from './components/CheckerTab.js';
@@ -353,6 +354,8 @@ function render() {
   let activeContentHtml = '';
   if (state.appMode === 'home') {
     activeContentHtml = renderHomeTab(state);
+  } else if (state.appMode === 'guide') {
+    activeContentHtml = renderToolGuideTab(state);
   } else if (state.appMode === 'course') {
     if (state.courseSubTab === 'manage' && state.isAdmin) {
       activeContentHtml = renderIngredientImageAdminModal({
@@ -442,7 +445,7 @@ function render() {
 
     ${renderHeader(state.isOnline, state.appMode, state.showProjectTab, state.activeDiet, state.theme, null, state.isSyncing, state.justSynced)}
     
-    <main class="app-container ${state.appMode === 'home' ? 'home-main-container' : (state.appMode === 'course' ? 'pt-24 course-mode-container w-full max-w-7xl mx-auto px-3 sm:px-5 lg:px-6' : 'pt-24')}">
+    <main class="app-container ${state.appMode === 'home' || state.appMode === 'guide' ? 'home-main-container' : (state.appMode === 'course' ? 'pt-24 course-mode-container w-full max-w-7xl mx-auto px-3 sm:px-5 lg:px-6' : 'pt-24')}">
       ${activeContentHtml}
     </main>
 
