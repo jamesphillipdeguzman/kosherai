@@ -67,6 +67,7 @@ import {
   setHouseholdMembers,
   getScanHistory,
   saveScanResult,
+  generateScanId,
   addScanToHistory,
   clearScanHistory,
   getLocalScanHistory,
@@ -1844,6 +1845,7 @@ function attachEventHandlers() {
       state.imagePreviewUrl = null;
       state.lastScannedFile = null;
       state.lastScannedDataUrl = null;
+      state.activeScanId = null;
       state.scanText = '';
       clearTempScannerImage().catch(() => { });
       render();
@@ -4637,9 +4639,20 @@ Cracked black pepper`;
 }
 
 // Helper: Processes scanned/entered text with Gemini AI (if key present) or offline rule engine
+let processScanTextInFlight = false;
+
 async function processScanText(text, title = 'Food Label', isReceipt = false) {
   if (!text || !text.trim()) return;
-  const settings = getSettings();
+  if (processScanTextInFlight || state.aiLoading) {
+    console.warn('[Scanner] Duplicate manual/preset scan submission ignored.');
+    return;
+  }
+  processScanTextInFlight = true;
+  state.aiLoading = true;
+  const scanId = generateScanId();
+
+  try {
+    const settings = getSettings();
   console.log(`[Scanner] Gemini Key present: ${Boolean(settings.geminiApiKey)}`);
   console.log(`[Scanner] Cloudinary configured: ${Boolean(settings.cloudinaryCloudName && settings.cloudinaryPreset)}`);
 
@@ -4685,6 +4698,7 @@ async function processScanText(text, title = 'Food Label', isReceipt = false) {
     };
 
     state.scanHistory = saveScanResult({
+      id: scanId,
       title: resolvedTitle || `${storeName} Receipt Audit`,
       productName: resolvedTitle || `${storeName} Receipt Audit`,
       name: resolvedTitle || `${storeName} Receipt Audit`,
@@ -4770,6 +4784,7 @@ async function processScanText(text, title = 'Food Label', isReceipt = false) {
   const reason = state.aiAnalysis?.reason || analysis.reason || (analysis.reasons && analysis.reasons[0]) || '';
 
   state.scanHistory = saveScanResult({
+    id: scanId,
     title: resolvedTitle,
     productName: resolvedTitle,
     name: resolvedTitle,
@@ -4785,6 +4800,10 @@ async function processScanText(text, title = 'Food Label', isReceipt = false) {
 
   render();
   refreshScanHistory();
+  } finally {
+    processScanTextInFlight = false;
+    state.aiLoading = false;
+  }
 }
 
 /**

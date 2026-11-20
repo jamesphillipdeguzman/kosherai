@@ -227,43 +227,99 @@ export function saveLocalHistory(records) {
   }
 }
 
+const inFlightScanSyncs = new Set();
+
+/**
+ * Generates a single deterministic UUID (with fallback) for a new scan submission.
+ */
+export function generateScanId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `scan_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Merges two representations of the same scan ID into the most complete record.
+ */
+function mergeSameIdScan(primary, secondary) {
+  if (!primary) return secondary;
+  if (!secondary) return primary;
+  const pickRemoteHttpUrl = (a, b) => {
+    const aHttp = typeof a === 'string' && /^https?:\/\//i.test(a) ? a : null;
+    const bHttp = typeof b === 'string' && /^https?:\/\//i.test(b) ? b : null;
+    return aHttp || bHttp || a || b || null;
+  };
+  return {
+    ...secondary,
+    ...primary,
+    id: primary.id || secondary.id,
+    title: primary.title && primary.title !== 'Scanned Food Label'
+      ? primary.title
+      : (secondary.title || primary.title || 'Scanned Food Label'),
+    reason: primary.reason || secondary.reason || '',
+    imageUrl: pickRemoteHttpUrl(primary.imageUrl, secondary.imageUrl),
+    cloudinaryUrl: pickRemoteHttpUrl(primary.cloudinaryUrl, secondary.cloudinaryUrl),
+    flaggedIngredients: Array.isArray(primary.flaggedIngredients) && primary.flaggedIngredients.length > 0
+      ? primary.flaggedIngredients
+      : (Array.isArray(secondary.flaggedIngredients) ? secondary.flaggedIngredients : []),
+    createdAt: primary.createdAt || secondary.createdAt || primary.timestamp || secondary.timestamp,
+    timestamp: primary.timestamp || secondary.timestamp || primary.createdAt || secondary.createdAt,
+    synced: primary.synced === true || secondary.synced === true
+  };
+}
+
+/**
+ * Conservatively deduplicates scan records by canonical ID.
+ * Preserves distinct legitimate scans even if timestamps or labels happen to match.
+ */
+export function cleanupDuplicateScans(records = []) {
+  if (!Array.isArray(records)) return [];
+  const byId = new Map();
+  for (const rec of records) {
+    if (!rec || !rec.id) continue;
+    const existing = byId.get(rec.id);
+    byId.set(rec.id, existing ? mergeSameIdScan(existing, rec) : rec);
+  }
+  return Array.from(byId.values());
+}
+
 /**
  * Safely reconciles remote Neon scan records with local scan history.
+ * - Deduplicates strictly by canonical scan ID
  * - Never overwrites newer local modifications or unsynced records
  * - Preserves user-corrected titles, locally enriched images, and flagged ingredients
  * - Retains pending offline scans (synced: false)
  * - Returns merged list sorted newest first
  */
 export function reconcileScanRecords(remoteScans, localScans = []) {
-  if (!Array.isArray(remoteScans)) return Array.isArray(localScans) ? localScans : [];
-  const localList = Array.isArray(localScans) ? localScans : [];
-  const localMap = new Map(localList.map(s => [s?.id, s]));
-  const remoteIds = new Set();
-  const merged = [];
+  if (!Array.isArray(remoteScans)) return cleanupDuplicateScans(Array.isArray(localScans) ? localScans : []);
+  const localList = cleanupDuplicateScans(Array.isArray(localScans) ? localScans : []);
+  const localMap = new Map(localList.map(s => [s.id, s]));
+  const remoteMap = new Map();
 
   for (const rem of remoteScans) {
     if (!rem || !rem.id) continue;
-    remoteIds.add(rem.id);
-    const loc = localMap.get(rem.id);
+    const prev = remoteMap.get(rem.id);
+    remoteMap.set(rem.id, prev ? mergeSameIdScan(prev, rem) : rem);
+  }
+
+  const merged = [];
+  for (const [id, rem] of remoteMap.entries()) {
+    const loc = localMap.get(id);
     if (loc && loc.synced === false) {
-      // Local scan is still pending upload or has local modifications
-      merged.push(loc);
+      merged.push(mergeSameIdScan(loc, rem));
+      merged[merged.length - 1].synced = false;
     } else {
-      merged.push({
-        ...rem,
-        synced: true,
-        imageUrl: rem.imageUrl || loc?.imageUrl || null,
-        title: loc?.title && loc?.title !== 'Scanned Food Label' ? loc.title : (rem.title || 'Scanned Food Label'),
-        flaggedIngredients: Array.isArray(rem.flaggedIngredients) && rem.flaggedIngredients.length > 0
-          ? rem.flaggedIngredients
-          : (Array.isArray(loc?.flaggedIngredients) ? loc.flaggedIngredients : [])
-      });
+      const combined = mergeSameIdScan(rem, loc);
+      combined.synced = true;
+      merged.push(combined);
     }
   }
 
   // Preserve all local scans that are not yet in remote!
   for (const loc of localList) {
-    if (loc && loc.id && !remoteIds.has(loc.id)) {
+    if (loc && loc.id && !remoteMap.has(loc.id)) {
       merged.push(loc);
     }
   }
@@ -342,7 +398,7 @@ export function saveScanResult(scanRecord) {
     const title = scanRecord.title || (scanRecord.rawText ? scanRecord.rawText.slice(0, 45) + '...' : 'Scanned Food Label');
 
     const record = {
-      id: scanRecord.id || ('scan_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
+      id: scanRecord.id || generateScanId(),
       title,
       timestamp,
       createdAt: timestamp,
@@ -353,6 +409,7 @@ export function saveScanResult(scanRecord) {
       synced: false,
       ...scanRecord
     };
+    record.id = scanRecord.id || record.id;
     record.title = title;
     record.timestamp = timestamp;
     record.createdAt = timestamp;
@@ -361,13 +418,14 @@ export function saveScanResult(scanRecord) {
     record.imageUrl = imageUrl;
     record.synced = scanRecord.synced === true;
 
-    // 1. Save to localStorage as offline backup (keep last 50 scans)
-    const updated = [record, ...history.filter(item => item.id !== record.id).slice(0, 49)];
+    // 1. Save to localStorage as offline backup (deduplicated by canonical ID, keep last 50 scans)
+    const updated = cleanupDuplicateScans([record, ...history.filter(item => item.id !== record.id)]).slice(0, 50);
     saveLocalHistory(updated);
 
-    // 2. Concurrently send POST /api/scans when online
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    if (isOnline) {
+    // 2. Concurrently send idempotent POST /api/scans when online (guarded against duplicate concurrent POSTs)
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine !== undefined ? navigator.onLine : true;
+    if (isOnline && !inFlightScanSyncs.has(record.id)) {
+      inFlightScanSyncs.add(record.id);
       const payload = {
         id: record.id,
         title: record.title,
@@ -402,6 +460,9 @@ export function saveScanResult(scanRecord) {
         })
         .catch((err) => {
           console.warn('[Storage] Remote POST /api/scans network error (saved locally):', err);
+        })
+        .finally(() => {
+          inFlightScanSyncs.delete(record.id);
         });
     }
 
@@ -413,21 +474,73 @@ export function saveScanResult(scanRecord) {
 }
 
 /**
+ * Updates an existing scan record with its Cloudinary remote URL without creating a duplicate entry.
+ */
+export function updateScanRecordImage(scanId, remoteUrl) {
+  if (!scanId || !remoteUrl) return getLocalScanHistory();
+  const history = getLocalScanHistory();
+  let targetRecord = null;
+  const updated = history.map(item => {
+    if (item && item.id === scanId) {
+      targetRecord = {
+        ...item,
+        imageUrl: remoteUrl,
+        cloudinaryUrl: remoteUrl
+      };
+      return targetRecord;
+    }
+    return item;
+  });
+  saveLocalHistory(updated);
+
+  const isOnline = typeof navigator !== 'undefined' && navigator.onLine !== undefined ? navigator.onLine : true;
+  if (targetRecord && isOnline && typeof fetch === 'function' && !inFlightScanSyncs.has(scanId)) {
+    inFlightScanSyncs.add(scanId);
+    fetch('/api/scans', {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'include',
+      body: JSON.stringify({
+        id: targetRecord.id,
+        title: targetRecord.title || 'Scanned Food Label',
+        status: targetRecord.status || 'SAFE',
+        reason: targetRecord.reason || '',
+        flaggedIngredients: Array.isArray(targetRecord.flaggedIngredients) ? targetRecord.flaggedIngredients : [],
+        imageUrl: remoteUrl,
+        createdAt: targetRecord.createdAt || targetRecord.timestamp
+      })
+    })
+      .then((res) => {
+        if (res && res.ok) {
+          const latest = getLocalScanHistory().map(s => s.id === scanId ? { ...s, synced: true } : s);
+          saveLocalHistory(latest);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        inFlightScanSyncs.delete(scanId);
+      });
+  }
+  return updated;
+}
+
+/**
  * Auto-retries synchronization of pending offline scan records to Neon PostgreSQL
  */
 export async function syncPendingScans() {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return { syncedCount: 0, pendingCount: 0 };
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return { syncedCount: 0, pendingCount: 0 };
   if (typeof fetch !== 'function') return { syncedCount: 0, pendingCount: 0 };
 
   try {
-    const history = getLocalScanHistory();
-    const unsynced = history.filter(s => s && s.synced === false);
+    const history = cleanupDuplicateScans(getLocalScanHistory());
+    const unsynced = history.filter(s => s && s.synced === false && !inFlightScanSyncs.has(s.id));
     if (unsynced.length === 0) return { syncedCount: 0, pendingCount: 0 };
 
     let syncedCount = 0;
     const syncedIds = new Set();
 
     for (const scan of unsynced) {
+      inFlightScanSyncs.add(scan.id);
       try {
         let imageUrl = scan.imageUrl || null;
         if (imageUrl && (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:'))) {
@@ -437,6 +550,7 @@ export async function syncPendingScans() {
             if (cUrl && typeof cUrl === 'string' && cUrl.startsWith('http')) {
               imageUrl = cUrl;
               scan.imageUrl = cUrl;
+              scan.cloudinaryUrl = cUrl;
             }
           } catch (_) {}
         }
@@ -467,6 +581,8 @@ export async function syncPendingScans() {
         }
       } catch (err) {
         console.warn(`[Sync] Failed to sync scan ${scan.id}:`, err);
+      } finally {
+        inFlightScanSyncs.delete(scan.id);
       }
     }
 

@@ -191,7 +191,7 @@ console.log('🧪 Starting KosherAI Gemini 3.8 & Mobile Scanner Test Suite...\n'
   assert.ok(tabSrc.includes('type="button" id="toggle-receipt-mode"'), 'Receipt toggle must have type="button"');
   assert.ok(tabSrc.includes('type="button" id="toggle-text-mode"'), 'Text toggle must have type="button"');
   assert.ok(tabSrc.includes('type="button" id="rescan-btn"'), 'Rescan button must have type="button"');
-  assert.ok(tabSrc.includes('if (state.aiLoading)'), 'Duplicate submission guard must exist');
+  assert.ok(tabSrc.includes('if (isSubmittingScan || state.aiLoading)'), 'Duplicate submission guard must exist');
 
   const blob = dataUrlToBlob('data:image/jpeg;base64,' + Buffer.from('ok').toString('base64'));
   assert.ok(blob instanceof Blob);

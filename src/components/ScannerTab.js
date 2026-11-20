@@ -20,9 +20,10 @@ import {
   clearTempScannerImage
 } from '../services/scannerPersistence.js';
 import { analyzeIngredients } from '../services/ruleEngine.js';
-import { getSettings, getScanHistory, saveScanResult, clearScanHistory, isScannerEnabled, setScannerEnabled } from '../services/storage.js';
+import { getSettings, getScanHistory, saveScanResult, clearScanHistory, isScannerEnabled, setScannerEnabled, generateScanId, updateScanRecordImage } from '../services/storage.js';
 
 let activeScanAbortController = null;
+let isSubmittingScan = false;
 
 /**
  * Cancels an in-flight scan request and cleanly resets loading state.
@@ -34,6 +35,7 @@ export function cancelActiveScan(state, render = () => {}) {
     } catch (_) {}
     activeScanAbortController = null;
   }
+  isSubmittingScan = false;
   if (state) {
     state.aiLoading = false;
     state.ocrStatus = null;
@@ -183,10 +185,14 @@ export async function executeScanWorkflow(fileOrDataUrl, context = {}) {
   } = context;
 
   if (!fileOrDataUrl || !state) return;
-  if (state.aiLoading) {
+  if (isSubmittingScan || state.aiLoading) {
     console.warn('[ScannerPerf] Duplicate scan submission ignored while scan is already in progress.');
     return;
   }
+  isSubmittingScan = true;
+
+  const scanId = state.activeScanId || generateScanId();
+  state.activeScanId = scanId;
 
   const nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
   const tWorkflowStart = nowMs();
@@ -266,6 +272,7 @@ export async function executeScanWorkflow(fileOrDataUrl, context = {}) {
               state.cloudinaryUrl = url;
               if (state.scanAnalysis) state.scanAnalysis.cloudinaryUrl = url;
               if (state.scannedReceiptAudit) state.scannedReceiptAudit.cloudinaryUrl = url;
+              state.scanHistory = updateScanRecordImage(scanId, url);
               render();
             }
             return url;
@@ -332,7 +339,7 @@ export async function executeScanWorkflow(fileOrDataUrl, context = {}) {
 
       const tDbStart = nowMs();
       state.scanHistory = saveScanResult({
-        id: 'scan_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        id: scanId,
         title: `${receiptAudit.storeName || 'Supermarket'} Receipt Audit`,
         rawText: `Receipt: ${receiptAudit.storeName || 'Supermarket'} (${itemsCount} items)`,
         status: overallStatus,
@@ -438,7 +445,7 @@ export async function executeScanWorkflow(fileOrDataUrl, context = {}) {
     const imageUrl = state.cloudinaryUrl || state.imagePreviewUrl || null;
 
     state.scanHistory = saveScanResult({
-      id: 'scan_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      id: scanId,
       title: scanAnalysis.productName || 'Scanned Food Item',
       rawText: extractedText || scanAnalysis.productName || 'Food Image',
       status: scanAnalysis.status,
@@ -454,6 +461,7 @@ export async function executeScanWorkflow(fileOrDataUrl, context = {}) {
     console.log(`[ScannerPerf] [${new Date().toISOString()}] Stage 4 (Display & DB save): ${timings.dbSaveMs}ms | Total=${timings.totalMs}ms`, timings);
 
     clearTempScannerImage().catch(() => {});
+    state.activeScanId = null;
     fetchAndSyncHistory(state, render).catch(() => {});
   } catch (err) {
     if (err?.name === 'AbortError') {
@@ -472,6 +480,7 @@ export async function executeScanWorkflow(fileOrDataUrl, context = {}) {
         : 'Could not identify the food item. Please retry with better lighting or enter the food name manually.');
     }
   } finally {
+    isSubmittingScan = false;
     state.ocrStatus = null;
     state.ocrProgress = 0;
     state.aiLoading = false;
@@ -668,8 +677,8 @@ export function renderScannerTab(state) {
               
               <div style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button type="button" id="scanner-clear-text-btn" class="btn-secondary" style="padding: 8px 16px;">Clear</button>
-                <button type="button" id="scanner-analyze-btn" class="btn-primary" style="padding: 8px 20px;">
-                  Audit Pasted Items
+                <button type="button" id="scanner-analyze-btn" class="btn-primary" style="padding: 8px 20px;" ${aiLoading ? 'disabled' : ''}>
+                  ${aiLoading ? 'Auditing...' : 'Audit Pasted Items'}
                 </button>
               </div>
             </div>
@@ -1368,7 +1377,7 @@ function renderScanHistory(history) {
                   </div>
                   <div style="font-size: 0.74rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 3px;">
                     <span>${displayDate}</span>
-                    ${item.imageUrl ? '<span style="color: #38bdf8; font-weight: 600;">• ☁️ Remote Photo</span>' : ''}
+                    ${(item.cloudinaryUrl || (item.imageUrl && /^https?:\/\//i.test(item.imageUrl))) ? '<span style="color: #38bdf8; font-weight: 600;">• ☁️ Remote Photo</span>' : ''}
                     ${item.flaggedIngredients && item.flaggedIngredients.length > 0 ? `<span style="color: #f87171;">• ${item.flaggedIngredients.length} flagged</span>` : ''}
                   </div>
                 </div>

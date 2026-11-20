@@ -423,13 +423,18 @@ export default async function handler(req, res) {
         });
       }
 
-      // Standard Food Label Scan Persistence
-      const id = body.id || `scan_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-      const title = body.title || 'Scanned Food Label';
-      const status = body.status || 'SAFE';
-      const reason = body.reason || '';
+      // Standard Food Label Scan Persistence (Idempotent Upsert by Canonical Scan ID)
+      const rawId = typeof body.id === 'string' ? body.id.trim() : '';
+      const id = rawId && rawId.length <= 128
+        ? rawId
+        : (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `scan_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`);
+      const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : 'Scanned Food Label';
+      const status = typeof body.status === 'string' && body.status.trim() ? body.status.trim().toUpperCase() : 'SAFE';
+      const reason = typeof body.reason === 'string' ? body.reason : '';
       const flaggedIngredients = Array.isArray(body.flaggedIngredients) ? body.flaggedIngredients : [];
-      const imageUrl = body.imageUrl || null;
+      const imageUrl = typeof body.imageUrl === 'string' && body.imageUrl.trim() ? body.imageUrl.trim() : null;
       const createdAt = body.createdAt || body.timestamp || new Date().toISOString();
 
       const jsonFlagged = JSON.stringify(flaggedIngredients);
@@ -438,36 +443,40 @@ export default async function handler(req, res) {
         INSERT INTO scans (id, user_id, title, status, reason, flagged_ingredients, image_url, created_at)
         VALUES (${id}, ${userId}, ${title}, ${status}, ${reason}, ${jsonFlagged}::jsonb, ${imageUrl}, ${createdAt})
         ON CONFLICT (id) DO UPDATE SET
-          user_id = EXCLUDED.user_id,
-          title = EXCLUDED.title,
-          status = EXCLUDED.status,
-          reason = EXCLUDED.reason,
-          flagged_ingredients = EXCLUDED.flagged_ingredients,
-          image_url = EXCLUDED.image_url
+          user_id = COALESCE(scans.user_id, EXCLUDED.user_id),
+          title = COALESCE(NULLIF(EXCLUDED.title, ''), scans.title),
+          status = COALESCE(NULLIF(EXCLUDED.status, ''), scans.status),
+          reason = COALESCE(NULLIF(EXCLUDED.reason, ''), scans.reason),
+          flagged_ingredients = CASE
+            WHEN jsonb_array_length(EXCLUDED.flagged_ingredients) > 0 THEN EXCLUDED.flagged_ingredients
+            ELSE scans.flagged_ingredients
+          END,
+          image_url = COALESCE(NULLIF(EXCLUDED.image_url, ''), scans.image_url)
+        WHERE scans.user_id = ${userId} OR scans.user_id IS NULL
         RETURNING id, user_id, title, status, reason, flagged_ingredients, image_url, created_at;
       `;
 
-      const saved = rows[0] || {
-        id,
-        title,
-        status,
-        reason,
-        flagged_ingredients: flaggedIngredients,
-        image_url: imageUrl,
-        created_at: createdAt
-      };
+      if (!rows || rows.length === 0) {
+        return sendJson(res, 403, {
+          error: 'FORBIDDEN',
+          message: 'You do not have permission to modify this scan record.'
+        });
+      }
 
-      return sendJson(res, 201, {
+      const saved = rows[0];
+
+      return sendJson(res, 200, {
         id: saved.id,
         title: saved.title,
         status: saved.status,
         reason: saved.reason,
-        flaggedIngredients: Array.isArray(saved.flagged_ingredients) 
-          ? saved.flagged_ingredients 
+        flaggedIngredients: Array.isArray(saved.flagged_ingredients)
+          ? saved.flagged_ingredients
           : flaggedIngredients,
         imageUrl: saved.image_url,
         createdAt: saved.created_at,
-        timestamp: saved.created_at
+        timestamp: saved.created_at,
+        synced: true
       });
     }
 
