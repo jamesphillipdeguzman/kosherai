@@ -7,6 +7,7 @@ import recipeInteractionsHandler from './api/recipe-interactions.js';
 import inventoryApiHandler from './api/inventory.js';
 import mealPlansApiHandler from './api/meal-plans.js';
 import settingsApiHandler from './api/settings.js';
+import visitorsApiHandler from './api/visitors.js';
 import ingredientImagesHandler from './api/ingredient-images.js';
 import adminIngredientImagesHandler from './api/admin/ingredient-images.js';
 
@@ -156,6 +157,24 @@ export default defineConfig({
               await mealPlansApiHandler(req, res);
             } catch (err) {
               console.error('[Vite Meal Plans API Error]:', err);
+              if (!res.headersSent) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({
+                  error: 'INTERNAL_SERVER_ERROR',
+                  message: err.message
+                }));
+              }
+            }
+            return;
+          }
+
+          // Intercept /api/visitors route
+          if (url.pathname === '/api/visitors') {
+            try {
+              await visitorsApiHandler(req, res);
+            } catch (err) {
+              console.error('[Vite Visitors API Error]:', err);
               if (!res.headersSent) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');

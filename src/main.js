@@ -6,6 +6,7 @@ import './styles/admin-ingredient-gallery.css';
 import { renderHeader } from './components/Header.js';
 import { renderHomeTab } from './components/HomeTab.js';
 import { renderBottomNav } from './components/BottomNav.js';
+import { renderFooter } from './components/Footer.js';
 import { renderCheckerTab } from './components/CheckerTab.js';
 import { renderScannerTab, executeScanWorkflow, SAMPLE_LABELS, releaseScannerResources } from './components/ScannerTab.js';
 import { renderCheatSheetTab } from './components/CheatSheetTab.js';
@@ -38,6 +39,7 @@ import {
   clearAuthUrlIfOnAuthPath
 } from './services/authNavigation.js';
 import { getAuthHeaders, getClientAuthToken } from './services/authHeaders.js';
+import { getCachedVisitorCount, registerAndFetchVisitorCount } from './services/visitorService.js';
 import {
   toggleRecipeLike,
   recordRecipeView,
@@ -159,6 +161,7 @@ const state = {
   // Clinical Diet Companion Tabs
   activeTab: 'checker', // 'checker' | 'scanner' | 'cheatsheet' | 'substitutes' | 'cook'
   isOnline: navigator.onLine,
+  visitorCount: getCachedVisitorCount(),
   
   // Checker Tab
   searchQuery: '',
@@ -442,6 +445,8 @@ function render() {
     <main class="app-container ${state.appMode === 'home' ? 'home-main-container' : (state.appMode === 'course' ? 'pt-24 course-mode-container w-full max-w-7xl mx-auto px-3 sm:px-5 lg:px-6' : 'pt-24')}">
       ${activeContentHtml}
     </main>
+
+    ${renderFooter({ visitorCount: state.visitorCount })}
 
     ${renderBottomNav(currentNavTab, state.appMode, state.isAdmin)}
 
@@ -4918,6 +4923,15 @@ async function initializeAuthSession() {
   }
   fetchAllRecipeInteractions().then(() => render()).catch(() => {});
   syncPendingRecipeInteractions().catch(() => {});
+  registerAndFetchVisitorCount().then((count) => {
+    if (typeof count === 'number' && Number.isFinite(count)) {
+      state.visitorCount = count;
+      const footerEl = typeof document !== 'undefined' ? document.querySelector('#app-footer') : null;
+      if (footerEl) {
+        footerEl.outerHTML = renderFooter({ visitorCount: count });
+      }
+    }
+  }).catch(() => {});
 })();
 
 if (typeof window !== 'undefined') {
