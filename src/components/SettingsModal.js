@@ -2,7 +2,7 @@
 import { DIET_PROFILES } from '../data/dietProfiles.js';
 import { isScannerEnabled } from '../services/storage.js';
 
-export function renderSettingsModal(settings = {}, currentTheme = 'dark', showProjectTab = false, activeDiet = 'lid', scannerEnabled = null) {
+export function renderSettingsModal(settings = {}, currentTheme = 'dark', showProjectTab = true, activeDiet = 'lid', scannerEnabled = null) {
   const isDark = currentTheme === 'dark';
   const isScannerActive = scannerEnabled !== null ? Boolean(scannerEnabled) : (settings.scannerEnabled !== undefined ? Boolean(settings.scannerEnabled) : isScannerEnabled());
 

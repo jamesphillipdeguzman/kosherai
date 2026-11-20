@@ -130,12 +130,12 @@ export function setHouseholdMembers(count) {
 }
 
 export function getShowProjectTabPreference() {
-  if (typeof localStorage === 'undefined') return false;
+  if (typeof localStorage === 'undefined') return true;
   try {
     const saved = localStorage.getItem('kosherai_show_project_tab');
-    return saved !== null ? saved === 'true' : false;
+    return saved !== null ? saved === 'true' : true;
   } catch (_) {
-    return false;
+    return true;
   }
 }
 

@@ -133,9 +133,9 @@ if (initialTheme === 'light') {
   document.documentElement.classList.remove('light');
 }
 
-// 6-Week Project Tab Visibility Preference (Default OFF)
+// 6-Week Project Tab Visibility Preference (Default ON)
 const savedShowProject = localStorage.getItem('kosherai_show_project_tab');
-const initialShowProjectTab = savedShowProject !== null ? savedShowProject === 'true' : false;
+const initialShowProjectTab = savedShowProject !== null ? savedShowProject === 'true' : true;
 
 // Lightweight 60fps scroll listener for ambient parallax sheen
 let scrollTicking = false;

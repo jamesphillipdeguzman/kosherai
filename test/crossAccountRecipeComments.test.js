@@ -444,16 +444,16 @@ try {
 
   console.log('  ✅ Frontend service & CookModeTab UI ownership verified.');
 
-  // 10. 6-Week Project Toggle Default OFF & Preference Preservation
-  console.log('\nTest 10: Sustaining Human Life (6-Week Project) toggle defaults to OFF & preserves saved preferences');
+  // 10. 6-Week Project Toggle Default ON & Preference Preservation
+  console.log('\nTest 10: Sustaining Human Life (6-Week Project) toggle defaults to ON & preserves saved preferences');
   {
     const { getShowProjectTabPreference } = await import('../src/services/storage.js');
     const { renderSettingsModal } = await import('../src/components/SettingsModal.js');
     const { renderHeader } = await import('../src/components/Header.js');
 
-    // Fresh install (key unset)
+    // Fresh install (key unset) -> ON by default
     localStorage.removeItem('kosherai_show_project_tab');
-    assert.strictEqual(getShowProjectTabPreference(), false, 'Default 6-Week Project preference must be false');
+    assert.strictEqual(getShowProjectTabPreference(), true, 'Default 6-Week Project preference must be true');
 
     // Explicit user opt-in preserved
     localStorage.setItem('kosherai_show_project_tab', 'true');
@@ -463,15 +463,15 @@ try {
     localStorage.setItem('kosherai_show_project_tab', 'false');
     assert.strictEqual(getShowProjectTabPreference(), false, 'Explicit false preference must be preserved');
 
-    // Default SettingsModal and Header parameters render toggle OFF
+    // Default SettingsModal and Header parameters render toggle ON
     const defaultModalHtml = renderSettingsModal({}, 'dark');
     const toggleMatch = defaultModalHtml.match(/<input[^>]*id="toggle-project-tab-input"[^>]*>/);
-    assert.ok(toggleMatch && !toggleMatch[0].includes('checked'), 'SettingsModal toggle must be unchecked by default');
+    assert.ok(toggleMatch && toggleMatch[0].includes('checked'), 'SettingsModal toggle must be checked by default');
 
     const defaultHeaderHtml = renderHeader(true, 'diet');
-    assert.ok(!defaultHeaderHtml.includes('data-app-mode="course"'), 'Header must not show 6-Week Project mode button by default');
+    assert.ok(defaultHeaderHtml.includes('data-app-mode="course"'), 'Header must show 6-Week Project mode button by default');
   }
-  console.log('  ✅ 6-Week Project toggle default OFF and preference preservation verified.');
+  console.log('  ✅ 6-Week Project toggle default ON and preference preservation verified.');
 
   // 11. Recipe Comments Drawer Anti-Flicker & Fetch Deduplication
   console.log('\nTest 11: Comments drawer anti-flicker (cached immediate render, loading state, no-anim, dedupe)');

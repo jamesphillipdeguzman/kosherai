@@ -72,6 +72,13 @@ console.log('\nTest 3: HomeTab renders Hero, 4 Benefits, 3 Steps, Feature Links,
     assert.ok(homeHtml.includes(title), `Benefit card "${title}" must be rendered`);
   }
 
+  // 6-Week Project Spotlight
+  assert.ok(homeHtml.includes('Make Every Meal Count.'), 'Spotlight heading must be rendered');
+  assert.ok(homeHtml.includes('Explore the 6-Week Project'), 'Spotlight CTA must be rendered');
+  for (const item of ['Build Healthy Habits', 'Plan with Purpose', 'Manage Your Budget', 'Reduce Food Waste']) {
+    assert.ok(homeHtml.includes(item), `Spotlight benefit "${item}" must be rendered`);
+  }
+
   // Three Steps
   for (const step of ['01 — PLAN', '02 — TRACK', '03 — IMPROVE']) {
     assert.ok(homeHtml.includes(step), `Step "${step}" must be rendered`);

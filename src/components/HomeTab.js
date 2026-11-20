@@ -39,6 +39,29 @@ export function renderHomeTab(state = {}) {
     }
   ];
 
+  const spotlightBenefits = [
+    {
+      icon: '🌱',
+      title: 'Build Healthy Habits',
+      desc: 'Develop sustainable food and meal-planning routines.'
+    },
+    {
+      icon: '🎯',
+      title: 'Plan with Purpose',
+      desc: 'Organize meals and make more intentional food choices.'
+    },
+    {
+      icon: '💰',
+      title: 'Manage Your Budget',
+      desc: 'Make your food spending more purposeful.'
+    },
+    {
+      icon: '♻️',
+      title: 'Reduce Food Waste',
+      desc: 'Make better use of the food you purchase.'
+    }
+  ];
+
   const steps = [
     {
       badge: '01 — PLAN',
@@ -215,6 +238,42 @@ export function renderHomeTab(state = {}) {
                   <span aria-hidden="true">→</span>
                 </div>
               </button>
+            `).join('')}
+          </div>
+        </section>
+
+        <!-- 6-Week Project Spotlight -->
+        <section aria-labelledby="home-spotlight-heading" class="home-project-spotlight">
+          <div class="home-spotlight-top">
+            <div class="home-spotlight-copy">
+              <span class="home-eyebrow" style="margin-bottom: 0;">SUSTAINING HUMAN LIFE • 6-WEEK PROJECT</span>
+              <h2 id="home-spotlight-heading" class="home-spotlight-title">
+                Make Every Meal Count.
+              </h2>
+              <p class="home-spotlight-desc">
+                Discover how small, intentional food choices can make a meaningful difference. The Sustaining Human Life 6-Week Project helps you build healthier eating habits, plan meals thoughtfully, manage your food budget, and reduce food waste—one week at a time.
+              </p>
+            </div>
+            <button
+              type="button"
+              id="home-explore-project-btn"
+              data-home-course-tab="dashboard"
+              class="home-spotlight-cta"
+            >
+              <span>Explore the 6-Week Project</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
+
+          <div class="home-spotlight-grid">
+            ${spotlightBenefits.map(item => `
+              <div class="home-spotlight-item">
+                <h3 class="home-spotlight-item-title">
+                  <span aria-hidden="true">${item.icon}</span>
+                  <span>${item.title}</span>
+                </h3>
+                <p class="home-spotlight-item-desc">${item.desc}</p>
+              </div>
             `).join('')}
           </div>
         </section>

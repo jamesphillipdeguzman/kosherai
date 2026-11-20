@@ -9,7 +9,7 @@ export { DIET_DESCRIPTIONS, getDietDescription };
 export function Header({
   isOnline: propIsOnline,
   appMode = 'diet',
-  showProjectTab = false,
+  showProjectTab = true,
   activeDiet = 'lid',
   theme = 'dark',
   user = undefined,
