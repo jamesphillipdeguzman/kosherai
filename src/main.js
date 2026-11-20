@@ -10,6 +10,7 @@ import { renderBottomNav } from './components/BottomNav.js';
 import { renderFooter } from './components/Footer.js';
 import { renderCheckerTab } from './components/CheckerTab.js';
 import { renderScannerTab, executeScanWorkflow, SAMPLE_LABELS, releaseScannerResources, cancelActiveScan, recheckFoodName } from './components/ScannerTab.js';
+import { saveScannerSessionState, loadScannerSessionState, clearScannerSessionState, loadTempScannerImage, clearTempScannerImage } from './services/scannerPersistence.js';
 import { renderCheatSheetTab } from './components/CheatSheetTab.js';
 import { renderSubstitutesTab } from './components/SubstitutesTab.js';
 import { renderCookModeTab, renderCommentsDrawerBody, renderCommentsDrawerStats, lidRecipes, DIET_RECIPES } from './components/CookModeTab.js';
@@ -151,10 +152,12 @@ window.addEventListener('scroll', () => {
 }, { passive: true });
 
 // Global Reactive State
+const restoredScannerSession = loadScannerSessionState();
+
 const state = {
   theme: initialTheme,
   showProjectTab: initialShowProjectTab,
-  activeDiet: getActiveDiet(),
+  activeDiet: restoredScannerSession?.activeDiet || getActiveDiet(),
 
   // App Mode Switcher: 'home' (Landing) | 'diet' (Dietary Protocol Companion) | 'course' (Six-Week Sustainability Project)
   appMode: 'home',
@@ -163,7 +166,7 @@ const state = {
   activeTab: 'checker', // 'checker' | 'scanner' | 'cheatsheet' | 'substitutes' | 'cook'
   isOnline: navigator.onLine,
   visitorCount: getCachedVisitorCount(),
-  
+
   // Checker Tab
   searchQuery: '',
   statusFilter: 'ALL',
@@ -172,10 +175,10 @@ const state = {
   selectedItem: null,
 
   // Scanner Tab (Consolidated single source of truth: 'food_label' | 'receipt' | 'paste')
-  scannerEnabled: isScannerEnabled(),
-  scannerTab: 'food_label',
+  scannerEnabled: restoredScannerSession ? restoredScannerSession.scannerEnabled : isScannerEnabled(),
+  scannerTab: restoredScannerSession?.scannerTab || 'food_label',
   inputMode: 'camera', // 'camera' | 'text'
-  scanTarget: 'label', // 'label' | 'receipt'
+  scanTarget: restoredScannerSession?.scanTarget || 'label', // 'label' | 'receipt'
   scannedReceiptAudit: null,
   scanError: null,
   scanText: '',
@@ -267,7 +270,7 @@ const state = {
         const u = parsed.user || parsed;
         return Boolean(u && (u.role === 'admin' || u.role === 'administrator'));
       }
-    } catch (_) {}
+    } catch (_) { }
     return false;
   })()),
 
@@ -292,6 +295,15 @@ const state = {
   adminImageLoading: false
 };
 
+if (restoredScannerSession) {
+  state.appMode = 'diet';
+  state.activeTab = 'scanner';
+  state.scannerTab = restoredScannerSession.scannerTab || 'food_label';
+  state.scanTarget = restoredScannerSession.scanTarget || 'label';
+  state.activeDiet = restoredScannerSession.activeDiet || state.activeDiet;
+  state.scannerEnabled = restoredScannerSession.scannerEnabled !== undefined ? Boolean(restoredScannerSession.scannerEnabled) : true;
+}
+
 // Pre-seed admin and public image state from global cache immediately on script evaluation
 (() => {
   try {
@@ -301,7 +313,7 @@ const state = {
       state.adminImageMappings = cached.mappings;
       if (cached.stats) state.adminImageStats = cached.stats;
     }
-  } catch (_) {}
+  } catch (_) { }
 })();
 
 // Main DOM Render Function
@@ -456,21 +468,21 @@ function render() {
     ${state.selectedItem ? renderItemDetailModal(state.selectedItem, state.activeDiet) : ''}
     ${state.settingsOpen ? renderSettingsModal(state.settings, state.theme, state.showProjectTab, state.activeDiet, state.scannerEnabled) : ''}
     ${state.adminImageModalOpen ? renderIngredientImageAdminModal({
-      activeProtocol: state.adminImageProtocol,
-      stats: state.adminImageStats,
-      mappings: state.adminImageMappings,
-      searchQuery: state.adminImageSearchQuery,
-      statusFilter: state.adminImageStatusFilter,
-      isLoading: state.adminImageLoading,
-      statusMessage: state.adminImageStatusMsg,
-      uploadFormOpen: state.adminImageUploadFormOpen,
-      selectedIngredientId: state.adminImageSelectedIngredientId,
-      uploadPreviewUrl: state.adminImageUploadPreviewUrl,
-      selectedFileName: state.adminImageSelectedFile?.name || null,
-      selectedFileSize: state.adminImageSelectedFile?.size || null,
-      isUploading: state.adminImageUploading,
-      isDiscovering: state.adminImageDiscovering
-    }) : ''}
+    activeProtocol: state.adminImageProtocol,
+    stats: state.adminImageStats,
+    mappings: state.adminImageMappings,
+    searchQuery: state.adminImageSearchQuery,
+    statusFilter: state.adminImageStatusFilter,
+    isLoading: state.adminImageLoading,
+    statusMessage: state.adminImageStatusMsg,
+    uploadFormOpen: state.adminImageUploadFormOpen,
+    selectedIngredientId: state.adminImageSelectedIngredientId,
+    uploadPreviewUrl: state.adminImageUploadPreviewUrl,
+    selectedFileName: state.adminImageSelectedFile?.name || null,
+    selectedFileSize: state.adminImageSelectedFile?.size || null,
+    isUploading: state.adminImageUploading,
+    isDiscovering: state.adminImageDiscovering
+  }) : ''}
     ${state.authModalOpen ? renderAuthModalHtml({ isOpen: true, mode: state.authModalMode, errorMsg: state.authModalError, isLoading: state.authModalLoading, values: state.authModalValues || {} }) : ''}
   `;
 
@@ -561,7 +573,7 @@ function attachEventHandlers() {
     headerDietSelector.addEventListener('change', (e) => {
       const selected = e.target.value;
       state.activeDiet = setActiveDiet(selected);
-      fetchIngredientImages(state.activeDiet).catch(() => {});
+      fetchIngredientImages(state.activeDiet).catch(() => { });
       render();
     });
   }
@@ -571,7 +583,7 @@ function attachEventHandlers() {
     settingsDietSelect.addEventListener('change', (e) => {
       const selected = e.target.value;
       state.activeDiet = setActiveDiet(selected);
-      fetchIngredientImages(state.activeDiet).catch(() => {});
+      fetchIngredientImages(state.activeDiet).catch(() => { });
       render();
     });
   }
@@ -579,13 +591,18 @@ function attachEventHandlers() {
   // App Mode Switcher (Diet Protocol vs. 6-Week Project)
   document.querySelectorAll('.mode-tab-btn[data-app-mode]').forEach(btn => {
     btn.addEventListener('click', (e) => {
+      e.preventDefault();
       const mode = e.currentTarget.getAttribute('data-app-mode');
       if (mode && mode !== state.appMode) {
         if (mode === 'course' && !state.showProjectTab) return;
+        if (mode !== 'diet' || state.activeTab !== 'scanner') {
+          clearScannerSessionState();
+          clearTempScannerImage().catch(() => { });
+        }
         state.appMode = mode;
         try {
           localStorage.setItem('kosherai_app_mode', mode);
-        } catch {}
+        } catch { }
         window.scrollTo({ top: 0, behavior: 'smooth' });
         render();
       }
@@ -595,14 +612,19 @@ function attachEventHandlers() {
   // Navigation Tabs (bottom nav)
   document.querySelectorAll('.nav-tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
+      e.preventDefault();
       const tab = e.currentTarget.getAttribute('data-tab');
       const mode = e.currentTarget.getAttribute('data-mode') || state.appMode;
 
       if (tab === 'home' || mode === 'home') {
+        clearScannerSessionState();
+        clearTempScannerImage().catch(() => { });
         state.appMode = 'home';
         window.scrollTo({ top: 0, behavior: 'smooth' });
         render();
       } else if (mode === 'course') {
+        clearScannerSessionState();
+        clearTempScannerImage().catch(() => { });
         state.appMode = 'course';
         state.courseSubTab = tab;
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -613,6 +635,12 @@ function attachEventHandlers() {
       } else if (tab) {
         state.appMode = 'diet';
         state.activeTab = tab;
+        if (tab === 'scanner') {
+          saveScannerSessionState(state);
+        } else {
+          clearScannerSessionState();
+          clearTempScannerImage().catch(() => { });
+        }
         if (tab === 'cook') {
           state.checklistExpanded = false;
         }
@@ -632,7 +660,7 @@ function attachEventHandlers() {
     btn.addEventListener('click', () => {
       if (!state.showProjectTab) {
         state.showProjectTab = true;
-        try { localStorage.setItem('kosherai_show_project_tab', 'true'); } catch {}
+        try { localStorage.setItem('kosherai_show_project_tab', 'true'); } catch { }
       }
       state.appMode = 'course';
       state.courseSubTab = 'dashboard';
@@ -650,13 +678,40 @@ function attachEventHandlers() {
     });
   });
 
+  // Tool Guide Process Map Lightbox
+  const openProcessMapBtn = document.querySelector('#open-process-map-lightbox-btn');
+  if (openProcessMapBtn) {
+    openProcessMapBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      state.processMapLightboxOpen = true;
+      render();
+    });
+  }
+  const closeProcessMapBtn = document.querySelector('#close-process-map-lightbox-btn');
+  if (closeProcessMapBtn) {
+    closeProcessMapBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      state.processMapLightboxOpen = false;
+      render();
+    });
+  }
+  const processMapOverlay = document.querySelector('#process-map-lightbox-overlay');
+  if (processMapOverlay) {
+    processMapOverlay.addEventListener('click', (e) => {
+      if (e.target === processMapOverlay) {
+        state.processMapLightboxOpen = false;
+        render();
+      }
+    });
+  }
+
   document.querySelectorAll('[data-home-course-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
       const targetSub = btn.getAttribute('data-home-course-tab');
       if (!targetSub) return;
       if (!state.showProjectTab) {
         state.showProjectTab = true;
-        try { localStorage.setItem('kosherai_show_project_tab', 'true'); } catch {}
+        try { localStorage.setItem('kosherai_show_project_tab', 'true'); } catch { }
       }
       state.appMode = 'course';
       state.courseSubTab = targetSub;
@@ -763,7 +818,7 @@ function attachEventHandlers() {
         'kosherai_user_name'
       ];
       keysToClear.forEach(k => {
-        try { localStorage.removeItem(k); } catch (_) {}
+        try { localStorage.removeItem(k); } catch (_) { }
       });
       clearRecipeInteractionsCache();
       sessionStorage.clear();
@@ -779,8 +834,8 @@ function attachEventHandlers() {
           method: 'POST',
           headers: getAuthHeaders(),
           credentials: 'include'
-        }).catch(() => {});
-      } catch (_) {}
+        }).catch(() => { });
+      } catch (_) { }
       showToast?.('Signed out successfully.');
       render();
       window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: null }));
@@ -935,7 +990,7 @@ function attachEventHandlers() {
           localStorage.setItem('kosherai_user_session', JSON.stringify(sessionPayload));
           localStorage.setItem('kosherai_current_user', JSON.stringify(sessionPayload.user));
           if (userRecord.token) {
-            try { localStorage.setItem('better-auth.session_token', userRecord.token); } catch (_) {}
+            try { localStorage.setItem('better-auth.session_token', userRecord.token); } catch (_) { }
           }
 
           // Enforce tenant account isolation (purges old user's local cache only if account actually switched)
@@ -956,7 +1011,7 @@ function attachEventHandlers() {
           // Trigger refresh of user's trips and scans
           showToast?.(`✓ Signed in as ${sessionPayload.user.name}`);
           window.dispatchEvent(new CustomEvent('kosherai:auth-changed', { detail: sessionPayload }));
-          pushThenRestoreFromNeon({ manual: true }).catch(() => {});
+          pushThenRestoreFromNeon({ manual: true }).catch(() => { });
         } catch (err) {
           state.authModalLoading = false;
           state.authModalError = err.message || 'Authentication failed. Please verify credentials.';
@@ -1016,7 +1071,7 @@ function attachEventHandlers() {
         state.appMode = 'diet';
         try {
           localStorage.setItem('kosherai_app_mode', 'diet');
-        } catch {}
+        } catch { }
       }
       render();
     });
@@ -1605,37 +1660,51 @@ function attachEventHandlers() {
   const dismissScanErrorBtn = document.querySelector('#dismiss-scan-error-btn');
 
   if (toggleLabelModeBtn) {
-    toggleLabelModeBtn.addEventListener('click', () => {
+    toggleLabelModeBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       state.scannerTab = 'food_label';
       state.scanTarget = 'label';
       state.inputMode = 'camera';
+      saveScannerSessionState(state);
       render();
     });
   }
   if (toggleReceiptModeBtn) {
-    toggleReceiptModeBtn.addEventListener('click', () => {
+    toggleReceiptModeBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       state.scannerTab = 'receipt';
       state.scanTarget = 'receipt';
       state.inputMode = 'camera';
+      saveScannerSessionState(state);
       render();
     });
   }
   if (toggleTextModeBtn) {
-    toggleTextModeBtn.addEventListener('click', () => {
+    toggleTextModeBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       state.scannerTab = 'paste';
       state.inputMode = 'text';
+      saveScannerSessionState(state);
       render();
     });
   }
   if (toggleCameraModeBtn) {
-    toggleCameraModeBtn.addEventListener('click', () => {
+    toggleCameraModeBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       state.scannerTab = state.scanTarget === 'receipt' ? 'receipt' : 'food_label';
       state.inputMode = 'camera';
+      saveScannerSessionState(state);
       render();
     });
   }
   if (dismissScanErrorBtn) {
-    dismissScanErrorBtn.addEventListener('click', () => {
+    dismissScanErrorBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       state.scanError = null;
       render();
     });
@@ -1644,19 +1713,25 @@ function attachEventHandlers() {
   // Enable / Disable Scanner Controls
   const enableScannerBtn = document.querySelector('#enable-scanner-btn');
   if (enableScannerBtn) {
-    enableScannerBtn.addEventListener('click', () => {
+    enableScannerBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       setScannerEnabled(true);
       state.scannerEnabled = true;
+      saveScannerSessionState(state);
       render();
     });
   }
 
   const disableScannerBtn = document.querySelector('#disable-scanner-btn');
   if (disableScannerBtn) {
-    disableScannerBtn.addEventListener('click', () => {
+    disableScannerBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       releaseScannerResources(state);
       setScannerEnabled(false);
       state.scannerEnabled = false;
+      saveScannerSessionState(state);
       render();
     });
   }
@@ -1667,6 +1742,9 @@ function attachEventHandlers() {
 
   const handleImageFile = async (file) => {
     if (!file) return;
+    state.appMode = 'diet';
+    state.activeTab = 'scanner';
+    saveScannerSessionState(state);
     await executeScanWorkflow(file, {
       state,
       render,
@@ -1675,14 +1753,30 @@ function attachEventHandlers() {
   };
 
   if (cameraInput) {
+    cameraInput.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.appMode = 'diet';
+      state.activeTab = 'scanner';
+      saveScannerSessionState(state);
+    });
     cameraInput.addEventListener('change', (e) => {
+      e.stopPropagation();
       const file = e.target.files?.[0];
+      e.target.value = '';
       if (file) handleImageFile(file);
     });
   }
   if (galleryInput) {
+    galleryInput.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.appMode = 'diet';
+      state.activeTab = 'scanner';
+      saveScannerSessionState(state);
+    });
     galleryInput.addEventListener('change', (e) => {
+      e.stopPropagation();
       const file = e.target.files?.[0];
+      e.target.value = '';
       if (file) handleImageFile(file);
     });
   }
@@ -1736,13 +1830,18 @@ function attachEventHandlers() {
   // Re-scan button
   const rescanBtn = document.querySelector('#rescan-btn');
   if (rescanBtn) {
-    rescanBtn.addEventListener('click', () => {
+    rescanBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       state.scanAnalysis = null;
       state.scannedReceiptAudit = null;
       state.scanError = null;
       state.aiAnalysis = null;
       state.imagePreviewUrl = null;
+      state.lastScannedFile = null;
+      state.lastScannedDataUrl = null;
       state.scanText = '';
+      clearTempScannerImage().catch(() => { });
       render();
     });
   }
@@ -1750,17 +1849,23 @@ function attachEventHandlers() {
   // Cancel in-flight scan
   const cancelScanBtn = document.querySelector('#cancel-scan-btn');
   if (cancelScanBtn) {
-    cancelScanBtn.addEventListener('click', () => {
+    cancelScanBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       cancelActiveScan(state, render);
     });
   }
 
-  // Retry failed/timed-out scan
+  // Retry failed/timed-out scan using preserved captured image
   const retryScanBtn = document.querySelector('#retry-scan-btn');
   if (retryScanBtn) {
-    retryScanBtn.addEventListener('click', async () => {
-      if (state.lastScannedFile) {
-        await executeScanWorkflow(state.lastScannedFile, {
+    retryScanBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const source = state.lastScannedFile || state.lastScannedDataUrl || state.imagePreviewUrl;
+      if (source) {
+        state.scanError = null;
+        await executeScanWorkflow(source, {
           state,
           render,
           addScanToHistory
@@ -1772,10 +1877,13 @@ function attachEventHandlers() {
   // Switch to Manual Food Entry fallback
   const manualFoodEntryBtn = document.querySelector('#manual-food-entry-btn');
   if (manualFoodEntryBtn) {
-    manualFoodEntryBtn.addEventListener('click', () => {
+    manualFoodEntryBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       state.scanError = null;
       state.scannerTab = 'paste';
       state.inputMode = 'text';
+      saveScannerSessionState(state);
       render();
     });
   }
@@ -1948,10 +2056,10 @@ function attachEventHandlers() {
       try {
         const payload = (record.imageUrl && record.imageUrl.startsWith('data:') && (!state.scanText || state.scanText.length < 15))
           ? {
-              text: state.scanText || 'Analyze the food packaging label ingredients for Low-Iodine Diet compliance.',
-              imageBase64: record.imageUrl,
-              mimeType: 'image/jpeg'
-            }
+            text: state.scanText || 'Analyze the food packaging label ingredients for Low-Iodine Diet compliance.',
+            imageBase64: record.imageUrl,
+            mimeType: 'image/jpeg'
+          }
           : (state.scanText || 'Food Label');
 
         const result = await verifyWithGeminiAI(payload, activeKey, state.activeDiet || 'lid');
@@ -2052,9 +2160,9 @@ function attachEventHandlers() {
       const activeDiet = state.activeDiet || 'lid';
       const currentDietData = DIET_RECIPES[activeDiet] || DIET_RECIPES.lid;
       const targetSampleName = currentDietData.sampleAudit?.name || 'Safe Meal';
-      
+
       // Match sample meal or default to first meal in current diet
-      const matchedMeal = currentDietData.meals?.find(m => 
+      const matchedMeal = currentDietData.meals?.find(m =>
         (m.name || m.title || '').toLowerCase().includes(targetSampleName.toLowerCase()) ||
         targetSampleName.toLowerCase().includes((m.name || m.title || '').toLowerCase())
       ) || currentDietData.meals?.[0];
@@ -2062,8 +2170,8 @@ function attachEventHandlers() {
       if (matchedMeal && matchedMeal.ingredients) {
         state.recipeText = matchedMeal.ingredients.join('\n');
       } else {
-        state.recipeText = 
-`Fresh chicken cutlets, cut into pieces
+        state.recipeText =
+          `Fresh chicken cutlets, cut into pieces
 1 medium sayote (chayote), peeled and sliced
 Fresh ginger slices (luya)
 1 fresh onion, chopped
@@ -2080,8 +2188,8 @@ Cracked black pepper`;
   if (loadRiskyRecipeBtn) {
     loadRiskyRecipeBtn.addEventListener('click', () => {
       const activeDiet = state.activeDiet || 'lid';
-      state.recipeText = 
-`1 lb beef chuck roast cubes
+      state.recipeText =
+        `1 lb beef chuck roast cubes
 2 large russet potatoes, cubed
 2 whole eggs (for breading)
 2 tbsp commercial butter
@@ -2918,7 +3026,7 @@ Cracked black pepper`;
       const venue = btn.getAttribute('data-venue');
       if (venue && venue !== state.groceryVenueMode) {
         state.groceryVenueMode = venue;
-        try { localStorage.setItem('kosherai_venue_mode', venue); } catch (e) {}
+        try { localStorage.setItem('kosherai_venue_mode', venue); } catch (e) { }
         render();
       }
     });
@@ -2930,7 +3038,7 @@ Cracked black pepper`;
     dismissTipBtn.addEventListener('click', () => {
       const tip = document.querySelector('#portrait-orientation-tip');
       if (tip) tip.style.display = 'none';
-      try { sessionStorage.setItem('kosherai_portrait_tip_dismissed', '1'); } catch (e) {}
+      try { sessionStorage.setItem('kosherai_portrait_tip_dismissed', '1'); } catch (e) { }
     });
   }
 
@@ -3216,13 +3324,13 @@ Cracked black pepper`;
   if (openManualTripBtn) openManualTripBtn.addEventListener('click', () => {
     state.receiptModalOpen = true;
     state.groceryVenueMode = 'wet_market';
-    try { localStorage.setItem('kosherai_venue_mode', 'wet_market'); } catch (e) {}
+    try { localStorage.setItem('kosherai_venue_mode', 'wet_market'); } catch (e) { }
     render();
   });
   if (emptyManualBtn) emptyManualBtn.addEventListener('click', () => {
     state.receiptModalOpen = true;
     state.groceryVenueMode = 'wet_market';
-    try { localStorage.setItem('kosherai_venue_mode', 'wet_market'); } catch (e) {}
+    try { localStorage.setItem('kosherai_venue_mode', 'wet_market'); } catch (e) { }
     render();
   });
   if (closeManualTripBtn) closeManualTripBtn.addEventListener('click', () => { state.manualTripModalOpen = false; render(); });
@@ -3659,7 +3767,7 @@ Cracked black pepper`;
           ? await compressImageForOCR(state.editTripPendingFile, 1600, 0.8)
           : targetImg;
 
-        const result = await scanSupermarketReceipt(dataUrl, () => {}, state.settings?.geminiApiKey, state.activeDiet || 'lid');
+        const result = await scanSupermarketReceipt(dataUrl, () => { }, state.settings?.geminiApiKey, state.activeDiet || 'lid');
         if (result) {
           if (result.storeName && document.querySelector('#edit-store-name')) {
             document.querySelector('#edit-store-name').value = result.storeName;
@@ -4260,7 +4368,7 @@ Cracked black pepper`;
           method: 'DELETE',
           headers: getAuthHeaders(),
           credentials: 'include'
-        }).catch(() => {});
+        }).catch(() => { });
         render();
       }
     });
@@ -4745,12 +4853,12 @@ window.addEventListener('kosherai:auth-changed', (e) => {
     state.isAdmin = false;
     state.commentUserName = '';
   }
-  fetchAllRecipeInteractions().then(() => render()).catch(() => {});
+  fetchAllRecipeInteractions().then(() => render()).catch(() => { });
   if (state.activeCommentDrawerRecipe?.id) {
     const activeRid = state.activeCommentDrawerRecipe.id;
     fetchRecipeDetails(activeRid).then(() => {
       if (state.activeCommentDrawerRecipe?.id === activeRid) render();
-    }).catch(() => {});
+    }).catch(() => { });
   }
   render();
 });
@@ -4761,7 +4869,7 @@ window.addEventListener('kosherai-neon-restored', () => {
   render();
 });
 window.addEventListener('kosherai:sync-data', () => {
-  pushThenRestoreFromNeon({ manual: true }).catch(() => {});
+  pushThenRestoreFromNeon({ manual: true }).catch(() => { });
 });
 window.addEventListener('kosherai:household-changed', (e) => {
   if (e.detail?.household_members) {
@@ -4959,7 +5067,7 @@ async function initializeAuthSession() {
           state.isAdmin = Boolean(u.role === 'admin' || u.role === 'administrator');
           if (u.id) handleTenantAccountChange(u.id);
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     const res = await fetch('/api/auth/get-session', { credentials: 'include', headers: getAuthHeaders() }).catch(() => null);
@@ -4995,7 +5103,7 @@ async function initializeAuthSession() {
         localStorage.removeItem('kosherai_current_user');
         localStorage.removeItem('kosherai_user_session');
         localStorage.removeItem('better-auth.session_token');
-      } catch (_) {}
+      } catch (_) { }
 
       // Verified signed out: if on an auth pathname, ensure modal is open in appropriate mode
       const authMode = getAuthModeFromPathname();
@@ -5004,7 +5112,7 @@ async function initializeAuthSession() {
         state.authModalMode = authMode;
       }
     }
-  } catch (_) {}
+  } catch (_) { }
   state.scanHistory = getLocalScanHistory();
   state.household_members = getHouseholdMembers();
   state.settings = getSettings();
@@ -5022,16 +5130,16 @@ async function initializeAuthSession() {
     initIngredientImageCache(state.activeDiet);
     fetchIngredientImages(state.activeDiet).then(() => {
       if (state.activeTab === 'checker') render();
-    }).catch(() => {});
-  } catch (_) {}
+    }).catch(() => { });
+  } catch (_) { }
   try {
     await initializeAuthSession();
     await pushThenRestoreFromNeon();
   } catch (err) {
     console.warn('[Bootstrap] Session restoration error:', err);
   }
-  fetchAllRecipeInteractions().then(() => render()).catch(() => {});
-  syncPendingRecipeInteractions().catch(() => {});
+  fetchAllRecipeInteractions().then(() => render()).catch(() => { });
+  syncPendingRecipeInteractions().catch(() => { });
   registerAndFetchVisitorCount().then((count) => {
     if (typeof count === 'number' && Number.isFinite(count)) {
       state.visitorCount = count;
@@ -5040,7 +5148,7 @@ async function initializeAuthSession() {
         footerEl.outerHTML = renderFooter({ visitorCount: count });
       }
     }
-  }).catch(() => {});
+  }).catch(() => { });
 })();
 
 if (typeof window !== 'undefined') {
@@ -5065,6 +5173,18 @@ if (typeof window !== 'undefined') {
         loadAdminImageData(state.adminImageProtocol || state.activeDiet || 'lid');
       } else {
         render();
+        if (state.appMode === 'diet' && state.activeTab === 'scanner') {
+          loadTempScannerImage().then((record) => {
+            if (record && record.dataUrl && !state.imagePreviewUrl) {
+              state.imagePreviewUrl = record.dataUrl;
+              state.lastScannedDataUrl = record.dataUrl;
+              if (!state.scanAnalysis && !state.scanError) {
+                state.scanError = 'Your previous photo was restored after returning from the camera. Tap Retry Scan to analyze it.';
+              }
+              render();
+            }
+          }).catch(() => { });
+        }
       }
     }
   });

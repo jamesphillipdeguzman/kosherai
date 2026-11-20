@@ -5,6 +5,7 @@ import {
   compressImageForOCR,
   runClientOCR,
   verifyWithGeminiAI,
+  recognizeFoodViaBackend,
   recognizeFoodWithGemini,
   evaluateFoodForProtocol,
   dataUrlToBlob,
@@ -13,6 +14,11 @@ import {
   auditReceiptItemOffline,
   cleanPinoyGroceryTerm
 } from '../services/aiVerification.js';
+import {
+  saveScannerSessionState,
+  saveTempScannerImage,
+  clearTempScannerImage
+} from '../services/scannerPersistence.js';
 import { analyzeIngredients } from '../services/ruleEngine.js';
 import { getSettings, getScanHistory, saveScanResult, clearScanHistory, isScannerEnabled, setScannerEnabled } from '../services/storage.js';
 
@@ -169,14 +175,14 @@ TOTAL AMOUNT: 430.50`
  * 3. If scanning a receipt, audit food line items & Pinoy smart swaps under the active diet protocol.
  * 4. Display clear color-coded result cards (🟢 Safe, 🔴 Avoid, 🟡 Caution) with actionable reasons and substitutions.
  */
-export async function executeScanWorkflow(file, context = {}) {
+export async function executeScanWorkflow(fileOrDataUrl, context = {}) {
   const {
     state,
     render = () => {},
     addScanToHistory = () => {}
   } = context;
 
-  if (!file || !state) return;
+  if (!fileOrDataUrl || !state) return;
   if (state.aiLoading) {
     console.warn('[ScannerPerf] Duplicate scan submission ignored while scan is already in progress.');
     return;
@@ -197,7 +203,14 @@ export async function executeScanWorkflow(file, context = {}) {
   activeScanAbortController = new AbortController();
   const scanSignal = activeScanAbortController.signal;
 
-  state.lastScannedFile = file;
+  // Keep user anchored on Scanner tab throughout processing, success, and error
+  state.appMode = 'diet';
+  state.activeTab = 'scanner';
+  saveScannerSessionState(state);
+
+  if (typeof fileOrDataUrl !== 'string') {
+    state.lastScannedFile = fileOrDataUrl;
+  }
   state.aiLoading = true;
   state.scanError = null;
   state.scanAnalysis = null;
@@ -211,10 +224,18 @@ export async function executeScanWorkflow(file, context = {}) {
     render();
 
     const tPrepStart = nowMs();
-    const dataUrl = await compressImageForOCR(file, 1024, 0.78);
+    const dataUrl = typeof fileOrDataUrl === 'string' && fileOrDataUrl.startsWith('data:')
+      ? fileOrDataUrl
+      : await compressImageForOCR(fileOrDataUrl, 1024, 0.78);
     timings.imagePrepMs = Math.round(nowMs() - tPrepStart);
     state.imagePreviewUrl = dataUrl;
+    state.lastScannedDataUrl = dataUrl;
     state.cloudinaryUrl = null;
+    // Temporarily persist captured image in IndexedDB for mobile reload/retry recovery
+    saveTempScannerImage(dataUrl, {
+      scannerTab: state.scannerTab || 'food_label',
+      activeDiet: state.activeDiet || 'lid'
+    }).catch(() => {});
     console.log(`[ScannerPerf] [${new Date().toISOString()}] Stage 1 (Preparing image): ${timings.imagePrepMs}ms`);
 
     if (scanSignal.aborted) {
@@ -222,7 +243,7 @@ export async function executeScanWorkflow(file, context = {}) {
     }
 
     const settings = getSettings();
-    const apiKey = settings.geminiApiKey;
+    const userProvidedKey = (settings.geminiApiKey || '').trim();
     const activeDiet = state.activeDiet || 'lid';
 
     const scanTarget = state.scanTarget || state.scannerTab || state.scannerMode;
@@ -235,27 +256,29 @@ export async function executeScanWorkflow(file, context = {}) {
     const uploadPreset = settings.cloudinaryPreset;
     if (cloudName && uploadPreset) {
       const tCloudStart = nowMs();
-      const uploadPayload = dataUrlToBlob(dataUrl) || file;
-      uploadToCloudinary(uploadPayload, cloudName, uploadPreset, isReceipt)
-        .then((url) => {
-          timings.cloudinaryMs = Math.round(nowMs() - tCloudStart);
-          console.log(`[ScannerPerf] [${new Date().toISOString()}] Async Cloudinary archive finished in ${timings.cloudinaryMs}ms (non-blocking)`);
-          if (url) {
-            state.cloudinaryUrl = url;
-            if (state.scanAnalysis) state.scanAnalysis.cloudinaryUrl = url;
-            if (state.scannedReceiptAudit) state.scannedReceiptAudit.cloudinaryUrl = url;
-            render();
-          }
-          return url;
-        })
-        .catch((err) => {
-          console.warn('[ScannerPerf] Async Cloudinary archive skipped:', err?.message || err);
-          return null;
-        });
+      const uploadPayload = dataUrlToBlob(dataUrl) || (typeof fileOrDataUrl !== 'string' ? fileOrDataUrl : null);
+      if (uploadPayload) {
+        uploadToCloudinary(uploadPayload, cloudName, uploadPreset, isReceipt)
+          .then((url) => {
+            timings.cloudinaryMs = Math.round(nowMs() - tCloudStart);
+            console.log(`[ScannerPerf] [${new Date().toISOString()}] Async Cloudinary archive finished in ${timings.cloudinaryMs}ms (non-blocking)`);
+            if (url) {
+              state.cloudinaryUrl = url;
+              if (state.scanAnalysis) state.scanAnalysis.cloudinaryUrl = url;
+              if (state.scannedReceiptAudit) state.scannedReceiptAudit.cloudinaryUrl = url;
+              render();
+            }
+            return url;
+          })
+          .catch((err) => {
+            console.warn('[ScannerPerf] Async Cloudinary archive skipped:', err?.message || err);
+            return null;
+          });
+      }
     }
 
     if (isReceipt) {
-      // Receipt Scanning & Audit
+      // Receipt Scanning & Audit (server-routed via /api/receipt-scan)
       state.ocrStatus = { message: 'Identifying receipt items...', stage: 'identifying' };
       state.ocrProgress = 0.45;
       render();
@@ -269,7 +292,7 @@ export async function executeScanWorkflow(file, context = {}) {
           const fill = document.querySelector('.progress-bar-fill');
           if (fill) fill.style.width = Math.round((prog.progress || 0.5) * 100) + '%';
         },
-        apiKey,
+        '',
         activeDiet
       );
       timings.recognitionMs = Math.round(nowMs() - tRecStart);
@@ -327,6 +350,7 @@ export async function executeScanWorkflow(file, context = {}) {
       console.log(`[ScannerPerf] Receipt scan complete:`, timings);
 
       state.scanError = null;
+      clearTempScannerImage().catch(() => {});
       fetchAndSyncHistory(state, render).catch(() => {});
       return;
     }
@@ -336,66 +360,18 @@ export async function executeScanWorkflow(file, context = {}) {
     state.ocrProgress = 0.50;
     render();
 
-    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine !== undefined ? navigator.onLine : true;
     let recognition = null;
     let scanAnalysis = null;
     let extractedText = '';
 
     const tRecStart = nowMs();
     if (isOnline) {
-      if (apiKey && apiKey.trim()) {
-        try {
-          recognition = await recognizeFoodWithGemini(dataUrl, apiKey, scanSignal);
-        } catch (clientErr) {
-          if (scanSignal.aborted || clientErr.name === 'AbortError') {
-            throw clientErr;
-          }
-          console.warn('[ScannerPerf] Direct client recognition notice, trying server /api/receipt-scan:', clientErr.message);
-        }
-      }
-
-      if (!recognition && !scanSignal.aborted) {
-        const serverController = new AbortController();
-        const serverTimeoutId = setTimeout(() => serverController.abort(), 10000);
-        const onUserAbort = () => serverController.abort();
-        scanSignal.addEventListener('abort', onUserAbort, { once: true });
-
-        try {
-          const apiRes = await fetch('/api/receipt-scan', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            signal: serverController.signal,
-            body: JSON.stringify({
-              imageBase64: dataUrl,
-              mimeType: 'image/jpeg',
-              activeDiet,
-              mode: 'food_recognition'
-            })
-          });
-          clearTimeout(serverTimeoutId);
-          scanSignal.removeEventListener('abort', onUserAbort);
-
-          if (apiRes.ok) {
-            const data = await apiRes.json();
-            if (data && (data.foodName || data.productName)) {
-              recognition = data;
-            }
-          } else {
-            const errBody = await apiRes.json().catch(() => ({}));
-            throw new Error(errBody.message || `Food recognition endpoint returned ${apiRes.status}`);
-          }
-        } catch (serverErr) {
-          clearTimeout(serverTimeoutId);
-          scanSignal.removeEventListener('abort', onUserAbort);
-          if (scanSignal.aborted) {
-            throw new DOMException('Scan cancelled by user', 'AbortError');
-          }
-          if (serverErr.name === 'AbortError') {
-            throw new Error('Food recognition timed out. Please retry or use Manual Food Entry.');
-          }
-          throw serverErr;
-        }
+      // Single request path: use user's explicit Settings API key ONLY if configured; otherwise route via backend /api/receipt-scan
+      if (userProvidedKey) {
+        recognition = await recognizeFoodWithGemini(dataUrl, userProvidedKey, scanSignal);
+      } else {
+        recognition = await recognizeFoodViaBackend(dataUrl, activeDiet, scanSignal);
       }
     } else {
       // Offline fallback: run on-device OCR only when offline
@@ -477,6 +453,7 @@ export async function executeScanWorkflow(file, context = {}) {
     timings.totalMs = Math.round(nowMs() - tWorkflowStart);
     console.log(`[ScannerPerf] [${new Date().toISOString()}] Stage 4 (Display & DB save): ${timings.dbSaveMs}ms | Total=${timings.totalMs}ms`, timings);
 
+    clearTempScannerImage().catch(() => {});
     fetchAndSyncHistory(state, render).catch(() => {});
   } catch (err) {
     if (err?.name === 'AbortError') {
@@ -650,13 +627,13 @@ export function renderScannerTab(state) {
 
           <!-- Mode Toggles: Food Label vs Grocery Receipt vs Paste Text -->
           <div style="display: flex; justify-content: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
-            <button id="toggle-label-mode" class="filter-btn ${activeScannerTab === 'food_label' ? 'active' : ''}">
+            <button type="button" id="toggle-label-mode" class="filter-btn ${activeScannerTab === 'food_label' ? 'active' : ''}">
               🏷️ Food Label
             </button>
-            <button id="toggle-receipt-mode" class="filter-btn ${activeScannerTab === 'receipt' ? 'active' : ''}">
+            <button type="button" id="toggle-receipt-mode" class="filter-btn ${activeScannerTab === 'receipt' ? 'active' : ''}">
               🧾 Grocery Receipt
             </button>
-            <button id="toggle-text-mode" class="filter-btn ${activeScannerTab === 'paste' ? 'active' : ''}">
+            <button type="button" id="toggle-text-mode" class="filter-btn ${activeScannerTab === 'paste' ? 'active' : ''}">
               ✏️ Paste Text
             </button>
           </div>
@@ -690,8 +667,8 @@ export function renderScannerTab(state) {
               >${escapeHtml(scanText || '')}</textarea>
               
               <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button id="scanner-clear-text-btn" class="btn-secondary" style="padding: 8px 16px;">Clear</button>
-                <button id="scanner-analyze-btn" class="btn-primary" style="padding: 8px 20px;">
+                <button type="button" id="scanner-clear-text-btn" class="btn-secondary" style="padding: 8px 16px;">Clear</button>
+                <button type="button" id="scanner-analyze-btn" class="btn-primary" style="padding: 8px 20px;">
                   Audit Pasted Items
                 </button>
               </div>
@@ -702,17 +679,17 @@ export function renderScannerTab(state) {
 
       <!-- Actionable Error Banner -->
       ${scanError ? `
-        <div class="scan-error-banner" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.45); border-radius: 14px; padding: 14px 18px; margin: 16px 0; color: #fca5a5; display: flex; align-items: flex-start; gap: 12px;">
+        <div class="scan-error-banner" role="alert" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.45); border-radius: 14px; padding: 14px 18px; margin: 16px 0; color: #fca5a5; display: flex; align-items: flex-start; gap: 12px;">
           <div style="font-size: 1.35rem; line-height: 1;">⚠️</div>
-          <div style="flex: 1;">
+          <div style="flex: 1; min-width: 0;">
             <div style="font-weight: 700; color: #ef4444; font-size: 0.95rem; margin-bottom: 4px;">
               ${(!isReceipt || activeScannerTab === 'food_label' || activeTarget === 'food_label') 
                 ? 'Food Recognition Notice' 
                 : 'Receipt Scanning Failed'}
             </div>
-            <div style="font-size: 0.88rem; line-height: 1.45; color: #fecaca;">${escapeHtml(scanError)}</div>
+            <div style="font-size: 0.88rem; line-height: 1.45; color: #fecaca; overflow-wrap: anywhere;">${escapeHtml(scanError)}</div>
             <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
-              ${state.lastScannedFile ? `
+              ${(state.lastScannedFile || state.lastScannedDataUrl || state.imagePreviewUrl) ? `
                 <button id="retry-scan-btn" type="button" class="btn-primary" style="padding: 6px 14px; font-size: 0.8rem;">
                   🔄 Retry Scan
                 </button>
@@ -733,7 +710,7 @@ export function renderScannerTab(state) {
               </ul>
             </div>
           </div>
-          <button id="dismiss-scan-error-btn" style="background: transparent; border: none; color: #fca5a5; cursor: pointer; font-size: 1.25rem; line-height: 1; padding: 2px 6px;">✕</button>
+          <button type="button" id="dismiss-scan-error-btn" style="background: transparent; border: none; color: #fca5a5; cursor: pointer; font-size: 1.25rem; line-height: 1; padding: 2px 6px;">✕</button>
         </div>
       ` : ''}
 
@@ -744,7 +721,7 @@ export function renderScannerTab(state) {
         </div>
         <div class="preset-pills-grid">
           ${SAMPLE_LABELS.map((sample, idx) => `
-            <button class="preset-chip" data-sample-index="${idx}">
+            <button type="button" class="preset-chip" data-sample-index="${idx}">
               <span>${sample.badge.includes('Safe') ? '🟢' : sample.badge.includes('Receipt') ? '🧾' : sample.badge.includes('Caution') ? '🟡' : '🔴'}</span>
               <span>${escapeHtml(sample.title)}</span>
             </button>
@@ -1285,12 +1262,12 @@ function renderAnalysisResult(analysis, rawText, aiAnalysis, aiLoading, cloudina
 
       <!-- Re-Scan and AI Action Buttons -->
       <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; align-items: center; justify-content: space-between;">
-        <button id="rescan-btn" class="btn-secondary" style="padding: 10px 18px;">
+        <button type="button" id="rescan-btn" class="btn-secondary" style="padding: 10px 18px;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M3 21v-5h5"></path></svg>
           <span>One-Tap Re-Scan / Clear</span>
         </button>
 
-        <button id="run-ai-check-btn" class="btn-primary" style="padding: 10px 20px; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);" ${aiLoading ? 'disabled' : ''}>
+        <button type="button" id="run-ai-check-btn" class="btn-primary" style="padding: 10px 20px; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);" ${aiLoading ? 'disabled' : ''}>
           <span style="font-size: 1rem;">✨</span>
           <span>${aiLoading ? 'AI Reasoning...' : (aiAnalysis ? 'Re-Run Gemini AI Verification' : 'Run Gemini AI Verification')}</span>
         </button>

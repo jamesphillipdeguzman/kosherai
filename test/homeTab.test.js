@@ -129,16 +129,32 @@ console.log('\nTest 5: ToolGuideTab renders About, Collection, Workflow, Visuali
       clear: () => store.clear()
     };
   }
+  const { registerHooks } = await import('node:module');
+  registerHooks({
+    load(url, context, nextLoad) {
+      if (url.endsWith('.webp')) {
+        return { format: 'module', shortCircuit: true, source: 'export default "/assets/process-map.webp";' };
+      }
+      return nextLoad(url, context);
+    }
+  });
   const { renderToolGuideTab } = await import('../src/components/ToolGuideTab.js');
   const guideHtml = renderToolGuideTab({});
   assert.ok(guideHtml.includes('A. About KosherAI'), 'Must include About section');
   assert.ok(guideHtml.includes('B. Data Collection Process'), 'Must include Data Collection section');
   assert.ok(guideHtml.includes('C. Data Processing Workflow'), 'Must include Processing Workflow section');
+  assert.ok(guideHtml.includes('KosherAI End-to-End Household Food and Waste Management Process Flow'), 'Must render process map alt text');
+  assert.ok(guideHtml.includes('/assets/process-map.webp'), 'Must render bundled processMapImg src');
+  assert.ok(guideHtml.includes('id="open-process-map-lightbox-btn"'), 'Must render tap-to-expand button');
   assert.ok(guideHtml.includes('D. Data Visualization'), 'Must include Data Visualization section');
   assert.ok(guideHtml.includes('E. Feature Guides'), 'Must include Feature Guides section');
   assert.ok(guideHtml.includes('User Input') && guideHtml.includes('User Insights'), 'Flowchart stages must be present');
   assert.ok(guideHtml.includes('Weekly Expenses vs.'), 'Live bar chart visualization must be rendered');
   assert.ok(guideHtml.includes('data-home-course-tab="scan"'), 'Feature guide must link to Scan Food');
+
+  const lightboxHtml = renderToolGuideTab({ processMapLightboxOpen: true });
+  assert.ok(lightboxHtml.includes('id="process-map-lightbox-overlay"'), 'Lightbox modal must render when processMapLightboxOpen is true');
+  assert.ok(lightboxHtml.includes('id="close-process-map-lightbox-btn"'), 'Lightbox close button must render');
 }
 console.log('  ✅ ToolGuideTab verified.');
 

@@ -1,6 +1,7 @@
 // AI Verification & Image Processing Service (Gemini API + PaddleOCR PP-OCRv4 + Cloudinary)
 import { runPaddleOCR, parseReceiptAmount, parseStructuredReceiptText } from './paddleOcrService.js';
 import { analyzeIngredients } from './ruleEngine.js';
+import { GEMINI_MODELS, buildGeminiRequestConfig } from '../../lib/geminiConfig.js';
 
 /**
  * Converts a base64 data URL into a Blob for lightweight Cloudinary upload
@@ -218,9 +219,9 @@ export function parseGeminiJson(rawText) {
  */
 export async function verifyWithGeminiAI(ingredientTextOrPayload, apiKey, activeDiet = 'lid', scanTarget = 'food_label') {
   const activeTarget = scanTarget || 'food_label';
-  const activeKey = (apiKey?.trim() || import.meta.env.VITE_GEMINI_API_KEY || '').trim();
+  const activeKey = (apiKey || '').trim();
   if (!activeKey) {
-    throw new Error('Please add your Gemini API Key in Settings or set VITE_GEMINI_API_KEY to enable online AI deep reasoning.');
+    throw new Error('Please add your Gemini API Key in Settings to enable direct AI deep reasoning.');
   }
 
   // Support string ingredient text or multimodal payload object { text, imageBase64, mimeType }
@@ -355,8 +356,8 @@ Return clean JSON:
   }
   parts.push({ text: prompt });
 
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
-  const timeoutMs = scanTarget === 'receipt' ? 14000 : 9000;
+  const models = GEMINI_MODELS;
+  const timeoutMs = scanTarget === 'receipt' ? 15000 : 10000;
   let response = null;
   let lastErrMsg = '';
 
@@ -364,13 +365,11 @@ Return clean JSON:
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(activeKey)}`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    const generationConfig = {
-      responseMimeType: 'application/json',
-      temperature: 0.1
-    };
-    if (model.startsWith('gemini-2.5')) {
-      generationConfig.thinkingConfig = { thinkingBudget: 0 };
-    }
+    const generationConfig = buildGeminiRequestConfig({
+      thinkingLevel: 'LOW',
+      maxOutputTokens: scanTarget === 'receipt' ? 4096 : 1024,
+      responseMimeType: 'application/json'
+    });
 
     try {
       response = await fetch(url, {
@@ -386,6 +385,7 @@ Return clean JSON:
       if (response.ok) break;
       const errData = await response.json().catch(() => ({}));
       lastErrMsg = errData.error?.message || `Gemini API error: ${response.status} ${response.statusText}`;
+      if (response.status === 401 || response.status === 403 || response.status === 400) break;
     } catch (err) {
       clearTimeout(timeoutId);
       lastErrMsg = err.name === 'AbortError'
@@ -438,8 +438,64 @@ const PROTOCOL_DISPLAY_NAMES = {
 };
 
 /**
- * Stage 1: Fast visual food recognition using Gemini Flash (with thinkingBudget: 0 and strict timeout).
- * Recognizes produce, Filipino local names (kamote, gabi, ube, malunggay, sayote), dishes, or packaged labels.
+ * Stage 1 (Default Backend Route): Visual food recognition via /api/receipt-scan using server-side Gemini 3.8 credentials.
+ */
+export async function recognizeFoodViaBackend(dataUrl, activeDiet = 'lid', externalSignal = null) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 14000);
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      clearTimeout(timeoutId);
+      throw new DOMException('Scan cancelled by user', 'AbortError');
+    }
+    externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+  }
+
+  try {
+    const apiRes = await fetch('/api/receipt-scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      signal: controller.signal,
+      body: JSON.stringify({
+        imageBase64: dataUrl,
+        mimeType: 'image/jpeg',
+        activeDiet,
+        mode: 'food_recognition'
+      })
+    });
+    clearTimeout(timeoutId);
+    if (externalSignal) externalSignal.removeEventListener('abort', onExternalAbort);
+
+    const payload = await apiRes.json().catch(() => null);
+    if (!apiRes.ok) {
+      const msg = payload?.message || `Food recognition failed with status ${apiRes.status}. Please retry.`;
+      const err = new Error(msg);
+      err.status = apiRes.status;
+      err.errorType = payload?.errorType || 'SERVER_ERROR';
+      throw err;
+    }
+
+    if (!payload || !payload.foodName) {
+      throw new Error('Food recognition returned an incomplete response. Please retry or enter manually.');
+    }
+    return payload;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (externalSignal) externalSignal.removeEventListener('abort', onExternalAbort);
+    if (externalSignal?.aborted) {
+      throw new DOMException('Scan cancelled by user', 'AbortError');
+    }
+    if (err.name === 'AbortError') {
+      throw new Error('Food recognition timed out. Please retry with the captured image.');
+    }
+    throw err;
+  }
+}
+
+/**
+ * Stage 1 (Explicit User-Configured Key Only): Visual food recognition using Gemini 3.8 Flash.
  */
 export async function recognizeFoodWithGemini(dataUrl, apiKey, externalSignal = null) {
   const activeKey = (apiKey || '').trim();
@@ -463,8 +519,8 @@ Return strictly JSON:
   "needsClarification": false
 }`;
 
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
-  const timeoutMs = 8500;
+  const models = GEMINI_MODELS;
+  const timeoutMs = 10000;
   let lastErr = '';
 
   for (const model of models) {
@@ -480,14 +536,11 @@ Return strictly JSON:
       externalSignal.addEventListener('abort', onExternalAbort, { once: true });
     }
 
-    const generationConfig = {
-      responseMimeType: 'application/json',
-      temperature: 0.1,
-      maxOutputTokens: 512
-    };
-    if (model.startsWith('gemini-2.5')) {
-      generationConfig.thinkingConfig = { thinkingBudget: 0 };
-    }
+    const generationConfig = buildGeminiRequestConfig({
+      thinkingLevel: 'LOW',
+      maxOutputTokens: 512,
+      responseMimeType: 'application/json'
+    });
 
     try {
       const response = await fetch(url, {
@@ -511,7 +564,7 @@ Return strictly JSON:
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         const parsed = parseGeminiJson(text);
-        if (parsed) {
+        if (parsed && (parsed.foodName || parsed.productName)) {
           return {
             source: 'GEMINI_VISION_STAGE1',
             modelUsed: model,
@@ -527,6 +580,9 @@ Return strictly JSON:
       } else {
         const errData = await response.json().catch(() => ({}));
         lastErr = errData.error?.message || `Model ${model} returned ${response.status}`;
+        if (response.status === 401 || response.status === 403 || response.status === 400) {
+          break;
+        }
       }
     } catch (err) {
       clearTimeout(timeoutId);
@@ -617,9 +673,9 @@ export function evaluateFoodForProtocol(recognition = {}, activeDiet = 'lid') {
 
   const parsedTokens = ruleResult.parsedTokens && ruleResult.parsedTokens.length > 0
     ? ruleResult.parsedTokens.map(t => ({
-        ...t,
-        status: status !== 'SAFE' && t.status === 'SAFE' ? status : t.status
-      }))
+      ...t,
+      status: status !== 'SAFE' && t.status === 'SAFE' ? status : t.status
+    }))
     : [{ text: displayName, status, matchedReason: reason }];
 
   return {
@@ -700,21 +756,13 @@ export async function uploadToCloudinary(blob, cloudName, uploadPreset, isReceip
 export async function scanSupermarketReceipt(dataUrl, onProgress = () => { }, clientApiKey = '', activeDiet = 'lid') {
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
-  // Resolve API key from arguments, Vite env, or process env
-  const resolvedApiKey = (
-    clientApiKey ||
-    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) ||
-    (typeof import.meta !== 'undefined' && import.meta.env?.GEMINI_API_KEY) ||
-    ''
-  ).trim();
-
   // Condition 2: Strict offline check upfront
   if (!isOnline) {
     console.warn('[ReceiptScan] Device strictly offline. Running on-device PaddleOCR fallback...');
     return await executeLocalOcrFallback(dataUrl, onProgress, 'Switching to on-device PaddleOCR engine...', activeDiet);
   }
 
-  console.log(`[ReceiptScan] Initiating supermarket receipt scan for protocol "${activeDiet}". Key present: ${Boolean(resolvedApiKey)}`);
+  console.log(`[ReceiptScan] Initiating server-routed supermarket receipt scan for protocol "${activeDiet}".`);
 
   // Phased Status Feedback During Processing:
   // 0s–3s: "Uploading receipt image..."
@@ -814,89 +862,9 @@ export async function scanSupermarketReceipt(dataUrl, onProgress = () => { }, cl
     }
   }
 
-  // Direct Client-side Gemini fallback if API key is provided and failure was not 30s timeout
-  if (shouldTriggerOcrFallback && !controller.signal.aborted && resolvedApiKey && isOnline) {
-    try {
-      console.log('[ReceiptScan] Attempting direct client-side Gemini Vision fallback with resolved API key...');
-      const prompt = `Extract all purchased food line items and receipt details from this Philippine supermarket receipt image.
-Evaluate each item under the "${activeDiet.toUpperCase()}" dietary compliance protocol.
-Return strictly JSON:
-{
-  "storeName": "Store or Supermarket Name",
-  "purchaseDate": "YYYY-MM-DD",
-  "totalAmountPaid": 0.00,
-  "items": [
-    {
-      "name": "Clean Item Name",
-      "quantity": 1,
-      "unit": "pcs",
-      "unitPrice": 0.00,
-      "totalPrice": 0.00,
-      "category": "Produce | Meat | Dairy/Alt | Pantry | Bakery | Beverages | General Food",
-      "lidStatus": "SAFE | AVOID | CAUTION",
-      "lidReason": "Brief dietary compliance reason"
-    }
-  ]
-}`;
-      const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
-      const cleanBase64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
-
-      for (const model of models) {
-        console.log(`[ReceiptScan] Calling direct client Gemini Vision with model "${model}"...`);
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(resolvedApiKey)}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 14000);
-        const generationConfig = {
-          responseMimeType: "application/json",
-          temperature: 0.1,
-          maxOutputTokens: 4096
-        };
-        if (model.startsWith('gemini-2.5')) {
-          generationConfig.thinkingConfig = { thinkingBudget: 0 };
-        }
-        try {
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: controller.signal,
-            body: JSON.stringify({
-              contents: [{
-                parts: [
-                  { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
-                  { text: prompt }
-                ]
-              }],
-              generationConfig
-            })
-          });
-          clearTimeout(timeoutId);
-
-          if (response.ok) {
-            const jsonRes = await response.json();
-            const text = jsonRes.candidates?.[0]?.content?.parts?.[0]?.text;
-            const parsed = parseGeminiJson(text);
-            if (parsed) {
-              console.log(`[ReceiptScan] Direct client Gemini Vision call succeeded with model "${model}"! Detected ${parsed.items?.length || 0} items.`);
-              onProgress({ status: 'populating', progress: 0.95, message: 'Populating receipt items...' });
-              return normalizeReceiptData(parsed, 'CLIENT_GEMINI_VISION');
-            }
-          } else {
-            const errData = await response.json().catch(() => ({}));
-            console.warn(`[ReceiptScan] Direct client Gemini Vision model "${model}" failed (${response.status}):`, errData.error?.message || response.statusText);
-          }
-        } catch (modelErr) {
-          clearTimeout(timeoutId);
-          console.warn(`[ReceiptScan] Direct client Gemini Vision model "${model}" exception:`, modelErr.message);
-        }
-      }
-    } catch (clientErr) {
-      console.warn('[ReceiptScan] Direct client Gemini fallback exception:', clientErr);
-    }
-  }
-
   // Graceful Client PaddleOCR (PP-OCRv4) fallback when fallback criteria are met
   if (shouldTriggerOcrFallback) {
-    console.warn('[ReceiptScan] Gemini Vision endpoints unavailable or exhausted. Running on-device PaddleOCR fallback...');
+    console.warn('[ReceiptScan] Server Gemini Vision endpoint unavailable or timed out. Running on-device PaddleOCR fallback...');
     return await executeLocalOcrFallback(dataUrl, onProgress, ocrFallbackMessage, activeDiet);
   }
 
@@ -1089,14 +1057,7 @@ export const scanReceipt = scanSupermarketReceipt;
  * High-level receipt audit function for Scanner tab & Course Project
  */
 export async function auditGroceryReceipt(imageSource, onProgress = () => { }, clientApiKey = '', activeDiet = 'lid') {
-  const resolvedApiKey = (
-    clientApiKey ||
-    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) ||
-    (typeof import.meta !== 'undefined' && import.meta.env?.GEMINI_API_KEY) ||
-    ''
-  ).trim();
-
-  console.log(`[auditGroceryReceipt] Starting receipt audit for diet "${activeDiet}". Live Gemini API key configured: ${Boolean(resolvedApiKey)}`);
+  console.log(`[auditGroceryReceipt] Starting server-routed receipt audit for diet "${activeDiet}".`);
 
   let dataUrl = imageSource;
   if (typeof imageSource !== 'string' || !imageSource.startsWith('data:')) {
@@ -1104,7 +1065,7 @@ export async function auditGroceryReceipt(imageSource, onProgress = () => { }, c
   }
 
   try {
-    const result = await scanSupermarketReceipt(dataUrl, onProgress, resolvedApiKey, activeDiet);
+    const result = await scanSupermarketReceipt(dataUrl, onProgress, '', activeDiet);
     console.log(`[auditGroceryReceipt] Receipt scan completed using engine "${result.source}". Detected items: ${result.items?.length || 0}`);
     return result;
   } catch (err) {

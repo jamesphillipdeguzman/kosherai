@@ -2,6 +2,7 @@
 // Interactive documentation of KosherAI's purpose, data collection, processing pipeline, live visualizations, and feature guides.
 import { getSixWeekComparison, getCourseConfig } from '../services/courseProjectStorage.js';
 import { renderHouseholdInsightsDashboard } from './HouseholdInsightsView.js';
+import processMapImg from '../docs/process-map.webp';
 
 export function renderToolGuideTab(state = {}) {
   const config = getCourseConfig();
@@ -189,6 +190,28 @@ export function renderToolGuideTab(state = {}) {
         <p class="guide-lead">
           Every record follows the application's actual end-to-end processing pipeline from user entry to insight generation:
         </p>
+
+        <div class="rounded-xl border border-slate-700/60 bg-slate-900/60 p-3 sm:p-4 shadow-lg" style="margin: 16px 0 20px;">
+          <button
+            type="button"
+            id="open-process-map-lightbox-btn"
+            style="display: block; width: 100%; background: transparent; border: none; padding: 0; cursor: zoom-in; text-align: left;"
+            aria-label="Expand process map diagram"
+            title="Tap to expand process map"
+          >
+            <img
+              src="${processMapImg}"
+              alt="KosherAI End-to-End Household Food and Waste Management Process Flow"
+              class="w-full h-auto rounded-lg object-contain"
+              style="display: block; width: 100%; height: auto;"
+              loading="lazy"
+            />
+          </button>
+          <p style="margin: 8px 0 0; font-size: 0.78rem; color: #94a3b8; text-align: center;">
+            End-to-end household food, grocery, and waste management flow — tap image to expand &amp; zoom.
+          </p>
+        </div>
+
         <div class="guide-flowchart" role="list" aria-label="KosherAI Data Processing Flowchart">
           ${workflowStages.map(stage => `
             <div class="guide-flow-node" role="listitem">
@@ -263,6 +286,32 @@ export function renderToolGuideTab(state = {}) {
           `).join('')}
         </div>
       </section>
+
+      ${state.processMapLightboxOpen ? `
+        <div
+          id="process-map-lightbox-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="KosherAI Process Flow Diagram"
+          style="position: fixed; inset: 0; z-index: 60; background: rgba(2, 6, 23, 0.9); backdrop-filter: blur(4px); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px;"
+        >
+          <div style="width: 100%; max-width: 1120px; display: flex; justify-content: flex-end; margin-bottom: 10px;">
+            <button
+              type="button"
+              id="close-process-map-lightbox-btn"
+              aria-label="Close process map"
+              style="background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 9999px; width: 38px; height: 38px; font-size: 1.1rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;"
+            >✕</button>
+          </div>
+          <div style="width: 100%; max-width: 1120px; max-height: 85vh; overflow: auto; border-radius: 12px; background: #0f172a; border: 1px solid #334155; padding: 8px;">
+            <img
+              src="${processMapImg}"
+              alt="KosherAI End-to-End Household Food and Waste Management Process Flow"
+              style="display: block; width: 100%; height: auto; object-fit: contain; touch-action: pinch-zoom;"
+            />
+          </div>
+        </div>
+      ` : ''}
     </div>
   `;
 }

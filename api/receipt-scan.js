@@ -2,6 +2,7 @@
 // Connects to Google Gemini Vision with server-side API key protection
 import 'dotenv/config';
 import { setCorsHeaders } from '../lib/auth.js';
+import { GEMINI_MODELS, buildGeminiRequestConfig, classifyGeminiError } from '../lib/geminiConfig.js';
 
 export const config = {
   maxDuration: 30, // Extends max execution time up to 30s
@@ -218,34 +219,63 @@ export default async function handler(req, res) {
       clientHint = '',
       activeDiet = 'lid',
       mode = ''
-    } = body;
+    } = body || {};
 
     const apiKey = (
       process.env.GEMINI_API_KEY ||
-      process.env.VITE_GEMINI_API_KEY ||
       process.env.GEMINI_KEY ||
-      req.body?.apiKey ||
-      body?.apiKey ||
       ''
     ).trim();
     if (!apiKey) {
       return sendJson(res, 503, {
         error: 'GEMINI_API_KEY_NOT_CONFIGURED',
-        message: 'GEMINI_API_KEY is not configured in Vercel Project Settings or KosherAI Settings. Falling back to on-device OCR.'
+        errorType: 'AUTH_ERROR',
+        retryable: false,
+        message: 'Server Gemini API key is not configured.'
       });
     }
 
     const currentDiet = DIET_NAMES[activeDiet] ? activeDiet : 'lid';
     const currentDietName = DIET_NAMES[currentDiet];
 
-    if (!imageBase64) {
+    if (!imageBase64 || typeof imageBase64 !== 'string') {
       return sendJson(res, 400, {
         error: 'MISSING_IMAGE',
-        message: 'imageBase64 payload is required for receipt scanning.'
+        errorType: 'INVALID_IMAGE',
+        retryable: false,
+        message: 'imageBase64 payload is required.'
       });
     }
 
-    const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
+    const supportedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+    const normalizedMime = String(mimeType || 'image/jpeg').toLowerCase().split(';')[0].trim();
+    if (!supportedMimes.includes(normalizedMime)) {
+      return sendJson(res, 400, {
+        error: 'UNSUPPORTED_IMAGE_TYPE',
+        errorType: 'INVALID_IMAGE',
+        retryable: false,
+        message: `Unsupported image MIME type: ${normalizedMime}`
+      });
+    }
+
+    const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '').trim();
+    if (!cleanBase64 || cleanBase64.length < 32) {
+      return sendJson(res, 400, {
+        error: 'INVALID_IMAGE_DATA',
+        errorType: 'INVALID_IMAGE',
+        retryable: false,
+        message: 'Captured image data is empty or corrupted.'
+      });
+    }
+    // Guard against oversized payloads (~8MB base64)
+    if (cleanBase64.length > 8 * 1024 * 1024) {
+      return sendJson(res, 413, {
+        error: 'IMAGE_TOO_LARGE',
+        errorType: 'INVALID_IMAGE',
+        retryable: false,
+        message: 'Image payload is too large. Please retry with a smaller or compressed photo.'
+      });
+    }
 
     const isFoodRecognition = mode === 'food_recognition' || body.scanTarget === 'food_recognition';
     const isFoodLabel = !isFoodRecognition && (body.scanTarget === 'food_label' || body.scanType === 'food_label');
@@ -308,11 +338,12 @@ Return strictly JSON:
 }`;
     }
 
-    // Fast Gemini Flash cascade (no slow legacy 1.5-flash, disable extended thinking on 2.5-flash)
-    const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
-    const perModelTimeoutMs = isFoodRecognition ? 8500 : 14000;
+    // Centralized Gemini 3.8 Flash cascade with thinkingLevel: 'LOW'
+    const models = GEMINI_MODELS;
+    const perModelTimeoutMs = isFoodRecognition ? 9500 : 15000;
     let response = null;
     let lastErrMessage = '';
+    let lastClassification = classifyGeminiError(502, '');
     let modelUsed = '';
     const tGeminiStart = Date.now();
 
@@ -320,14 +351,12 @@ Return strictly JSON:
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), perModelTimeoutMs);
-      const generationConfig = {
-        responseMimeType: "application/json",
-        temperature: 0.1,
-        maxOutputTokens: isFoodRecognition ? 512 : 4096
-      };
-      if (model.startsWith('gemini-2.5')) {
-        generationConfig.thinkingConfig = { thinkingBudget: 0 };
-      }
+      const generationConfig = buildGeminiRequestConfig({
+        thinkingLevel: 'LOW',
+        maxOutputTokens: isFoodRecognition ? 512 : 4096,
+        responseMimeType: 'application/json'
+      });
+
       try {
         response = await fetch(url, {
           method: 'POST',
@@ -339,7 +368,7 @@ Return strictly JSON:
                 parts: [
                   {
                     inlineData: {
-                      mimeType,
+                      mimeType: normalizedMime,
                       data: cleanBase64
                     }
                   },
@@ -358,52 +387,54 @@ Return strictly JSON:
         } else {
           const errData = await response.json().catch(() => ({}));
           lastErrMessage = errData.error?.message || `Model ${model} returned status ${response.status}`;
-          console.warn(`[API /api/receipt-scan] Model ${model} failed (${response.status}): ${lastErrMessage}. Trying next model...`);
+          lastClassification = classifyGeminiError(response.status, lastErrMessage);
+          console.warn(`[API /api/receipt-scan] Model ${model} failed (${response.status}, type=${lastClassification.errorType}): ${lastErrMessage}`);
+          // Do not retry permanent errors (invalid credentials or invalid image)
+          if (!lastClassification.retryable) {
+            break;
+          }
         }
       } catch (fetchErr) {
         clearTimeout(timeoutId);
         lastErrMessage = fetchErr.name === 'AbortError'
           ? `Model ${model} timed out after ${perModelTimeoutMs}ms`
-          : fetchErr.message;
-        console.warn(`[API /api/receipt-scan] Model ${model} fetch exception: ${lastErrMessage}`);
+          : (fetchErr.message || 'Network request failed');
+        lastClassification = classifyGeminiError(0, lastErrMessage, fetchErr.name);
+        console.warn(`[API /api/receipt-scan] Model ${model} exception (type=${lastClassification.errorType}): ${lastErrMessage}`);
       }
     }
     const geminiMs = Date.now() - tGeminiStart;
 
     if (!response || !response.ok) {
-      console.warn(`[API /api/receipt-scan] All Gemini models failed in ${geminiMs}ms: ${lastErrMessage}`);
-      return sendJson(res, 502, {
-        error: 'GEMINI_API_ERROR',
-        message: lastErrMessage || 'Failed to analyze image with Gemini Vision.'
+      console.warn(`[API /api/receipt-scan] Gemini cascade failed in ${geminiMs}ms (${lastClassification.errorType}): ${lastErrMessage}`);
+      return sendJson(res, lastClassification.httpStatus, {
+        error: lastClassification.errorType,
+        errorType: lastClassification.errorType,
+        retryable: lastClassification.retryable,
+        message: lastClassification.userMessage
       });
     }
 
-    const data = await response.json();
-    const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const data = await response.json().catch(() => null);
+    const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!candidateText) {
       return sendJson(res, 502, {
         error: 'EMPTY_AI_RESPONSE',
-        message: 'No response received from Gemini model.'
+        errorType: 'MALFORMED_RESPONSE',
+        retryable: true,
+        message: 'Gemini returned an empty response. Please retry with the captured image.'
       });
     }
 
-    // Step 3: Enforce Resilient JSON Parsing on the Response
-    let rawResponse = candidateText;
-    rawResponse = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
-
-    let parsedData = null;
-    try {
-      parsedData = parseGeminiJson(rawResponse);
-      if (!parsedData) {
-        throw new Error("Could not parse receipt contents. Please ensure the receipt is well-lit and legible.");
-      }
-    } catch (err) {
-      console.error("Failed to parse receipt scanner JSON:", rawResponse);
+    const parsedData = parseGeminiJson(candidateText);
+    if (!parsedData || typeof parsedData !== 'object') {
+      console.error('[API /api/receipt-scan] Failed to parse Gemini JSON:', String(candidateText).slice(0, 300));
       return sendJson(res, 502, {
         error: 'INVALID_JSON_RESPONSE',
-        message: 'Could not parse receipt contents. Please ensure the receipt is well-lit and legible.',
-        raw: rawResponse
+        errorType: 'MALFORMED_RESPONSE',
+        retryable: true,
+        message: 'Could not parse structured data from AI response. Please retry.'
       });
     }
 
@@ -411,21 +442,38 @@ Return strictly JSON:
     console.log(`[API /api/receipt-scan] mode=${isFoodRecognition ? 'food_recognition' : (isFoodLabel ? 'food_label' : 'receipt')} model=${modelUsed} geminiMs=${geminiMs} totalMs=${totalMs}`);
 
     if (isFoodRecognition) {
+      const foodName = String(parsedData.foodName || parsedData.productName || '').trim();
+      if (!foodName) {
+        return sendJson(res, 502, {
+          error: 'INCOMPLETE_AI_RESPONSE',
+          errorType: 'MALFORMED_RESPONSE',
+          retryable: true,
+          message: 'AI could not identify a food name from the image. Please retry or enter manually.'
+        });
+      }
       return sendJson(res, 200, {
         success: true,
         source: 'GEMINI_VISION_STAGE1',
-        foodName: parsedData.foodName || parsedData.productName || 'Unidentified Food',
-        localName: parsedData.localName || '',
+        foodName,
+        localName: String(parsedData.localName || '').trim(),
         isPackagedLabel: Boolean(parsedData.isPackagedLabel),
-        ingredientsText: parsedData.ingredientsText || '',
+        ingredientsText: String(parsedData.ingredientsText || '').trim(),
         confidence: typeof parsedData.confidence === 'number' ? parsedData.confidence : 0.85,
-        explanation: parsedData.explanation || '',
+        explanation: String(parsedData.explanation || '').trim(),
         needsClarification: Boolean(parsedData.needsClarification),
         timings: { geminiMs, totalMs, modelUsed }
       });
     }
 
     if (isFoodLabel) {
+      if (!parsedData.status) {
+        return sendJson(res, 502, {
+          error: 'INCOMPLETE_AI_RESPONSE',
+          errorType: 'MALFORMED_RESPONSE',
+          retryable: true,
+          message: 'AI response was missing food safety status. Please retry.'
+        });
+      }
       return sendJson(res, 200, {
         success: true,
         source: 'GEMINI_VISION',
