@@ -3994,6 +3994,12 @@ html.dark .week-pill-dates,
   border-top: 1px solid var(--border-color);
   padding-top: 14px;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.course-subnav::-webkit-scrollbar {
+  display: none;
 }
 
 .subnav-btn {
@@ -4006,8 +4012,33 @@ html.dark .week-pill-dates,
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;
   transition: all 0.2s ease;
   user-select: none;
+}
+
+.subnav-btn.subnav-scan-highlight {
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #34d399 !important;
+}
+
+html.light .subnav-btn.subnav-scan-highlight {
+  border-color: rgba(5, 150, 105, 0.4) !important;
+  background: #ecfdf5 !important;
+  color: #047857 !important;
+}
+
+.scan-food-embedded-wrapper {
+  width: 100%;
+}
+
+.receipt-scanner-embedded {
+  max-width: 100% !important;
+  width: 100% !important;
+  max-height: none !important;
+  margin: 0 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
 }
 
 html.light .subnav-btn:not(.active) {

@@ -2541,6 +2541,48 @@ Cracked black pepper`;
   if (openReceiptScannerBtn) openReceiptScannerBtn.addEventListener('click', handleOpenReceiptScanner);
   if (emptyScanBtn) emptyScanBtn.addEventListener('click', handleOpenReceiptScanner);
 
+  // Scan Food: In-Scanner Dietary Protocol Selector (Low-Iodine, Low-Purine, Low-Sodium, Diabetic, Pinoy Keto)
+  const scanDietSelector = document.querySelector('#scan-diet-selector');
+  if (scanDietSelector) {
+    scanDietSelector.addEventListener('change', (e) => {
+      const nextDiet = e.target.value;
+      state.activeDiet = setActiveDiet(nextDiet);
+      if (state.scannedReceiptData && Array.isArray(state.scannedReceiptData.items)) {
+        const reAudited = state.scannedReceiptData.items.map(item => {
+          const audit = auditReceiptItemOffline(item.name || '', state.activeDiet);
+          return {
+            ...item,
+            dietStatus: audit.status,
+            lidStatus: audit.status,
+            isSafeForDiet: audit.status !== 'AVOID',
+            dietReason: audit.reason,
+            lidReason: audit.reason
+          };
+        });
+        const flagged = reAudited.filter(i => i.dietStatus === 'AVOID' || i.isSafeForDiet === false).length;
+        state.scannedReceiptData = {
+          ...state.scannedReceiptData,
+          items: reAudited,
+          flaggedItemCount: flagged,
+          safeItemCount: reAudited.length - flagged,
+          activeDietName: undefined
+        };
+      }
+      render();
+    });
+  }
+
+  // Scan Food: Guest Sign In / Create Account prompt (preserves current scan state)
+  const scanGuestSignInBtn = document.querySelector('#scan-guest-signin-btn');
+  if (scanGuestSignInBtn) {
+    scanGuestSignInBtn.addEventListener('click', () => {
+      state.authModalOpen = true;
+      state.authModalMode = 'signup';
+      state.authModalError = '';
+      render();
+    });
+  }
+
   // Receipt Scanner Theme Toggle (Sun/Moon)
   const receiptThemeToggleBtn = document.querySelector('#receipt-theme-toggle-btn');
   const receiptThemeIcon = document.querySelector('#receipt-theme-icon');
@@ -2946,6 +2988,15 @@ Cracked black pepper`;
     receiptVerificationForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
+      if (!state.user) {
+        showToast?.('Sign in or create a free account to save receipts to your history.');
+        state.authModalOpen = true;
+        state.authModalMode = 'signup';
+        state.authModalError = '';
+        render();
+        return;
+      }
+
       const activeVenue = state.groceryVenueMode || (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_venue_mode') : null) || 'supermarket';
       const isWetMarket = activeVenue === 'wet_market';
       const trip_type = isWetMarket ? 'wet_market' : 'supermarket';
@@ -3017,6 +3068,9 @@ Cracked black pepper`;
       state.receiptModalOpen = false;
       state.scannedReceiptData = null;
       state.receiptPreviewUrl = null;
+      if (state.courseSubTab === 'scan') {
+        state.courseSubTab = 'trips';
+      }
       render();
     });
   }
@@ -3025,6 +3079,14 @@ Cracked black pepper`;
   const quickSaveDraftBtn = document.querySelector('#quick-save-draft-btn');
   if (quickSaveDraftBtn) {
     quickSaveDraftBtn.addEventListener('click', async () => {
+      if (!state.user) {
+        showToast?.('Sign in or create a free account to save receipt drafts.');
+        state.authModalOpen = true;
+        state.authModalMode = 'signup';
+        state.authModalError = '';
+        render();
+        return;
+      }
       const activeVenue = state.groceryVenueMode || (typeof localStorage !== 'undefined' ? localStorage.getItem('kosherai_venue_mode') : null) || 'supermarket';
       const isWetMarket = activeVenue === 'wet_market';
       const trip_type = isWetMarket ? 'wet_market' : 'supermarket';

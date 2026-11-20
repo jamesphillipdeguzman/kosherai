@@ -67,7 +67,7 @@ export {
 
 import { compressImage, scanSupermarketReceipt } from '../services/aiVerification.js';
 import { LID_DATABASE, STATUS } from '../data/lidDatabase.js';
-import { getDietProfile } from '../data/dietProfiles.js';
+import { getDietProfile, DIET_PROFILES } from '../data/dietProfiles.js';
 import { DIET_RECIPES } from '../data/dietRecipes.js';
 import lidRecipes from '../data/lidRecipes.json' with { type: 'json' };
 import { renderManualTripModal } from './ManualTripModal.js';
@@ -149,6 +149,9 @@ export function renderCourseProjectView(state = {}) {
           <button class="${getSubNavClasses('dashboard')}" data-subtab="dashboard">
             <span class="nav-icon text-sm select-none">📊</span> Dashboard & Insights
           </button>
+          <button class="${getSubNavClasses('scan')}${activeSubTab === 'scan' ? '' : ' subnav-scan-highlight'}" data-subtab="scan">
+            <span class="nav-icon text-sm select-none">📷</span> Scan Food
+          </button>
           <button class="${getSubNavClasses('trips')}" data-subtab="trips">
             <span class="nav-icon text-sm select-none">🧾</span> Shopping Trips & Receipts
           </button>
@@ -195,6 +198,8 @@ function renderSubTabContent(subTab, state, comparison, config) {
   switch (subTab) {
     case 'dashboard':
       return renderDashboardTab(comparison, config, state);
+    case 'scan':
+      return renderReceiptScanModal(state, { embedded: true });
     case 'trips':
       return renderShoppingTripsTab(state);
     case 'groceries':
@@ -960,7 +965,8 @@ function createReceiptItemRowHtml(item = {}, idx = 0, dietProfile = null, isWetM
 /**
  * Side-by-Side Supermarket Receipt Scanner & Verification Modal
  */
-function renderReceiptScanModal(state) {
+function renderReceiptScanModal(state, options = {}) {
+  const embedded = Boolean(options?.embedded);
   const scanData = state.scannedReceiptData || null;
   const isScanning = state.receiptScanning || false;
   const scanProgress = state.receiptProgress || 0;
@@ -1079,8 +1085,10 @@ function renderReceiptScanModal(state) {
   const portraitTipDismissed = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('kosherai_portrait_tip_dismissed') === '1';
 
   return `
-    <div class="modal-overlay" id="receipt-modal-overlay">
-      <div class="modal-content receipt-modal-large" role="dialog" aria-modal="true">
+    ${embedded
+      ? '<div class="scan-food-embedded-wrapper" id="receipt-scanner-embedded">'
+      : '<div class="modal-overlay" id="receipt-modal-overlay">'}
+      <div class="modal-content receipt-modal-large${embedded ? ' receipt-scanner-embedded' : ''}" role="${embedded ? 'region' : 'dialog'}" ${embedded ? 'aria-label="Scan Food & Receipt Scanner"' : 'aria-modal="true"'}>
         <!-- Header -->
         <div class="modal-header">
           <div style="flex: 1; padding-right: 12px; min-width: 0;">
@@ -1092,10 +1100,17 @@ function renderReceiptScanModal(state) {
             </div>
           </div>
           <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-            <button type="button" class="btn-icon theme-toggle-btn" id="receipt-theme-toggle-btn" title="Toggle Light / Dark Theme" aria-label="Toggle Light / Dark Theme">
-              <span id="receipt-theme-icon">☀️</span>
-            </button>
-            <button type="button" class="btn-icon" id="close-receipt-modal-btn" title="Close modal" aria-label="Close modal">✕</button>
+            <select id="scan-diet-selector" class="form-input text-xs py-1.5 px-2.5 rounded-lg" aria-label="Evaluate against dietary protocol" title="Select dietary protocol for scan evaluation" style="width: auto; min-width: 140px; cursor: pointer;">
+              ${Object.values(DIET_PROFILES).map(p => `
+                <option value="${p.id}" ${p.id === activeDietKey ? 'selected' : ''}>${p.icon} ${escapeHtml(p.shortName)}</option>
+              `).join('')}
+            </select>
+            ${!embedded ? `
+              <button type="button" class="btn-icon theme-toggle-btn" id="receipt-theme-toggle-btn" title="Toggle Light / Dark Theme" aria-label="Toggle Light / Dark Theme">
+                <span id="receipt-theme-icon">☀️</span>
+              </button>
+              <button type="button" class="btn-icon" id="close-receipt-modal-btn" title="Close modal" aria-label="Close modal">✕</button>
+            ` : ''}
           </div>
         </div>
 
@@ -1308,8 +1323,15 @@ function renderReceiptScanModal(state) {
                 </div>
               </div>
 
+              ${!state.user ? `
+                <div class="scan-guest-notice flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl border border-teal-500/30 bg-teal-500/10 text-xs text-slate-700 dark:text-slate-200 mb-3">
+                  <span>Exploring as Guest — Scan any food or receipt freely. Sign in or create a free account when you're ready to save to your history.</span>
+                  <button type="button" id="scan-guest-signin-btn" class="btn-secondary shrink-0" style="padding: 6px 12px; font-size: 0.75rem;">Sign In / Create Account</button>
+                </div>
+              ` : ''}
+
               <div class="modal-footer-actions">
-                <button type="button" class="btn-secondary" id="cancel-receipt-modal-btn" ${isScanning ? 'disabled' : ''} style="min-height: 44px; padding: 0 18px;">Cancel</button>
+                ${!embedded ? `<button type="button" class="btn-secondary" id="cancel-receipt-modal-btn" ${isScanning ? 'disabled' : ''} style="min-height: 44px; padding: 0 18px;">Cancel</button>` : ''}
                 <button type="button" class="btn-secondary" id="quick-save-draft-btn" ${isScanning ? 'disabled' : ''} style="min-height: 44px; padding: 0 16px; border-color: rgba(245, 158, 11, 0.5); color: #f59e0b;" title="Save photo draft to complete details later">📝 Quick Save Draft</button>
                 <button type="submit" class="btn-primary" id="save-receipt-trip-btn" ${isScanning ? 'disabled' : ''} style="min-height: 44px; padding: 0 22px;">💾 Save Verified Shopping Trip</button>
               </div>
