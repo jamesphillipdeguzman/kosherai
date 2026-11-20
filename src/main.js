@@ -678,19 +678,22 @@ function attachEventHandlers() {
     });
   });
 
-  // Tool Guide Process Map Lightbox
-  const openProcessMapBtn = document.querySelector('#open-process-map-lightbox-btn');
-  if (openProcessMapBtn) {
-    openProcessMapBtn.addEventListener('click', (e) => {
+  // Tool Guide Diagrams Lightbox (Data Collection & Process Map)
+  document.querySelectorAll('.tool-guide-lightbox-trigger').forEach(btn => {
+    btn.addEventListener('click', (e) => {
       e.preventDefault();
+      const src = btn.getAttribute('data-lightbox-src');
+      const alt = btn.getAttribute('data-lightbox-alt') || 'KosherAI Diagram';
+      state.toolGuideLightbox = src ? { src, alt } : null;
       state.processMapLightboxOpen = true;
       render();
     });
-  }
+  });
   const closeProcessMapBtn = document.querySelector('#close-process-map-lightbox-btn');
   if (closeProcessMapBtn) {
     closeProcessMapBtn.addEventListener('click', (e) => {
       e.preventDefault();
+      state.toolGuideLightbox = null;
       state.processMapLightboxOpen = false;
       render();
     });
@@ -699,6 +702,7 @@ function attachEventHandlers() {
   if (processMapOverlay) {
     processMapOverlay.addEventListener('click', (e) => {
       if (e.target === processMapOverlay) {
+        state.toolGuideLightbox = null;
         state.processMapLightboxOpen = false;
         render();
       }

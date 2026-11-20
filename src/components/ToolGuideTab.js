@@ -3,6 +3,7 @@
 import { getSixWeekComparison, getCourseConfig } from '../services/courseProjectStorage.js';
 import { renderHouseholdInsightsDashboard } from './HouseholdInsightsView.js';
 import processMapImg from '../docs/process-map.webp';
+import dataCollectionImg from '../docs/data-collection.webp';
 
 export function renderToolGuideTab(state = {}) {
   const config = getCourseConfig();
@@ -163,6 +164,31 @@ export function renderToolGuideTab(state = {}) {
         <p class="guide-lead" style="margin-bottom: 18px;">
           KosherAI collects structured food, spending, and waste records through the following implemented input channels:
         </p>
+
+        <div class="rounded-xl border border-slate-700/60 bg-slate-900/60 p-3 sm:p-4 shadow-lg" style="margin: 16px 0 20px;">
+          <button
+            type="button"
+            id="open-data-collection-lightbox-btn"
+            class="tool-guide-lightbox-trigger"
+            data-lightbox-src="${dataCollectionImg}"
+            data-lightbox-alt="KosherAI Data Collection Process and Input Channels"
+            style="display: block; width: 100%; background: transparent; border: none; padding: 0; cursor: zoom-in; text-align: left;"
+            aria-label="Expand data collection diagram"
+            title="Tap to expand data collection diagram"
+          >
+            <img
+              src="${dataCollectionImg}"
+              alt="KosherAI Data Collection Process and Input Channels"
+              class="w-full h-auto rounded-lg object-contain"
+              style="display: block; width: 100%; height: auto;"
+              loading="lazy"
+            />
+          </button>
+          <p style="margin: 8px 0 0; font-size: 0.78rem; color: #94a3b8; text-align: center;">
+            Input channels and data acquisition flow — tap image to expand &amp; zoom.
+          </p>
+        </div>
+
         <div class="guide-grid-3">
           ${collectionMethods.map(m => `
             <div class="guide-subcard">
@@ -189,6 +215,9 @@ export function renderToolGuideTab(state = {}) {
           <button
             type="button"
             id="open-process-map-lightbox-btn"
+            class="tool-guide-lightbox-trigger"
+            data-lightbox-src="${processMapImg}"
+            data-lightbox-alt="KosherAI End-to-End Household Food and Waste Management Process Flow"
             style="display: block; width: 100%; background: transparent; border: none; padding: 0; cursor: zoom-in; text-align: left;"
             aria-label="Expand process map diagram"
             title="Tap to expand process map"
@@ -280,26 +309,26 @@ export function renderToolGuideTab(state = {}) {
         </div>
       </section>
 
-      ${state.processMapLightboxOpen ? `
+      ${(state.toolGuideLightbox || state.processMapLightboxOpen) ? `
         <div
           id="process-map-lightbox-overlay"
           role="dialog"
           aria-modal="true"
-          aria-label="KosherAI Process Flow Diagram"
+          aria-label="${state.toolGuideLightbox?.alt || 'KosherAI Process Flow Diagram'}"
           style="position: fixed; inset: 0; z-index: 60; background: rgba(2, 6, 23, 0.9); backdrop-filter: blur(4px); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px;"
         >
           <div style="width: 100%; max-width: 1120px; display: flex; justify-content: flex-end; margin-bottom: 10px;">
             <button
               type="button"
               id="close-process-map-lightbox-btn"
-              aria-label="Close process map"
+              aria-label="Close diagram"
               style="background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 9999px; width: 38px; height: 38px; font-size: 1.1rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;"
             >✕</button>
           </div>
           <div style="width: 100%; max-width: 1120px; max-height: 85vh; overflow: auto; border-radius: 12px; background: #0f172a; border: 1px solid #334155; padding: 8px;">
             <img
-              src="${processMapImg}"
-              alt="KosherAI End-to-End Household Food and Waste Management Process Flow"
+              src="${state.toolGuideLightbox?.src || processMapImg}"
+              alt="${state.toolGuideLightbox?.alt || 'KosherAI End-to-End Household Food and Waste Management Process Flow'}"
               style="display: block; width: 100%; height: auto; object-fit: contain; touch-action: pinch-zoom;"
             />
           </div>

@@ -133,7 +133,8 @@ console.log('\nTest 5: ToolGuideTab renders About, Collection, Workflow, Visuali
   registerHooks({
     load(url, context, nextLoad) {
       if (url.endsWith('.webp')) {
-        return { format: 'module', shortCircuit: true, source: 'export default "/assets/process-map.webp";' };
+        const filename = url.split('/').pop();
+        return { format: 'module', shortCircuit: true, source: `export default "/assets/${filename}";` };
       }
       return nextLoad(url, context);
     }
@@ -142,6 +143,9 @@ console.log('\nTest 5: ToolGuideTab renders About, Collection, Workflow, Visuali
   const guideHtml = renderToolGuideTab({});
   assert.ok(guideHtml.includes('A. About KosherAI'), 'Must include About section');
   assert.ok(guideHtml.includes('B. Data Collection Process'), 'Must include Data Collection section');
+  assert.ok(guideHtml.includes('KosherAI Data Collection Process and Input Channels'), 'Must render data collection diagram alt text');
+  assert.ok(guideHtml.includes('/assets/data-collection.webp'), 'Must render bundled dataCollectionImg src');
+  assert.ok(guideHtml.includes('id="open-data-collection-lightbox-btn"'), 'Must render tap-to-expand button for data collection diagram');
   assert.ok(guideHtml.includes('C. Data Processing Workflow'), 'Must include Processing Workflow section');
   assert.ok(guideHtml.includes('KosherAI End-to-End Household Food and Waste Management Process Flow'), 'Must render process map alt text');
   assert.ok(guideHtml.includes('/assets/process-map.webp'), 'Must render bundled processMapImg src');
