@@ -148,7 +148,9 @@ console.log('\nTest 5: ToolGuideTab renders About, Collection, Workflow, Visuali
   assert.ok(guideHtml.includes('id="open-process-map-lightbox-btn"'), 'Must render tap-to-expand button');
   assert.ok(guideHtml.includes('D. Data Visualization'), 'Must include Data Visualization section');
   assert.ok(guideHtml.includes('E. Feature Guides'), 'Must include Feature Guides section');
-  assert.ok(guideHtml.includes('User Input') && guideHtml.includes('User Insights'), 'Flowchart stages must be present');
+  assert.ok(guideHtml.includes('01 • RECEIPT CAPTURE') && guideHtml.includes('05 • MEAL PLANNING'), 'Section B numbered badges must be present');
+  assert.ok(guideHtml.includes('01 • USER INPUT') && guideHtml.includes('02 • DATA VALIDATION') && guideHtml.includes('03 • DATA ORGANIZATION') && guideHtml.includes('04 • DATA STORAGE') && guideHtml.includes('05 • DATA ANALYSIS') && guideHtml.includes('06 • USER INSIGHTS'), 'Section C 6 numbered stages must be present');
+  assert.ok(!guideHtml.includes('compressImageForOCR') && !guideHtml.includes('getProjectWeekForDate') && !guideHtml.includes('/api/trips') && !guideHtml.includes('CourseProjectView.js'), 'Technical filenames, functions, and endpoints must be removed from Sections B and C');
   assert.ok(guideHtml.includes('Weekly Expenses vs.'), 'Live bar chart visualization must be rendered');
   assert.ok(guideHtml.includes('data-home-course-tab="scan"'), 'Feature guide must link to Scan Food');
 

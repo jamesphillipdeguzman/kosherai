@@ -16,28 +16,28 @@ export function renderToolGuideTab(state = {}) {
 
   const collectionMethods = [
     {
+      step: '01 • RECEIPT CAPTURE',
       title: 'Supermarket Receipt OCR & Photo Upload',
-      module: 'CourseProjectView.js + aiVerification.js',
-      desc: 'Captures receipt images via device camera or photo gallery, compresses them for upload (compressImageForOCR), and extracts store, date, total amount, and line items using scanReceiptWithPaddleOCR and verifyWithGeminiAI.'
+      desc: 'Captures receipt images via your device camera or photo gallery, optimizes them for fast upload, and automatically extracts the store name, date, total amount, and purchased items.'
     },
     {
+      step: '02 • WET MARKET INTAKE',
       title: 'Wet Market / Palengke Intake',
-      module: 'CourseProjectView.js + ManualTripModal.js',
       desc: 'Records receipt-less produce and wet-market purchases including whole-grocery scale weight (kg), itemized quantities, unit prices, and dietary compatibility.'
     },
     {
+      step: '03 • LABEL SCANNING',
       title: 'Food & Label Scanner',
-      module: 'ScannerTab.js + ruleEngine.js',
-      desc: 'Analyzes food labels and ingredient lists using runClientOCR and analyzeIngredients against the active dietary protocol (Low-Iodine, Low-Purine, Low-Sodium, Diabetic, or Pinoy Keto).'
+      desc: 'Reads food labels and ingredient lists, then checks them against your active dietary protocol (Low-Iodine, Low-Purine, Low-Sodium, Diabetic, or Pinoy Keto).'
     },
     {
+      step: '04 • WASTE LOGGING',
       title: 'Food Waste Scale Logging',
-      module: 'CourseProjectView.js + FoodWasteLogView.jsx',
       desc: 'Captures measured kitchen and plate waste in grams, spoilage or preparation reason, and estimated cost separately from grocery spending.'
     },
     {
+      step: '05 • MEAL PLANNING',
       title: 'Weekly Meal Planner & Inventory Allocation',
-      module: 'SmartMealPlanningView.js',
       desc: 'Links planned family meals across Weeks 2–6 to on-hand grocery inventory items to prioritize expiring ingredients and reduce avoidable waste.'
     }
   ];
@@ -46,38 +46,32 @@ export function renderToolGuideTab(state = {}) {
     {
       step: '01 • USER INPUT',
       title: 'User Input',
-      desc: 'Household members upload receipt photos, scan food labels, log wet-market trips, record food waste weights, or plan weekly meals.',
-      modules: 'CourseProjectView.js · ScannerTab.js'
+      desc: 'Household members upload receipt photos, scan food labels, log wet-market trips, record food waste weights, or plan weekly meals.'
     },
     {
-      step: '02 • DATA COLLECTION',
-      title: 'Data Collection & OCR',
-      desc: 'Images are compressed client-side and parsed via PaddleOCR / Gemini AI or evaluated offline with the local ingredient rule engine.',
-      modules: 'aiVerification.js · ruleEngine.js'
+      step: '02 • DATA VALIDATION',
+      title: 'Data Collection & Validation',
+      desc: 'Images are optimized on your device and checked with AI vision or offline dietary rules to ensure accurate, reliable entries.'
     },
     {
-      step: '03 • DATA PROCESSING',
-      title: 'Analytics & Normalization',
-      desc: 'Records are grouped into project weeks (getProjectWeekForDate), checked for duplicate receipts, and analyzed for waste ratio and savings.',
-      modules: 'courseProjectStorage.js · householdInsightsService.js'
+      step: '03 • DATA ORGANIZATION',
+      title: 'Analytics & Organization',
+      desc: 'Records are grouped into project weeks, checked for duplicate receipts, and analyzed for waste ratio and household savings.'
     },
     {
       step: '04 • DATA STORAGE',
       title: 'Offline-First + Cloud Sync',
-      desc: 'Saved immediately to localStorage & IndexedDB, then synchronized to Neon PostgreSQL via /api/trips, /api/food-waste, /api/scans, and /api/meal-plans.',
-      modules: 'indexedDbStorage.js · api/*.js · cloudinary.js'
+      desc: 'Data is saved immediately on your device so it remains available offline, and automatically syncs to the cloud when connectivity is available.'
     },
     {
-      step: '05 • DATA VISUALIZATION',
+      step: '05 • DATA ANALYSIS',
       title: 'Dashboards & Charts',
-      desc: 'Aggregated metrics render in the Household Insights Scorecard, Six-Week Comparative Trajectory table, and Weekly Expenses Bar Chart.',
-      modules: 'HouseholdInsightsView.js · CourseProjectView.js'
+      desc: 'Aggregated metrics render in the Household Insights Scorecard, Six-Week Comparative Trajectory table, and Weekly Expenses Bar Chart.'
     },
     {
       step: '06 • USER INSIGHTS',
       title: 'User Insights',
-      desc: 'Families review W2–W6 savings vs. W1 baseline, waste-to-purchase ratios, over-buying alerts, and downloadable CSV reports.',
-      modules: 'overBuyingDetector.js · exportAllCourseCsvs'
+      desc: 'Families review W2–W6 savings vs. W1 baseline, waste-to-purchase ratios, over-buying alerts, and downloadable CSV reports.'
     }
   ];
 
@@ -173,11 +167,11 @@ export function renderToolGuideTab(state = {}) {
           ${collectionMethods.map(m => `
             <div class="guide-subcard">
               <div>
+                <div class="guide-flow-step" style="margin-bottom: 8px;">
+                  <span>${m.step}</span>
+                </div>
                 <h3>${m.title}</h3>
                 <p style="margin-top: 8px;">${m.desc}</p>
-              </div>
-              <div>
-                <span class="guide-code-tag">${m.module}</span>
               </div>
             </div>
           `).join('')}
@@ -221,7 +215,6 @@ export function renderToolGuideTab(state = {}) {
               </div>
               <h4>${stage.title}</h4>
               <p>${stage.desc}</p>
-              <span class="guide-code-tag">${stage.modules}</span>
             </div>
           `).join('')}
         </div>
