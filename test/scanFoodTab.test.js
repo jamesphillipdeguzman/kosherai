@@ -70,6 +70,8 @@ console.log('\nTest 4: Mobile scrollbar CSS and guest save guard in main.js');
   const styleCss = fs.readFileSync(path.resolve('src/style.css'), 'utf8');
   assert.ok(styleCss.includes('scrollbar-width: none'), 'course-subnav must hide scrollbar');
   assert.ok(styleCss.includes('.course-subnav::-webkit-scrollbar'), 'course-subnav must hide webkit scrollbar');
+  assert.ok(styleCss.includes('.receipt-modal-header'), 'style.css must define responsive .receipt-modal-header');
+  assert.ok(styleCss.includes('.receipt-header-controls'), 'style.css must define .receipt-header-controls');
 
   const mainJs = fs.readFileSync(path.resolve('src/main.js'), 'utf8');
   assert.ok(mainJs.includes('#scan-diet-selector'), 'main.js must wire #scan-diet-selector');

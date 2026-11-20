@@ -1090,26 +1090,30 @@ function renderReceiptScanModal(state, options = {}) {
       : '<div class="modal-overlay" id="receipt-modal-overlay">'}
       <div class="modal-content receipt-modal-large${embedded ? ' receipt-scanner-embedded' : ''}" role="${embedded ? 'region' : 'dialog'}" ${embedded ? 'aria-label="Scan Food & Receipt Scanner"' : 'aria-modal="true"'}>
         <!-- Header -->
-        <div class="modal-header">
-          <div style="flex: 1; padding-right: 12px; min-width: 0;">
-            <h2 class="modal-title">${isWetMarket ? 'Wet Market Food Intake & Manual Log' : 'Intelligent Supermarket Receipt Scanner'}</h2>
-            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">
-              ${isWetMarket
+        <div class="modal-header receipt-modal-header">
+          <div class="receipt-header-top">
+            <div class="receipt-header-title-wrap">
+              <h2 class="modal-title receipt-modal-title">${isWetMarket ? 'Wet Market Food Intake & Manual Log' : 'Intelligent Supermarket Receipt Scanner'}</h2>
+              <p class="receipt-modal-subtitle">
+                ${isWetMarket
       ? 'Record palengke and receipt-less produce, scale weights, and itemized batch purchases.'
       : 'AI document OCR extracts store details, itemized purchases, and final amount paid for side-by-side verification.'}
+              </p>
             </div>
+            ${!embedded ? `
+              <button type="button" class="btn-icon receipt-close-btn" id="close-receipt-modal-btn" title="Close modal" aria-label="Close modal">✕</button>
+            ` : ''}
           </div>
-          <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-            <select id="scan-diet-selector" class="form-input text-xs py-1.5 px-2.5 rounded-lg" aria-label="Evaluate against dietary protocol" title="Select dietary protocol for scan evaluation" style="width: auto; min-width: 140px; cursor: pointer;">
+          <div class="receipt-header-controls">
+            <select id="scan-diet-selector" class="form-input receipt-diet-select text-xs py-1.5 px-2.5 rounded-lg" aria-label="Evaluate against dietary protocol" title="Select dietary protocol for scan evaluation">
               ${Object.values(DIET_PROFILES).map(p => `
                 <option value="${p.id}" ${p.id === activeDietKey ? 'selected' : ''}>${p.icon} ${escapeHtml(p.shortName)}</option>
               `).join('')}
             </select>
             ${!embedded ? `
-              <button type="button" class="btn-icon theme-toggle-btn" id="receipt-theme-toggle-btn" title="Toggle Light / Dark Theme" aria-label="Toggle Light / Dark Theme">
+              <button type="button" class="btn-icon theme-toggle-btn receipt-theme-btn" id="receipt-theme-toggle-btn" title="Toggle Light / Dark Theme" aria-label="Toggle Light / Dark Theme">
                 <span id="receipt-theme-icon">☀️</span>
               </button>
-              <button type="button" class="btn-icon" id="close-receipt-modal-btn" title="Close modal" aria-label="Close modal">✕</button>
             ` : ''}
           </div>
         </div>
