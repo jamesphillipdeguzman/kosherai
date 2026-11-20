@@ -5,6 +5,9 @@ import {
   compressImageForOCR,
   runClientOCR,
   verifyWithGeminiAI,
+  recognizeFoodWithGemini,
+  evaluateFoodForProtocol,
+  dataUrlToBlob,
   uploadToCloudinary,
   auditGroceryReceipt,
   auditReceiptItemOffline,
@@ -13,10 +16,70 @@ import {
 import { analyzeIngredients } from '../services/ruleEngine.js';
 import { getSettings, getScanHistory, saveScanResult, clearScanHistory, isScannerEnabled, setScannerEnabled } from '../services/storage.js';
 
+let activeScanAbortController = null;
+
+/**
+ * Cancels an in-flight scan request and cleanly resets loading state.
+ */
+export function cancelActiveScan(state, render = () => {}) {
+  if (activeScanAbortController) {
+    try {
+      activeScanAbortController.abort();
+    } catch (_) {}
+    activeScanAbortController = null;
+  }
+  if (state) {
+    state.aiLoading = false;
+    state.ocrStatus = null;
+    state.ocrProgress = 0;
+    state.scanError = 'Scan cancelled. You can retry or enter the food manually.';
+  }
+  render();
+}
+
+/**
+ * Re-evaluates Stage 2 dietary compatibility when the user corrects the identified food name,
+ * without re-uploading or re-running visual recognition.
+ */
+export function recheckFoodName(correctedName, state, render = () => {}) {
+  const trimmed = String(correctedName || '').trim();
+  if (!trimmed || !state) return;
+
+  const tEvalStart = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const activeDiet = state.activeDiet || 'lid';
+  const prev = state.scanAnalysis || {};
+  const recognition = {
+    foodName: trimmed,
+    localName: '',
+    isPackagedLabel: false,
+    ingredientsText: '',
+    confidence: 1.0,
+    explanation: `User-confirmed food item: ${trimmed}.`,
+    needsClarification: false
+  };
+
+  const evaluated = evaluateFoodForProtocol(recognition, activeDiet);
+  evaluated.cloudinaryUrl = prev.cloudinaryUrl || state.cloudinaryUrl || null;
+  state.scanAnalysis = evaluated;
+  state.scanText = trimmed;
+  state.aiAnalysis = null;
+  state.scanError = null;
+
+  const evalMs = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - tEvalStart);
+  console.log(`[ScannerPerf] Stage 2 re-evaluation for "${trimmed}" (${activeDiet}) completed in ${evalMs}ms`);
+  render();
+}
+
 /**
  * Stops active camera streams and terminates workers to release resources.
  */
 export function releaseScannerResources(state) {
+  if (activeScanAbortController) {
+    try {
+      activeScanAbortController.abort();
+    } catch (_) {}
+    activeScanAbortController = null;
+  }
   if (state?.mediaStream) {
     try {
       state.mediaStream.getTracks().forEach(track => track.stop());
@@ -113,38 +176,70 @@ export async function executeScanWorkflow(file, context = {}) {
     addScanToHistory = () => {}
   } = context;
 
-  if (!file) return;
+  if (!file || !state) return;
+  if (state.aiLoading) {
+    console.warn('[ScannerPerf] Duplicate scan submission ignored while scan is already in progress.');
+    return;
+  }
+
+  const nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+  const tWorkflowStart = nowMs();
+  const timings = {
+    startedAt: new Date().toISOString(),
+    imagePrepMs: 0,
+    recognitionMs: 0,
+    evaluationMs: 0,
+    dbSaveMs: 0,
+    cloudinaryMs: null,
+    totalMs: 0
+  };
+
+  activeScanAbortController = new AbortController();
+  const scanSignal = activeScanAbortController.signal;
+
+  state.lastScannedFile = file;
+  state.aiLoading = true;
+  state.scanError = null;
+  state.scanAnalysis = null;
+  state.scannedReceiptAudit = null;
+  state.aiAnalysis = null;
 
   try {
-    state.scanError = null;
-    state.ocrStatus = { message: 'Compressing image...' };
-    state.ocrProgress = 0.15;
+    // Stage 1: Preparing image (max 1024px, JPEG 0.78)
+    state.ocrStatus = { message: 'Preparing image...', stage: 'preparing' };
+    state.ocrProgress = 0.20;
     render();
 
-    // Step 1: Client-Side Image Pre-Processing & Compression (Max ~1024px, ~0.78 quality)
+    const tPrepStart = nowMs();
     const dataUrl = await compressImageForOCR(file, 1024, 0.78);
+    timings.imagePrepMs = Math.round(nowMs() - tPrepStart);
     state.imagePreviewUrl = dataUrl;
     state.cloudinaryUrl = null;
+    console.log(`[ScannerPerf] [${new Date().toISOString()}] Stage 1 (Preparing image): ${timings.imagePrepMs}ms`);
 
-    // Retrieve settings using getSettings()
+    if (scanSignal.aborted) {
+      throw new DOMException('Scan cancelled by user', 'AbortError');
+    }
+
     const settings = getSettings();
     const apiKey = settings.geminiApiKey;
     const activeDiet = state.activeDiet || 'lid';
 
-    // Safely resolve active scan mode
     const scanTarget = state.scanTarget || state.scannerTab || state.scannerMode;
     const scannerMode = state.scannerMode || state.scannerTab;
     const activeTarget = scanTarget || scannerMode || 'food_label';
     const isReceipt = activeTarget === 'receipt' || activeTarget === 'supermarket_receipt';
 
-    // Background Cloudinary Upload if configured (targets kosherai/receipts for receipts)
+    // Decoupled Background Cloudinary Upload (uploads compressed JPEG blob, NEVER awaited before displaying results)
     const cloudName = settings.cloudinaryCloudName;
     const uploadPreset = settings.cloudinaryPreset;
-
-    let cloudinaryPromise = null;
     if (cloudName && uploadPreset) {
-      cloudinaryPromise = uploadToCloudinary(file, cloudName, uploadPreset, isReceipt)
+      const tCloudStart = nowMs();
+      const uploadPayload = dataUrlToBlob(dataUrl) || file;
+      uploadToCloudinary(uploadPayload, cloudName, uploadPreset, isReceipt)
         .then((url) => {
+          timings.cloudinaryMs = Math.round(nowMs() - tCloudStart);
+          console.log(`[ScannerPerf] [${new Date().toISOString()}] Async Cloudinary archive finished in ${timings.cloudinaryMs}ms (non-blocking)`);
           if (url) {
             state.cloudinaryUrl = url;
             if (state.scanAnalysis) state.scanAnalysis.cloudinaryUrl = url;
@@ -154,21 +249,22 @@ export async function executeScanWorkflow(file, context = {}) {
           return url;
         })
         .catch((err) => {
-          console.warn('Background Cloudinary upload error:', err);
+          console.warn('[ScannerPerf] Async Cloudinary archive skipped:', err?.message || err);
           return null;
         });
     }
 
     if (isReceipt) {
-      // Step 2: Receipt Scanning & Audit
-      state.ocrStatus = { message: 'Analyzing grocery receipt items...' };
+      // Receipt Scanning & Audit
+      state.ocrStatus = { message: 'Identifying receipt items...', stage: 'identifying' };
       state.ocrProgress = 0.45;
       render();
 
+      const tRecStart = nowMs();
       const receiptAudit = await auditGroceryReceipt(
         dataUrl,
         (prog) => {
-          state.ocrStatus = { message: prog.message || 'Scanning receipt items...' };
+          state.ocrStatus = { message: prog.message || 'Scanning receipt items...', stage: 'identifying' };
           state.ocrProgress = prog.progress || 0.5;
           const fill = document.querySelector('.progress-bar-fill');
           if (fill) fill.style.width = Math.round((prog.progress || 0.5) * 100) + '%';
@@ -176,6 +272,10 @@ export async function executeScanWorkflow(file, context = {}) {
         apiKey,
         activeDiet
       );
+      timings.recognitionMs = Math.round(nowMs() - tRecStart);
+
+      state.ocrStatus = { message: 'Displaying results...', stage: 'displaying' };
+      state.ocrProgress = 0.95;
 
       const itemsList = receiptAudit.items || [];
       const itemsCount = itemsList.length;
@@ -207,19 +307,7 @@ export async function executeScanWorkflow(file, context = {}) {
         cloudinaryUrl: state.cloudinaryUrl
       };
 
-      state.aiLoading = false;
-      state.ocrStatus = null;
-      state.scanError = null;
-
-      if (cloudinaryPromise) {
-        const cUrl = await cloudinaryPromise;
-        if (cUrl && state.scanAnalysis) {
-          state.scanAnalysis.cloudinaryUrl = cUrl;
-          if (state.scannedReceiptAudit) state.scannedReceiptAudit.cloudinaryUrl = cUrl;
-        }
-      }
-
-      // Save to scan history
+      const tDbStart = nowMs();
       state.scanHistory = saveScanResult({
         id: 'scan_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
         title: `${receiptAudit.storeName || 'Supermarket'} Receipt Audit`,
@@ -234,238 +322,183 @@ export async function executeScanWorkflow(file, context = {}) {
         analysis: state.scanAnalysis,
         receiptAudit: state.scannedReceiptAudit
       });
+      timings.dbSaveMs = Math.round(nowMs() - tDbStart);
+      timings.totalMs = Math.round(nowMs() - tWorkflowStart);
+      console.log(`[ScannerPerf] Receipt scan complete:`, timings);
 
-      render();
+      state.scanError = null;
       fetchAndSyncHistory(state, render).catch(() => {});
       return;
     }
 
-    // Food Packaging Label Scan Mode (Lightweight Pipeline)
-    state.ocrStatus = { message: 'Auditing food packaging label...' };
-    state.ocrProgress = 0.35;
+    // Two-Stage Food Recognition & Dietary Evaluation Pipeline
+    state.ocrStatus = { message: 'Identifying food...', stage: 'identifying' };
+    state.ocrProgress = 0.50;
     render();
 
-    let extractedText = '';
-    let scanAnalysis = null;
-    let aiResult = null;
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    let recognition = null;
+    let scanAnalysis = null;
+    let extractedText = '';
 
-    // 1. Online Fast Path (Gemini Multimodal Vision — 0MB on-device model overhead)
+    const tRecStart = nowMs();
     if (isOnline) {
       if (apiKey && apiKey.trim()) {
         try {
-          state.ocrStatus = { message: 'Clinical reasoning with Gemini AI...' };
-          state.ocrProgress = 0.70;
-          render();
-
-          aiResult = await verifyWithGeminiAI({
-            text: 'Extract and analyze all ingredients on this food packaging label for dietary compliance.',
-            imageBase64: dataUrl,
-            mimeType: 'image/jpeg'
-          }, apiKey, activeDiet, activeTarget);
-
-          state.aiAnalysis = aiResult;
-          extractedText = aiResult.rawText || '';
-
-          const probTokens = aiResult.problemIngredients || [];
-          scanAnalysis = {
-            isSafe: aiResult.status === 'SAFE',
-            status: aiResult.status || 'UNKNOWN',
-            overallBadge: aiResult.status === 'SAFE' ? 'SAFE TO EAT' : aiResult.status === 'AVOID' ? 'STRICTLY AVOID' : aiResult.status === 'CAUTION' ? 'CHECK LABEL CAREFULLY' : 'UNVERIFIED LABEL',
-            reasons: Array.isArray(aiResult.reasons) ? aiResult.reasons : [aiResult.reason || 'Audited with Gemini AI'],
-            reason: aiResult.reason || '',
-            problemIngredients: probTokens,
-            detectedForbidden: aiResult.status === 'AVOID' ? probTokens.map(p => ({
-              name: p,
-              matchedWord: p,
-              reason: aiResult.reason
-            })) : [],
-            detectedCaution: aiResult.status === 'CAUTION' ? probTokens.map(p => ({
-              name: p,
-              matchedWord: p,
-              reason: aiResult.reason
-            })) : [],
-            parsedTokens: (aiResult.ingredients || probTokens).map(tok => {
-              const name = typeof tok === 'string' ? tok : tok.name;
-              const tokStatus = typeof tok === 'object' && tok.status ? tok.status : (probTokens.some(p => name.toLowerCase().includes(p.toLowerCase())) ? aiResult.status : 'SAFE');
-              return {
-                text: name,
-                status: tokStatus,
-                matchedReason: aiResult.reason
-              };
-            }),
-            source: 'GEMINI_AI',
-            cloudinaryUrl: state.cloudinaryUrl
-          };
-        } catch (geminiErr) {
-          console.warn('Gemini AI online notice (will fall back to endpoint / local):', geminiErr);
-          aiResult = null;
+          recognition = await recognizeFoodWithGemini(dataUrl, apiKey, scanSignal);
+        } catch (clientErr) {
+          if (scanSignal.aborted || clientErr.name === 'AbortError') {
+            throw clientErr;
+          }
+          console.warn('[ScannerPerf] Direct client recognition notice, trying server /api/receipt-scan:', clientErr.message);
         }
       }
 
-      // Try serverless endpoint /api/receipt-scan if client key was not provided or threw
-      if (!scanAnalysis) {
+      if (!recognition && !scanSignal.aborted) {
+        const serverController = new AbortController();
+        const serverTimeoutId = setTimeout(() => serverController.abort(), 10000);
+        const onUserAbort = () => serverController.abort();
+        scanSignal.addEventListener('abort', onUserAbort, { once: true });
+
         try {
-          state.ocrStatus = { message: 'Auditing label with Cloud Vision...' };
-          state.ocrProgress = 0.55;
-          render();
-
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 12000);
-
           const apiRes = await fetch('/api/receipt-scan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
+            signal: serverController.signal,
             body: JSON.stringify({
               imageBase64: dataUrl,
               mimeType: 'image/jpeg',
-              activeDiet: activeDiet || 'lid',
-              scanTarget: 'food_label'
-            }),
-            signal: controller.signal
+              activeDiet,
+              mode: 'food_recognition'
+            })
           });
-          clearTimeout(timeoutId);
+          clearTimeout(serverTimeoutId);
+          scanSignal.removeEventListener('abort', onUserAbort);
 
           if (apiRes.ok) {
-            const labelData = await apiRes.json();
-            if (labelData && labelData.status) {
-              const probTokens = labelData.problemIngredients || [];
-              extractedText = labelData.rawText || '';
-              scanAnalysis = {
-                isSafe: labelData.status === 'SAFE',
-                status: labelData.status,
-                overallBadge: labelData.status === 'SAFE' ? 'SAFE TO EAT' : labelData.status === 'AVOID' ? 'STRICTLY AVOID' : labelData.status === 'CAUTION' ? 'CHECK LABEL CAREFULLY' : 'UNVERIFIED LABEL',
-                reasons: Array.isArray(labelData.reasons) ? labelData.reasons : [labelData.reason || 'Audited via Cloud Vision'],
-                reason: labelData.reason || '',
-                problemIngredients: probTokens,
-                detectedForbidden: labelData.status === 'AVOID' ? probTokens.map(p => ({
-                  name: p,
-                  matchedWord: p,
-                  reason: labelData.reason
-                })) : [],
-                detectedCaution: labelData.status === 'CAUTION' ? probTokens.map(p => ({
-                  name: p,
-                  matchedWord: p,
-                  reason: labelData.reason
-                })) : [],
-                parsedTokens: (labelData.ingredients || probTokens).map(tok => {
-                  const name = typeof tok === 'string' ? tok : tok.name;
-                  const tokStatus = typeof tok === 'object' && tok.status ? tok.status : (probTokens.some(p => name.toLowerCase().includes(p.toLowerCase())) ? labelData.status : 'SAFE');
-                  return {
-                    text: name,
-                    status: tokStatus,
-                    matchedReason: labelData.reason
-                  };
-                }),
-                source: 'GEMINI_VISION',
-                cloudinaryUrl: state.cloudinaryUrl
-              };
+            const data = await apiRes.json();
+            if (data && (data.foodName || data.productName)) {
+              recognition = data;
             }
+          } else {
+            const errBody = await apiRes.json().catch(() => ({}));
+            throw new Error(errBody.message || `Food recognition endpoint returned ${apiRes.status}`);
           }
         } catch (serverErr) {
-          console.warn('Cloud Vision endpoint notice (falling back to on-device OCR):', serverErr);
+          clearTimeout(serverTimeoutId);
+          scanSignal.removeEventListener('abort', onUserAbort);
+          if (scanSignal.aborted) {
+            throw new DOMException('Scan cancelled by user', 'AbortError');
+          }
+          if (serverErr.name === 'AbortError') {
+            throw new Error('Food recognition timed out. Please retry or use Manual Food Entry.');
+          }
+          throw serverErr;
         }
       }
-    }
-
-    // 2. Offline / Fallback Path (On-Demand Local OCR)
-    if (!scanAnalysis) {
-      state.ocrStatus = { message: 'Extracting text from label...' };
-      state.ocrProgress = 0.65;
-      render();
-
+    } else {
+      // Offline fallback: run on-device OCR only when offline
       try {
         extractedText = await runClientOCR(dataUrl, (prog) => {
-          state.ocrStatus = prog;
-          state.ocrProgress = prog.progress;
+          state.ocrStatus = { message: prog.message || 'Identifying food offline...', stage: 'identifying' };
+          state.ocrProgress = Math.max(0.5, prog.progress || 0.6);
           const fill = document.querySelector('.progress-bar-fill');
-          if (fill) fill.style.width = Math.round(prog.progress * 100) + '%';
+          if (fill) fill.style.width = Math.round(state.ocrProgress * 100) + '%';
         });
       } catch (ocrErr) {
-        console.warn('Client OCR error:', ocrErr);
+        console.warn('Offline OCR error:', ocrErr);
         extractedText = '';
       }
 
-      state.scanText = extractedText;
-
-      if (extractedText && extractedText.trim().length >= 15) {
-        scanAnalysis = analyzeIngredients(extractedText, activeDiet);
-        scanAnalysis.source = 'OFFLINE_RULE_ENGINE';
-
-        // Strict Safety Check: If no violations found but text has no recognized tokens, do not mark SAFE
-        if (scanAnalysis.status === 'SAFE' && (!scanAnalysis.parsedTokens || scanAnalysis.parsedTokens.length === 0)) {
-          scanAnalysis.status = 'UNKNOWN';
-          scanAnalysis.isSafe = false;
-          scanAnalysis.overallBadge = 'UNVERIFIED LABEL';
-          scanAnalysis.reasons = ['Ingredient text is incomplete or uncertain. For patient safety under the dietary protocol, unverified items should be treated with caution.'];
-        }
-      } else {
-        // Never classify unreadable or failed OCR as SAFE!
-        scanAnalysis = {
-          isSafe: false,
-          status: 'UNKNOWN',
-          overallBadge: 'LABEL UNREADABLE',
-          reasons: ['Could not clearly read or extract ingredients from this image. For patient safety under the Low-Iodine Diet protocol, unverified items cannot be classified as SAFE. Please ensure the label is flat, well-lit, and in focus, or enter ingredients manually.'],
-          reason: 'Could not extract or verify ingredient text from the image.',
-          problemIngredients: [],
-          detectedForbidden: [],
-          detectedCaution: [],
-          parsedTokens: [],
-          source: 'OFFLINE_UNREADABLE'
+      if (extractedText && extractedText.trim().length >= 3) {
+        recognition = {
+          foodName: extractedText.trim().split('\n')[0].slice(0, 60),
+          localName: '',
+          isPackagedLabel: extractedText.trim().length >= 15,
+          ingredientsText: extractedText.trim(),
+          confidence: 0.7,
+          explanation: 'Extracted offline via on-device OCR.',
+          needsClarification: false
         };
+      } else {
+        throw new Error('Offline and unable to read text from image. Please enter the food name manually.');
       }
     }
+    timings.recognitionMs = Math.round(nowMs() - tRecStart);
+    console.log(`[ScannerPerf] [${new Date().toISOString()}] Stage 2 (Identifying food): ${timings.recognitionMs}ms -> "${recognition?.foodName || ''}"`);
+
+    if (scanSignal.aborted) {
+      throw new DOMException('Scan cancelled by user', 'AbortError');
+    }
+
+    // Stage 3: Checking dietary compatibility (Active protocol ONLY)
+    state.ocrStatus = { message: 'Checking dietary compatibility...', stage: 'evaluating' };
+    state.ocrProgress = 0.80;
+    render();
+
+    const tEvalStart = nowMs();
+    scanAnalysis = evaluateFoodForProtocol(recognition, activeDiet);
+    scanAnalysis.cloudinaryUrl = state.cloudinaryUrl || null;
+    extractedText = recognition.ingredientsText || scanAnalysis.productName || '';
+    state.scanText = extractedText;
+    timings.evaluationMs = Math.round(nowMs() - tEvalStart);
+    console.log(`[ScannerPerf] [${new Date().toISOString()}] Stage 3 (Dietary evaluation for ${activeDiet}): ${timings.evaluationMs}ms -> ${scanAnalysis.status}`);
+
+    // Stage 4: Displaying results
+    state.ocrStatus = { message: 'Displaying results...', stage: 'displaying' };
+    state.ocrProgress = 1.0;
 
     state.scanAnalysis = scanAnalysis;
-    state.aiLoading = false;
-    state.ocrStatus = null;
     state.scanError = null;
 
-    if (cloudinaryPromise) {
-      const cUrl = await cloudinaryPromise;
-      if (cUrl && state.scanAnalysis) {
-        state.scanAnalysis.cloudinaryUrl = cUrl;
-      }
-    }
+    const tDbStart = nowMs();
+    const flaggedIngredients = [
+      ...(scanAnalysis.detectedForbidden || []).map(f => f.matchedWord || f.name),
+      ...(scanAnalysis.detectedCaution || []).map(c => c.matchedWord || c.name)
+    ];
+    const uniqueFlagged = [...new Set(flaggedIngredients.map(t => String(t).trim()))].filter(Boolean);
+    const reason = scanAnalysis.reason || (scanAnalysis.reasons && scanAnalysis.reasons[0]) || '';
+    const imageUrl = state.cloudinaryUrl || state.imagePreviewUrl || null;
 
-    if (scanAnalysis) {
-      const flaggedIngredients = [
-        ...(aiResult?.problemIngredients || []),
-        ...(scanAnalysis.detectedForbidden || []).map(f => f.matchedWord || f.name),
-        ...(scanAnalysis.detectedCaution || []).map(c => c.matchedWord || c.name)
-      ];
-      const uniqueFlagged = [...new Set(flaggedIngredients.map(t => String(t).trim()))].filter(Boolean);
-      const reason = aiResult?.reason || scanAnalysis.reason || (scanAnalysis.reasons && scanAnalysis.reasons[0]) || '';
-      const imageUrl = state.cloudinaryUrl || state.imagePreviewUrl || null;
+    state.scanHistory = saveScanResult({
+      id: 'scan_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      title: scanAnalysis.productName || 'Scanned Food Item',
+      rawText: extractedText || scanAnalysis.productName || 'Food Image',
+      status: scanAnalysis.status,
+      reason,
+      flaggedIngredients: uniqueFlagged,
+      imageUrl,
+      cloudinaryUrl: state.cloudinaryUrl || null,
+      analysis: scanAnalysis,
+      aiAnalysis: state.aiAnalysis
+    });
+    timings.dbSaveMs = Math.round(nowMs() - tDbStart);
+    timings.totalMs = Math.round(nowMs() - tWorkflowStart);
+    console.log(`[ScannerPerf] [${new Date().toISOString()}] Stage 4 (Display & DB save): ${timings.dbSaveMs}ms | Total=${timings.totalMs}ms`, timings);
 
-      state.scanHistory = saveScanResult({
-        id: 'scan_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-        title: 'Scanned Food Label',
-        rawText: extractedText || 'Packaging Image',
-        status: scanAnalysis.status,
-        reason,
-        flaggedIngredients: uniqueFlagged,
-        imageUrl,
-        cloudinaryUrl: state.cloudinaryUrl || null,
-        analysis: scanAnalysis,
-        aiAnalysis: state.aiAnalysis
-      });
-    }
-
-    render();
     fetchAndSyncHistory(state, render).catch(() => {});
   } catch (err) {
-    console.error('Scan workflow error:', err);
+    if (err?.name === 'AbortError') {
+      console.warn('[ScannerPerf] Scan aborted/cancelled cleanly.');
+      if (!state.scanError) {
+        state.scanError = 'Scan cancelled. You can retry or enter the food manually.';
+      }
+    } else {
+      console.error('Scan workflow error:', err);
+      const scanTarget = state.scanTarget || state.scannerTab || state.scannerMode;
+      const scannerMode = state.scannerMode || state.scannerTab;
+      const activeTarget = scanTarget || scannerMode || 'food_label';
+      const isReceiptMode = activeTarget === 'receipt' || activeTarget === 'supermarket_receipt';
+      state.scanError = err.message || (isReceiptMode
+        ? 'Could not parse receipt contents. Please ensure the receipt is well-lit and legible.'
+        : 'Could not identify the food item. Please retry with better lighting or enter the food name manually.');
+    }
+  } finally {
     state.ocrStatus = null;
+    state.ocrProgress = 0;
     state.aiLoading = false;
-    const scanTarget = state.scanTarget || state.scannerTab || state.scannerMode;
-    const scannerMode = state.scannerMode || state.scannerTab;
-    const activeTarget = scanTarget || scannerMode || 'food_label';
-    const isReceiptMode = activeTarget === 'receipt' || activeTarget === 'supermarket_receipt';
-    state.scanError = err.message || (isReceiptMode
-      ? 'Could not parse receipt contents. Please ensure the receipt is well-lit and legible.'
-      : 'Could not read food packaging label. Please ensure the nutrition facts or ingredient label is clear and well-lit.');
+    activeScanAbortController = null;
     render();
   }
 }
@@ -674,21 +707,29 @@ export function renderScannerTab(state) {
           <div style="flex: 1;">
             <div style="font-weight: 700; color: #ef4444; font-size: 0.95rem; margin-bottom: 4px;">
               ${(!isReceipt || activeScannerTab === 'food_label' || activeTarget === 'food_label') 
-                ? 'Food Label Scanning Failed' 
+                ? 'Food Recognition Notice' 
                 : 'Receipt Scanning Failed'}
             </div>
             <div style="font-size: 0.88rem; line-height: 1.45; color: #fecaca;">${escapeHtml(scanError)}</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+              ${state.lastScannedFile ? `
+                <button id="retry-scan-btn" type="button" class="btn-primary" style="padding: 6px 14px; font-size: 0.8rem;">
+                  🔄 Retry Scan
+                </button>
+              ` : ''}
+              <button id="manual-food-entry-btn" type="button" class="btn-secondary" style="padding: 6px 14px; font-size: 0.8rem;">
+                ✏️ Manual Food Entry
+              </button>
+            </div>
             <div style="font-size: 0.78rem; color: #f87171; margin-top: 8px; line-height: 1.4;">
               💡 <strong>Troubleshooting Tips:</strong>
               <ul style="margin: 4px 0 0 16px; list-style-type: disc;">
                 ${(!isReceipt) ? `
-                  <li>Ensure the food package nutrition label or ingredient list is well-lit, laid flat, and in focus.</li>
-                  <li>Avoid glare, reflections, or crumpled packaging that obscures ingredient text.</li>
+                  <li>Ensure the food item or nutrition label is well-lit and in focus.</li>
+                  <li>You can also type or paste a food name directly using <strong>Manual Food Entry</strong>.</li>
                 ` : `
                   <li>Ensure the printed receipt is well-lit, laid flat, and in focus.</li>
                 `}
-                <li>Verify your <code>GEMINI_API_KEY</code> is configured in Settings or Vercel Environment Variables.</li>
-                <li>You can also click <strong>✏️ Paste Text</strong> or try a <strong>⚡ One-Tap Clinical Sample</strong> below.</li>
               </ul>
             </div>
           </div>
@@ -711,17 +752,25 @@ export function renderScannerTab(state) {
         </div>
       </div>
 
-      <!-- OCR Progress Box -->
+      <!-- Real-Time Scan Stage Progress Box -->
       ${ocrStatus ? `
         <div class="scan-progress-box">
-          <div style="font-weight: 700; color: var(--safe-green);">
-            ${escapeHtml(ocrStatus.message || 'Processing image...')}
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+            <div style="font-weight: 700; color: var(--safe-green);">
+              ${escapeHtml(ocrStatus.message || 'Preparing image...')}
+            </div>
+            <button id="cancel-scan-btn" type="button" class="btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;">
+              ✕ Cancel
+            </button>
           </div>
           <div class="progress-bar-track">
-            <div class="progress-bar-fill" style="width: ${Math.round((ocrProgress || 0.3) * 100)}%;"></div>
+            <div class="progress-bar-fill" style="width: ${Math.round((ocrProgress || 0.2) * 100)}%;"></div>
           </div>
-          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
-            Extracting line items & auditing clinical compliance
+          <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); margin-top: 6px; flex-wrap: wrap; gap: 6px;">
+            <span>${ocrStatus.stage === 'preparing' ? '●' : '✓'} 1. Preparing image</span>
+            <span>${ocrStatus.stage === 'identifying' ? '●' : (ocrStatus.stage === 'evaluating' || ocrStatus.stage === 'displaying' ? '✓' : '○')} 2. Identifying food</span>
+            <span>${ocrStatus.stage === 'evaluating' ? '●' : (ocrStatus.stage === 'displaying' ? '✓' : '○')} 3. Checking dietary compatibility</span>
+            <span>${ocrStatus.stage === 'displaying' ? '●' : '○'} 4. Displaying results</span>
           </div>
         </div>
       ` : ''}
@@ -1050,22 +1099,29 @@ function renderAnalysisResult(analysis, rawText, aiAnalysis, aiLoading, cloudina
   const isSafe = currentStatus === STATUS.SAFE || currentStatus === 'SAFE';
   const isAvoid = currentStatus === STATUS.AVOID || currentStatus === 'AVOID';
   const isCaution = currentStatus === STATUS.CAUTION || currentStatus === 'CAUTION';
+  const activeProtocolLabel = analysis.activeDietName || 'Low-Iodine Diet';
 
   let bannerClass = 'banner-safe';
   let bannerIcon = '🟢';
-  let bannerTitle = 'SAFE ON LOW-IODINE DIET';
-  let bannerSub = 'No prohibited iodine sources, dairy, whey, seafood, goitrogens, or suspicious additives detected.';
+  let bannerTitle = `SAFE ON ${activeProtocolLabel.toUpperCase()}`;
+  let bannerSub = analysis.activeDiet && analysis.activeDiet !== 'lid'
+    ? `Compatible with ${activeProtocolLabel} guidelines.`
+    : 'No prohibited iodine sources, dairy, whey, seafood, goitrogens, or suspicious additives detected.';
 
   if (isAvoid) {
     bannerClass = 'banner-avoid';
     bannerIcon = '🔴';
-    bannerTitle = 'STRICTLY PROHIBITED (AVOID)';
-    bannerSub = 'Contains high-iodine ingredients, hidden dairy, sea salt, or clinical contraindications.';
+    bannerTitle = `STRICTLY PROHIBITED (AVOID)`;
+    bannerSub = analysis.activeDiet && analysis.activeDiet !== 'lid'
+      ? `Restricted under ${activeProtocolLabel} guidelines.`
+      : 'Contains high-iodine ingredients, hidden dairy, sea salt, or clinical contraindications.';
   } else if (isCaution) {
     bannerClass = 'banner-caution';
     bannerIcon = '🟡';
-    bannerTitle = 'CHECK LABEL CAREFULLY (CAUTION)';
-    bannerSub = 'Contains unverified salt, natural flavorings, or ambiguous dough conditioners.';
+    bannerTitle = 'CHECK / VERIFY CAREFULLY (CAUTION)';
+    bannerSub = analysis.needsClarification
+      ? 'Visual recognition had low confidence. Confirm or edit the food name below.'
+      : 'Contains unverified salt, natural flavorings, or ambiguous ingredients.';
   }
 
   // Collect problem terms from AI analysis or local rules
@@ -1078,17 +1134,37 @@ function renderAnalysisResult(analysis, rawText, aiAnalysis, aiLoading, cloudina
 
   // Match actionable substitutions
   const matchedSubstitutes = (isAvoid || isCaution) ? getSubstitutionsForTerms(uniqueProblemTerms) : [];
+  const confidencePct = typeof analysis.confidence === 'number' ? Math.round(analysis.confidence * 100) : null;
 
   return `
     <div class="scan-result-card ${isSafe ? 'status-safe' : isAvoid ? 'status-avoid' : 'status-caution'}">
       <!-- Audited Product Header -->
       <div class="mb-3">
-        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-          Audited Product / Sample
-        </span>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Audited Food / Sample (${escapeHtml(activeProtocolLabel)})
+          </span>
+          ${confidencePct !== null ? `
+            <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted);">
+              Recognition Confidence: ${confidencePct}%
+            </span>
+          ` : ''}
+        </div>
         <h3 class="text-lg font-bold text-slate-900 dark:text-white">
-          ${escapeHtml(analysis.productName || analysis.name || analysis.title || 'Safe Kosher Roast Chicken')}
+          ${escapeHtml(analysis.productName || analysis.name || analysis.title || 'Scanned Food Item')}
         </h3>
+        <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center;">
+          <input
+            id="correct-food-name-input"
+            type="text"
+            value="${escapeHtml(analysis.foodName || analysis.productName || '')}"
+            placeholder="Wrong food? Type correct name (e.g. Kamote)"
+            style="flex: 1; min-width: 180px; padding: 6px 10px; font-size: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-card-subtle); color: var(--text-primary);"
+          />
+          <button id="recheck-food-name-btn" type="button" class="btn-secondary" style="padding: 6px 12px; font-size: 0.78rem;">
+            ✏️ Re-check Food
+          </button>
+        </div>
       </div>
 
       <!-- Status Banner -->

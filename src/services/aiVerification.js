@@ -1,5 +1,26 @@
 // AI Verification & Image Processing Service (Gemini API + PaddleOCR PP-OCRv4 + Cloudinary)
 import { runPaddleOCR, parseReceiptAmount, parseStructuredReceiptText } from './paddleOcrService.js';
+import { analyzeIngredients } from './ruleEngine.js';
+
+/**
+ * Converts a base64 data URL into a Blob for lightweight Cloudinary upload
+ * without uploading huge raw camera originals.
+ * @param {string} dataUrl
+ * @returns {Blob|null}
+ */
+export function dataUrlToBlob(dataUrl) {
+  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return null;
+  const parts = dataUrl.split(',');
+  if (parts.length < 2) return null;
+  const mimeMatch = parts[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+  const binary = atob(parts[1]);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
+}
 
 /**
  * Client-side canvas downscaling for OCR before dispatching to Cloudinary or API.
@@ -322,8 +343,6 @@ Return clean JSON:
 }
 `;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${encodeURIComponent(activeKey)}`;
-
   const parts = [];
   if (imageBase64) {
     const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
@@ -336,21 +355,47 @@ Return clean JSON:
   }
   parts.push({ text: prompt });
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.1
-      }
-    })
-  });
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+  const timeoutMs = scanTarget === 'receipt' ? 14000 : 9000;
+  let response = null;
+  let lastErrMsg = '';
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `Gemini API error: ${response.status} ${response.statusText}`);
+  for (const model of models) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(activeKey)}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const generationConfig = {
+      responseMimeType: 'application/json',
+      temperature: 0.1
+    };
+    if (model.startsWith('gemini-2.5')) {
+      generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    }
+
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig
+        })
+      });
+      clearTimeout(timeoutId);
+      if (response.ok) break;
+      const errData = await response.json().catch(() => ({}));
+      lastErrMsg = errData.error?.message || `Gemini API error: ${response.status} ${response.statusText}`;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      lastErrMsg = err.name === 'AbortError'
+        ? `Gemini Vision timed out after ${timeoutMs}ms (${model})`
+        : err.message;
+    }
+  }
+
+  if (!response || !response.ok) {
+    throw new Error(lastErrMsg || 'Gemini API request failed.');
   }
 
   const data = await response.json();
@@ -381,6 +426,222 @@ Return clean JSON:
     detectedProblemIngredients: problemIngredients,
     safeSubstitutions: parsed.safeSubstitutions || (parsed.substitution ? [parsed.substitution] : []),
     clinicalSummary: parsed.clinicalSummary || reason
+  };
+}
+
+const PROTOCOL_DISPLAY_NAMES = {
+  lid: 'Low-Iodine Diet (LID)',
+  low_purine: 'Low-Purine (Gout Care)',
+  low_sodium: 'Low-Sodium / Heart Care',
+  diabetic: 'Diabetic / Low-GI',
+  pinoy_keto: 'Pinoy Keto'
+};
+
+/**
+ * Stage 1: Fast visual food recognition using Gemini Flash (with thinkingBudget: 0 and strict timeout).
+ * Recognizes produce, Filipino local names (kamote, gabi, ube, malunggay, sayote), dishes, or packaged labels.
+ */
+export async function recognizeFoodWithGemini(dataUrl, apiKey, externalSignal = null) {
+  const activeKey = (apiKey || '').trim();
+  if (!activeKey) {
+    throw new Error('Gemini API key is required for direct client recognition.');
+  }
+
+  const cleanBase64 = String(dataUrl || '').replace(/^data:[^;]+;base64,/, '');
+  const prompt = `Identify the food item, produce, dish, or packaged product in this image.
+Recognize Filipino produce and local names when applicable (e.g., kamote/sweet potato, gabi/taro, ube, malunggay, sayote, kangkong, talong, sitaw, ampalaya, pechay, bangus, tilapia).
+If this is a packaged product with a visible ingredient list, set "isPackagedLabel": true and put the extracted ingredients in "ingredientsText".
+If the image is blurry, ambiguous, or not food, set "needsClarification": true and a low confidence.
+Return strictly JSON:
+{
+  "foodName": "Common English food name",
+  "localName": "Local Filipino name if applicable, or empty string",
+  "isPackagedLabel": false,
+  "ingredientsText": "",
+  "confidence": 0.95,
+  "explanation": "Short 1-sentence visual description",
+  "needsClarification": false
+}`;
+
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+  const timeoutMs = 8500;
+  let lastErr = '';
+
+  for (const model of models) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(activeKey)}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const onExternalAbort = () => controller.abort();
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        clearTimeout(timeoutId);
+        throw new DOMException('Scan cancelled by user', 'AbortError');
+      }
+      externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+    }
+
+    const generationConfig = {
+      responseMimeType: 'application/json',
+      temperature: 0.1,
+      maxOutputTokens: 512
+    };
+    if (model.startsWith('gemini-2.5')) {
+      generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
+              { text: prompt }
+            ]
+          }],
+          generationConfig
+        })
+      });
+      clearTimeout(timeoutId);
+      if (externalSignal) externalSignal.removeEventListener('abort', onExternalAbort);
+
+      if (response.ok) {
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const parsed = parseGeminiJson(text);
+        if (parsed) {
+          return {
+            source: 'GEMINI_VISION_STAGE1',
+            modelUsed: model,
+            foodName: parsed.foodName || parsed.productName || 'Unidentified Food',
+            localName: parsed.localName || '',
+            isPackagedLabel: Boolean(parsed.isPackagedLabel),
+            ingredientsText: parsed.ingredientsText || '',
+            confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.85,
+            explanation: parsed.explanation || '',
+            needsClarification: Boolean(parsed.needsClarification)
+          };
+        }
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        lastErr = errData.error?.message || `Model ${model} returned ${response.status}`;
+      }
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (externalSignal) externalSignal.removeEventListener('abort', onExternalAbort);
+      if (externalSignal?.aborted) {
+        throw err;
+      }
+      lastErr = err.name === 'AbortError' ? `Recognition timed out (${model})` : err.message;
+    }
+  }
+
+  throw new Error(lastErr || 'Failed to identify food item.');
+}
+
+/**
+ * Stage 2: Fast dietary protocol evaluation for an identified food item or packaged ingredient list.
+ * Evaluates ONLY against the active protocol using the local clinical rule engine.
+ */
+export function evaluateFoodForProtocol(recognition = {}, activeDiet = 'lid') {
+  const dietKey = PROTOCOL_DISPLAY_NAMES[activeDiet] ? activeDiet : 'lid';
+  const dietLabel = PROTOCOL_DISPLAY_NAMES[dietKey];
+  const foodName = String(recognition.foodName || 'Unidentified Food').trim();
+  const localName = String(recognition.localName || '').trim();
+  const displayName = localName && !foodName.toLowerCase().includes(localName.toLowerCase())
+    ? `${foodName} (${localName})`
+    : foodName;
+  const ingredientsText = String(recognition.ingredientsText || '').trim();
+  const isPackagedLabel = Boolean(recognition.isPackagedLabel && ingredientsText.length >= 10);
+
+  if (isPackagedLabel) {
+    const ruleResult = analyzeIngredients(ingredientsText, dietKey);
+    const problemIngredients = [
+      ...(ruleResult.detectedForbidden || []).map(f => f.matchedWord || f.name),
+      ...(ruleResult.detectedCaution || []).map(c => c.matchedWord || c.name)
+    ];
+    return {
+      ...ruleResult,
+      productName: displayName,
+      foodName,
+      localName,
+      confidence: recognition.confidence ?? 0.9,
+      explanation: recognition.explanation || '',
+      needsClarification: Boolean(recognition.needsClarification),
+      activeDiet: dietKey,
+      activeDietName: dietLabel,
+      problemIngredients: [...new Set(problemIngredients)],
+      reason: ruleResult.reasons?.[0] || `Evaluated against ${dietLabel}.`,
+      source: 'TWO_STAGE_VISION_RULE_ENGINE'
+    };
+  }
+
+  const combinedQuery = [foodName, localName].filter(Boolean).join(', ');
+  const ruleResult = analyzeIngredients(combinedQuery, dietKey);
+  const offlineAudit = auditReceiptItemOffline(combinedQuery, dietKey);
+
+  let status = 'SAFE';
+  let reason = `${displayName} is permitted under the ${dietLabel} protocol.`;
+  const detectedForbidden = [...(ruleResult.detectedForbidden || [])];
+  const detectedCaution = [...(ruleResult.detectedCaution || [])];
+
+  if (offlineAudit.status === 'AVOID' || detectedForbidden.length > 0) {
+    status = 'AVOID';
+    reason = offlineAudit.status === 'AVOID'
+      ? offlineAudit.clinicalReason
+      : (ruleResult.reasons?.[0] || `${displayName} is restricted under ${dietLabel}.`);
+    if (detectedForbidden.length === 0) {
+      detectedForbidden.push({ name: displayName, matchedWord: displayName, reason });
+    }
+  } else if (offlineAudit.status === 'CAUTION' || detectedCaution.length > 0) {
+    status = 'CAUTION';
+    reason = offlineAudit.status === 'CAUTION'
+      ? offlineAudit.clinicalReason
+      : (ruleResult.reasons?.[0] || `${displayName} requires caution under ${dietLabel}.`);
+    if (detectedCaution.length === 0) {
+      detectedCaution.push({ name: displayName, matchedWord: displayName, reason });
+    }
+  } else if (recognition.needsClarification || (typeof recognition.confidence === 'number' && recognition.confidence < 0.5)) {
+    status = 'CAUTION';
+    reason = `Low visual confidence for "${displayName}". Please confirm or edit the food name below to verify ${dietLabel} compatibility.`;
+  } else if (recognition.explanation) {
+    reason = `${recognition.explanation} Compatible with ${dietLabel}.`;
+  }
+
+  const problemIngredients = [
+    ...detectedForbidden.map(f => f.matchedWord || f.name),
+    ...detectedCaution.map(c => c.matchedWord || c.name)
+  ];
+
+  const parsedTokens = ruleResult.parsedTokens && ruleResult.parsedTokens.length > 0
+    ? ruleResult.parsedTokens.map(t => ({
+        ...t,
+        status: status !== 'SAFE' && t.status === 'SAFE' ? status : t.status
+      }))
+    : [{ text: displayName, status, matchedReason: reason }];
+
+  return {
+    isSafe: status === 'SAFE',
+    status,
+    overallBadge: status === 'SAFE' ? 'SAFE TO EAT' : status === 'AVOID' ? 'STRICTLY AVOID' : 'CHECK / VERIFY',
+    productName: displayName,
+    foodName,
+    localName,
+    confidence: recognition.confidence ?? 0.9,
+    explanation: recognition.explanation || '',
+    needsClarification: Boolean(recognition.needsClarification),
+    activeDiet: dietKey,
+    activeDietName: dietLabel,
+    reasons: [reason],
+    reason,
+    suggestedSwap: offlineAudit.suggestedSwap || null,
+    problemIngredients: [...new Set(problemIngredients)],
+    detectedForbidden,
+    detectedCaution,
+    parsedTokens,
+    source: 'TWO_STAGE_VISION_RULE_ENGINE'
   };
 }
 
@@ -577,42 +838,55 @@ Return strictly JSON:
     }
   ]
 }`;
-      const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+      const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
       const cleanBase64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
 
       for (const model of models) {
         console.log(`[ReceiptScan] Calling direct client Gemini Vision with model "${model}"...`);
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(resolvedApiKey)}`;
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
-                { text: prompt }
-              ]
-            }],
-            generationConfig: {
-              responseMimeType: "application/json",
-              temperature: 0.1,
-              maxOutputTokens: 4096
-            }
-          })
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 14000);
+        const generationConfig = {
+          responseMimeType: "application/json",
+          temperature: 0.1,
+          maxOutputTokens: 4096
+        };
+        if (model.startsWith('gemini-2.5')) {
+          generationConfig.thinkingConfig = { thinkingBudget: 0 };
+        }
+        try {
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
+                  { text: prompt }
+                ]
+              }],
+              generationConfig
+            })
+          });
+          clearTimeout(timeoutId);
 
-        if (response.ok) {
-          const jsonRes = await response.json();
-          const text = jsonRes.candidates?.[0]?.content?.parts?.[0]?.text;
-          const parsed = parseGeminiJson(text);
-          if (parsed) {
-            console.log(`[ReceiptScan] Direct client Gemini Vision call succeeded with model "${model}"! Detected ${parsed.items?.length || 0} items.`);
-            onProgress({ status: 'populating', progress: 0.95, message: 'Populating receipt items...' });
-            return normalizeReceiptData(parsed, 'CLIENT_GEMINI_VISION');
+          if (response.ok) {
+            const jsonRes = await response.json();
+            const text = jsonRes.candidates?.[0]?.content?.parts?.[0]?.text;
+            const parsed = parseGeminiJson(text);
+            if (parsed) {
+              console.log(`[ReceiptScan] Direct client Gemini Vision call succeeded with model "${model}"! Detected ${parsed.items?.length || 0} items.`);
+              onProgress({ status: 'populating', progress: 0.95, message: 'Populating receipt items...' });
+              return normalizeReceiptData(parsed, 'CLIENT_GEMINI_VISION');
+            }
+          } else {
+            const errData = await response.json().catch(() => ({}));
+            console.warn(`[ReceiptScan] Direct client Gemini Vision model "${model}" failed (${response.status}):`, errData.error?.message || response.statusText);
           }
-        } else {
-          const errData = await response.json().catch(() => ({}));
-          console.warn(`[ReceiptScan] Direct client Gemini Vision model "${model}" failed (${response.status}):`, errData.error?.message || response.statusText);
+        } catch (modelErr) {
+          clearTimeout(timeoutId);
+          console.warn(`[ReceiptScan] Direct client Gemini Vision model "${model}" exception:`, modelErr.message);
         }
       }
     } catch (clientErr) {
@@ -826,7 +1100,7 @@ export async function auditGroceryReceipt(imageSource, onProgress = () => { }, c
 
   let dataUrl = imageSource;
   if (typeof imageSource !== 'string' || !imageSource.startsWith('data:')) {
-    dataUrl = await compressImageForOCR(imageSource, 1600, 0.8);
+    dataUrl = await compressImageForOCR(imageSource, 1200, 0.78);
   }
 
   try {

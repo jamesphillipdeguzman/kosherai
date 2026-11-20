@@ -9,7 +9,7 @@ import { renderToolGuideTab } from './components/ToolGuideTab.js';
 import { renderBottomNav } from './components/BottomNav.js';
 import { renderFooter } from './components/Footer.js';
 import { renderCheckerTab } from './components/CheckerTab.js';
-import { renderScannerTab, executeScanWorkflow, SAMPLE_LABELS, releaseScannerResources } from './components/ScannerTab.js';
+import { renderScannerTab, executeScanWorkflow, SAMPLE_LABELS, releaseScannerResources, cancelActiveScan, recheckFoodName } from './components/ScannerTab.js';
 import { renderCheatSheetTab } from './components/CheatSheetTab.js';
 import { renderSubstitutesTab } from './components/SubstitutesTab.js';
 import { renderCookModeTab, renderCommentsDrawerBody, renderCommentsDrawerStats, lidRecipes, DIET_RECIPES } from './components/CookModeTab.js';
@@ -1744,6 +1744,50 @@ function attachEventHandlers() {
       state.imagePreviewUrl = null;
       state.scanText = '';
       render();
+    });
+  }
+
+  // Cancel in-flight scan
+  const cancelScanBtn = document.querySelector('#cancel-scan-btn');
+  if (cancelScanBtn) {
+    cancelScanBtn.addEventListener('click', () => {
+      cancelActiveScan(state, render);
+    });
+  }
+
+  // Retry failed/timed-out scan
+  const retryScanBtn = document.querySelector('#retry-scan-btn');
+  if (retryScanBtn) {
+    retryScanBtn.addEventListener('click', async () => {
+      if (state.lastScannedFile) {
+        await executeScanWorkflow(state.lastScannedFile, {
+          state,
+          render,
+          addScanToHistory
+        });
+      }
+    });
+  }
+
+  // Switch to Manual Food Entry fallback
+  const manualFoodEntryBtn = document.querySelector('#manual-food-entry-btn');
+  if (manualFoodEntryBtn) {
+    manualFoodEntryBtn.addEventListener('click', () => {
+      state.scanError = null;
+      state.scannerTab = 'paste';
+      state.inputMode = 'text';
+      render();
+    });
+  }
+
+  // Correct identified food name and re-check Stage 2 immediately
+  const recheckFoodNameBtn = document.querySelector('#recheck-food-name-btn');
+  if (recheckFoodNameBtn) {
+    recheckFoodNameBtn.addEventListener('click', () => {
+      const input = document.querySelector('#correct-food-name-input');
+      if (input && input.value.trim()) {
+        recheckFoodName(input.value, state, render);
+      }
     });
   }
 

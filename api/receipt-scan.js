@@ -209,9 +209,16 @@ export default async function handler(req, res) {
     return sendJson(res, 405, { error: 'METHOD_NOT_ALLOWED', message: 'Only POST is supported for /api/receipt-scan.' });
   }
 
+  const tStart = Date.now();
   try {
     const body = await parseRequestBody(req);
-    const { imageBase64, mimeType = 'image/jpeg', clientHint = '', activeDiet = 'lid' } = body;
+    const {
+      imageBase64,
+      mimeType = 'image/jpeg',
+      clientHint = '',
+      activeDiet = 'lid',
+      mode = ''
+    } = body;
 
     const apiKey = (
       process.env.GEMINI_API_KEY ||
@@ -240,10 +247,26 @@ export default async function handler(req, res) {
 
     const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
 
-    const isFoodLabel = body.scanTarget === 'food_label' || body.scanType === 'food_label';
+    const isFoodRecognition = mode === 'food_recognition' || body.scanTarget === 'food_recognition';
+    const isFoodLabel = !isFoodRecognition && (body.scanTarget === 'food_label' || body.scanType === 'food_label');
 
     let prompt = '';
-    if (isFoodLabel) {
+    if (isFoodRecognition) {
+      prompt = `Identify the food item, produce, dish, or packaged product in this image.
+Recognize Filipino produce and local names when applicable (e.g., kamote/sweet potato, gabi/taro, ube, malunggay, sayote, kangkong, talong, sitaw, ampalaya, pechay, bangus, tilapia).
+If this is a packaged product with a visible ingredient list, set "isPackagedLabel": true and put the extracted ingredients in "ingredientsText".
+If the image is blurry, ambiguous, or not food, set "needsClarification": true and a low confidence.
+Return strictly JSON:
+{
+  "foodName": "Common English food name",
+  "localName": "Local Filipino name if applicable, or empty string",
+  "isPackagedLabel": false,
+  "ingredientsText": "",
+  "confidence": 0.95,
+  "explanation": "Short 1-sentence visual description",
+  "needsClarification": false
+}`;
+    } else if (isFoodLabel) {
       prompt = `Extract all ingredient items and nutrition label details from this food packaging image.
 Evaluate the product and every identified ingredient under the "${currentDietName}" (${currentDiet}) dietary compliance protocol.
 If the label is blurry, unreadable, or contains no ingredient text, set "status": "UNKNOWN", "isSafe": false, and explain why. NEVER mark an unreadable or unverified label as "SAFE".
@@ -285,17 +308,31 @@ Return strictly JSON:
 }`;
     }
 
-    // Cascade: Try gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-flash
-    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    // Fast Gemini Flash cascade (no slow legacy 1.5-flash, disable extended thinking on 2.5-flash)
+    const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+    const perModelTimeoutMs = isFoodRecognition ? 8500 : 14000;
     let response = null;
     let lastErrMessage = '';
+    let modelUsed = '';
+    const tGeminiStart = Date.now();
 
     for (const model of models) {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), perModelTimeoutMs);
+      const generationConfig = {
+        responseMimeType: "application/json",
+        temperature: 0.1,
+        maxOutputTokens: isFoodRecognition ? 512 : 4096
+      };
+      if (model.startsWith('gemini-2.5')) {
+        generationConfig.thinkingConfig = { thinkingBudget: 0 };
+      }
       try {
         response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify({
             contents: [
               {
@@ -310,15 +347,13 @@ Return strictly JSON:
                 ]
               }
             ],
-            generationConfig: {
-              responseMimeType: "application/json",
-              temperature: 0.1,
-              maxOutputTokens: 4096
-            }
+            generationConfig
           })
         });
+        clearTimeout(timeoutId);
 
         if (response.ok) {
+          modelUsed = model;
           break;
         } else {
           const errData = await response.json().catch(() => ({}));
@@ -326,15 +361,20 @@ Return strictly JSON:
           console.warn(`[API /api/receipt-scan] Model ${model} failed (${response.status}): ${lastErrMessage}. Trying next model...`);
         }
       } catch (fetchErr) {
-        lastErrMessage = fetchErr.message;
+        clearTimeout(timeoutId);
+        lastErrMessage = fetchErr.name === 'AbortError'
+          ? `Model ${model} timed out after ${perModelTimeoutMs}ms`
+          : fetchErr.message;
         console.warn(`[API /api/receipt-scan] Model ${model} fetch exception: ${lastErrMessage}`);
       }
     }
+    const geminiMs = Date.now() - tGeminiStart;
 
     if (!response || !response.ok) {
+      console.warn(`[API /api/receipt-scan] All Gemini models failed in ${geminiMs}ms: ${lastErrMessage}`);
       return sendJson(res, 502, {
         error: 'GEMINI_API_ERROR',
-        message: lastErrMessage || 'Failed to analyze receipt with Gemini Vision.'
+        message: lastErrMessage || 'Failed to analyze image with Gemini Vision.'
       });
     }
 
@@ -367,11 +407,30 @@ Return strictly JSON:
       });
     }
 
+    const totalMs = Date.now() - tStart;
+    console.log(`[API /api/receipt-scan] mode=${isFoodRecognition ? 'food_recognition' : (isFoodLabel ? 'food_label' : 'receipt')} model=${modelUsed} geminiMs=${geminiMs} totalMs=${totalMs}`);
+
+    if (isFoodRecognition) {
+      return sendJson(res, 200, {
+        success: true,
+        source: 'GEMINI_VISION_STAGE1',
+        foodName: parsedData.foodName || parsedData.productName || 'Unidentified Food',
+        localName: parsedData.localName || '',
+        isPackagedLabel: Boolean(parsedData.isPackagedLabel),
+        ingredientsText: parsedData.ingredientsText || '',
+        confidence: typeof parsedData.confidence === 'number' ? parsedData.confidence : 0.85,
+        explanation: parsedData.explanation || '',
+        needsClarification: Boolean(parsedData.needsClarification),
+        timings: { geminiMs, totalMs, modelUsed }
+      });
+    }
+
     if (isFoodLabel) {
       return sendJson(res, 200, {
         success: true,
         source: 'GEMINI_VISION',
-        ...parsedData
+        ...parsedData,
+        timings: { geminiMs, totalMs, modelUsed }
       });
     }
 
