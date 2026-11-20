@@ -6463,26 +6463,34 @@ html.dark .status-pill.status-pill-offline.offline,
 
 /* Keep header auth buttons and controls reachable on phones */
 @media (max-width: 520px) {
-  .header-auth-buttons { gap: 6px; }
+  .header-auth-buttons { gap: 4px; flex-shrink: 0; }
   #header-signin-btn,
-  #header-signup-btn { padding: 6px 10px; font-size: 11.5px; min-height: 32px; }
+  #header-signup-btn { padding: 5px 8px; font-size: 11px; min-height: 32px; white-space: nowrap; }
   .app-header { padding: 8px 10px; gap: 6px; box-sizing: border-box; }
-  .app-header .brand-wrapper { padding: 2px 6px; gap: 6px; min-width: 0; flex-shrink: 1; }
+  .app-header .brand-wrapper { padding: 3px 8px; gap: 6px; flex-shrink: 0; white-space: nowrap; }
   .app-header .brand-icon { width: 26px; height: 26px; flex-shrink: 0; }
-  .app-header .brand-title { font-size: 1rem; white-space: nowrap; }
-  .app-header .header-actions { gap: 4px; flex-shrink: 0; min-width: 0; }
+  .app-header .brand-title { font-size: 1rem; white-space: nowrap; flex-shrink: 0; }
+  .app-header .header-actions { gap: 4px; flex-shrink: 1; min-width: 0; }
   .status-pill { padding: 3px 8px !important; font-size: 0.7rem !important; gap: 4px !important; }
 }
 
 @media (max-width: 440px) {
   .status-pill { padding: 2.5px 7px !important; }
   .header-signout-btn { min-height: 36px; min-width: 36px; width: 36px; height: 36px; }
+  #header-theme-toggle-btn,
+  #settings-open-btn {
+    padding: 6px !important;
+    min-width: 32px;
+    min-height: 32px;
+  }
 }
 
-@media (max-width: 360px) {
-  .app-header { padding: 6px 6px !important; gap: 4px !important; }
-  .app-header .brand-wrapper { padding: 2px 4px !important; gap: 4px !important; }
-  .app-header .brand-title { font-size: 0.92rem !important; }
+@media (max-width: 380px) {
+  .app-header { padding: 6px 8px !important; gap: 4px !important; }
+  .app-header .brand-wrapper { padding: 3px 6px !important; gap: 5px !important; flex-shrink: 0 !important; }
+  .app-header .brand-title { font-size: 0.94rem !important; white-space: nowrap !important; }
+  #header-signin-btn,
+  #header-signup-btn { padding: 5px 7px !important; font-size: 10.5px !important; }
   .status-pill { padding: 2px 6px !important; }
   .header-signout-btn {
     width: 36px !important;

@@ -65,9 +65,9 @@ export function renderHeader(isOnline = true, appMode = 'diet', showProjectTab =
 
   return `
     <header class="app-header">
-      <div class="brand-wrapper inline-flex items-center gap-2 bg-slate-100/90 dark:bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-200/70 dark:border-slate-700/60 shadow-sm backdrop-blur-md cursor-pointer hover:border-emerald-500/50 transition-all select-none group" id="brand-logo-btn" role="button" tabindex="0" title="Click to synchronize cloud data (/api/scans, /api/trips, /api/food-waste)">
-        <img src="/favicon.svg" alt="KosherAI Logo" class="brand-icon ${syncingVal ? 'syncing animate-spin' : 'group-hover:scale-105'} transition-transform duration-300" />
-        <div class="brand-title text-slate-900 dark:text-white font-black text-xl tracking-tight flex items-center gap-1.5 leading-none">
+      <div class="brand-wrapper shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 sm:gap-2 bg-slate-100/90 dark:bg-slate-800/80 px-2 sm:px-2.5 py-1 rounded-xl border border-slate-200/70 dark:border-slate-700/60 shadow-sm backdrop-blur-md cursor-pointer hover:border-emerald-500/50 transition-all select-none group" id="brand-logo-btn" role="button" tabindex="0" title="Click to synchronize cloud data (/api/scans, /api/trips, /api/food-waste)">
+        <img src="/favicon.svg" alt="KosherAI Logo" class="brand-icon shrink-0 ${syncingVal ? 'syncing animate-spin' : 'group-hover:scale-105'} transition-transform duration-300" />
+        <div class="brand-title shrink-0 whitespace-nowrap text-slate-900 dark:text-white font-black text-xl tracking-tight flex items-center gap-1.5 leading-none">
           <span>KosherAI</span>
           ${syncingVal ? `
             <span class="inline-flex items-center gap-1 text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 dark:bg-teal-500/20 px-1.5 py-0.5 rounded-full border border-teal-500/30 animate-pulse leading-none">
@@ -81,9 +81,9 @@ export function renderHeader(isOnline = true, appMode = 'diet', showProjectTab =
         </div>
       </div>
 
-      <div class="header-actions flex items-center gap-2">
-        <!-- Consolidated Network Connection & User Status Pill -->
-        ${currentUser && onlineVal ? `
+      <div class="header-actions flex items-center gap-1.5 sm:gap-2 min-w-0">
+        <!-- Consolidated Network Connection & User Status Pill (Authenticated Users Only) -->
+        ${currentUser ? (onlineVal ? `
           <div class="status-pill status-pill-user online inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 transition-all select-none shadow-2xs" title="Network connection active · Signed in as ${escapeAttr(currentUser.name || currentUser.email || 'User')}${currentUser.email ? ` (${escapeAttr(currentUser.email)})` : ''}">
             <span class="status-dot"></span>
             <span class="user-avatar-badge status-label user-initial font-bold text-xs select-none">
@@ -93,17 +93,12 @@ export function renderHeader(isOnline = true, appMode = 'diet', showProjectTab =
               ${escapeHtml(firstName)}
             </span>
           </div>
-        ` : (!onlineVal ? `
+        ` : `
           <div class="status-pill status-pill-offline offline inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-500/30 transition-all select-none shadow-2xs" title="Offline · Device has no active network connection">
             <span class="status-dot offline"></span>
             <span class="status-label font-semibold">Offline</span>
           </div>
-        ` : `
-          <div class="status-pill online inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 select-none shadow-2xs" title="Network connection active">
-            <span class="status-dot"></span>
-            <span class="status-label font-semibold">Online</span>
-          </div>
-        `)}
+        `) : ''}
 
         <!-- Dynamic Auth State: Sign Out if logged in, Sign In/Get Started if logged out -->
         <div class="header-auth-controls inline-flex items-center gap-1.5 shrink-0" id="header-auth-container">
@@ -123,18 +118,18 @@ export function renderHeader(isOnline = true, appMode = 'diet', showProjectTab =
               <span class="signout-text hidden sm:inline">Sign Out</span>
             </button>
           ` : `
-            <div class="header-auth-buttons flex items-center gap-2">
+            <div class="header-auth-buttons flex items-center gap-1.5 sm:gap-2">
               <button
                 type="button"
                 id="header-signin-btn"
-                class="px-3.5 py-1.5 text-xs font-medium text-slate-200 hover:text-white bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-lg transition-all cursor-pointer"
+                class="whitespace-nowrap px-2.5 sm:px-3.5 py-1.5 text-xs font-medium text-slate-200 hover:text-white bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-lg transition-all cursor-pointer"
               >
                 Sign In
               </button>
               <button
                 type="button"
                 id="header-signup-btn"
-                class="px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-all shadow-sm cursor-pointer"
+                class="whitespace-nowrap px-2.5 sm:px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-all shadow-sm cursor-pointer"
               >
                 Get Started
               </button>

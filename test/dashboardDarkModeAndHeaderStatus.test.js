@@ -166,17 +166,25 @@ assert.ok(
   'When offline, status dot must have .offline class'
 );
 
-// 2.4 Unauthenticated + Online: Displays "Online" + Green Dot + Sign In button
+// 2.4 Unauthenticated + Online/Offline: Status pill is hidden for guests; Sign In, Get Started & full KosherAI brand visible
 const htmlLoggedOutOnline = renderHeader(true, 'diet', true, 'lid', 'dark', null);
+const htmlLoggedOutOffline = renderHeader(false, 'diet', true, 'lid', 'dark', null);
 
 assert.ok(
-  htmlLoggedOutOnline.includes('status-pill online'),
-  'When logged out and online, status pill displays Online'
+  !htmlLoggedOutOnline.includes('status-pill') && !htmlLoggedOutOffline.includes('status-pill'),
+  'When logged out (guest), status pill must be completely hidden'
 );
 
 assert.ok(
-  htmlLoggedOutOnline.includes('id="header-signin-btn"'),
-  'When logged out, header renders Sign In button'
+  htmlLoggedOutOnline.includes('brand-wrapper shrink-0 whitespace-nowrap') &&
+    htmlLoggedOutOnline.includes('<span>KosherAI</span>'),
+  'Full KosherAI brand name must remain visible with shrink-0 and whitespace-nowrap'
+);
+
+assert.ok(
+  htmlLoggedOutOnline.includes('id="header-signin-btn"') &&
+    htmlLoggedOutOnline.includes('id="header-signup-btn"'),
+  'When logged out, header renders Sign In and Get Started buttons'
 );
 
 console.log('  ✅ Section 2 Passed: Single status pill handles online user name, offline status, and unauthenticated state.\n');

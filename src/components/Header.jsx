@@ -217,14 +217,14 @@ export function Header({
           id="brand-logo-btn"
           onClick={handleLogoClick}
           title="Click to synchronize cloud data (/api/scans, /api/trips, /api/food-waste)"
-          className="brand-wrapper inline-flex items-center gap-2 bg-slate-100/90 dark:bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-200/70 dark:border-slate-700/60 shadow-sm backdrop-blur-md cursor-pointer hover:border-emerald-500/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left select-none group"
+          className="brand-wrapper shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 sm:gap-2 bg-slate-100/90 dark:bg-slate-800/80 px-2 sm:px-2.5 py-1 rounded-xl border border-slate-200/70 dark:border-slate-700/60 shadow-sm backdrop-blur-md cursor-pointer hover:border-emerald-500/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-left select-none group"
         >
           <img
             src="/favicon.svg"
             alt="KosherAI Logo"
-            className={`brand-icon ${isSyncing ? 'syncing animate-spin' : 'group-hover:scale-105'} transition-transform duration-300`}
+            className={`brand-icon shrink-0 ${isSyncing ? 'syncing animate-spin' : 'group-hover:scale-105'} transition-transform duration-300`}
           />
-          <div className="brand-title text-slate-900 dark:text-white font-black text-xl tracking-tight flex items-center gap-1.5 leading-none">
+          <div className="brand-title shrink-0 whitespace-nowrap text-slate-900 dark:text-white font-black text-xl tracking-tight flex items-center gap-1.5 leading-none">
             <span>KosherAI</span>
             {isSyncing ? (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-600 dark:text-teal-400 bg-teal-500/10 dark:bg-teal-500/20 px-1.5 py-0.5 rounded-full border border-teal-500/30 animate-pulse leading-none">
@@ -238,9 +238,9 @@ export function Header({
           </div>
         </button>
 
-        <div className="header-actions flex items-center gap-2">
-          {/* Consolidated Network Connection & User Status Pill */}
-          {currentUser && isBrowserOnline ? (
+        <div className="header-actions flex items-center gap-1.5 sm:gap-2 min-w-0">
+          {/* Consolidated Network Connection & User Status Pill (Authenticated Users Only) */}
+          {currentUser ? (isBrowserOnline ? (
             <div
               className="status-pill status-pill-user online inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 transition-all select-none shadow-2xs"
               title={`Network connection active · Signed in as ${currentUser.name || currentUser.email || 'User'}${currentUser.email ? ` (${currentUser.email})` : ''}`}
@@ -253,7 +253,7 @@ export function Header({
                 {firstName}
               </span>
             </div>
-          ) : !isBrowserOnline ? (
+          ) : (
             <div
               className="status-pill status-pill-offline offline inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-500/30 transition-all select-none shadow-2xs"
               title="Offline · Device has no active network connection"
@@ -261,15 +261,7 @@ export function Header({
               <span className="status-dot offline"></span>
               <span className="status-label font-semibold">Offline</span>
             </div>
-          ) : (
-            <div
-              className="status-pill online inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 select-none shadow-2xs"
-              title="Network connection active"
-            >
-              <span className="status-dot"></span>
-              <span className="status-label font-semibold">Online</span>
-            </div>
-          )}
+          )) : null}
 
           {/* Dynamic Auth State: Sign Out button if logged in, Sign In / Get Started buttons if logged out */}
           <div className="header-auth-controls inline-flex items-center gap-1.5 shrink-0" id="header-auth-container">
