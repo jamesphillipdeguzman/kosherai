@@ -269,17 +269,25 @@ export function renderToolGuideTab(state = {}) {
             ${weeklyData.map(w => {
               const maxVal = Math.max(...weeklyData.map(d => Math.max(d.totalExpense, d.targetBudget)), baselineExpense, 5000);
               const heightPct = Math.min(Math.round((w.totalExpense / maxVal) * 100), 100);
+              const baselinePct = Math.min(Math.round((baselineExpense / maxVal) * 100), 100);
               return `
                 <div class="bar-col">
                   <div class="bar-container">
-                    <div class="bar-fill ${w.isBaseline ? 'bar-baseline' : (w.totalExpense <= w.targetBudget ? 'bar-safe' : 'bar-avoid')}" style="height: ${Math.max(heightPct, 4)}%;" title="Week ${w.weekNumber}: ₱${formatNum(w.totalExpense)}">
-                      ${w.totalExpense > 0 ? `<span class="bar-value-tag">₱${Math.round(w.totalExpense)}</span>` : ''}
+                    <div class="baseline-line-indicator" style="bottom: ${baselinePct}%;" title="W1 Baseline: ₱${baselineExpense}"></div>
+                    <div class="bar-fill ${w.isBaseline ? 'baseline-fill' : (w.totalExpense <= baselineExpense ? 'safe-fill' : 'over-fill')}" style="height: ${w.hasRecords ? Math.max(heightPct, 6) : 2}%;" title="Week ${w.weekNumber}: ₱${formatNum(w.totalExpense)}">
+                      <span class="bar-value-label">₱${w.totalExpense > 0 ? (w.totalExpense >= 1000 ? (w.totalExpense / 1000).toFixed(1) + 'k' : w.totalExpense) : '0'}</span>
                     </div>
                   </div>
-                  <div class="bar-label">W${w.weekNumber}</div>
+                  <div class="bar-x-label">W${w.weekNumber}</div>
                 </div>
               `;
             }).join('')}
+          </div>
+          <div class="chart-legend" style="margin-bottom: 12px;">
+            <span class="legend-item"><span class="legend-color baseline-color"></span> Baseline (W1)</span>
+            <span class="legend-item"><span class="legend-color safe-color"></span> Under Baseline</span>
+            <span class="legend-item"><span class="legend-color over-color"></span> Over Baseline</span>
+            <span class="legend-item"><span class="legend-color line-color"></span> Baseline Reference</span>
           </div>
           <p class="guide-lead" style="font-size: 0.82rem; margin-top: 12px;">
             <strong>How to interpret:</strong> Week 1 establishes your baseline spending (₱${formatNum(baselineExpense)}). Green bars in Weeks 2–6 indicate weeks at or below target budget; red bars highlight overspend weeks. Total recorded waste across the study is <strong>${totals.totalProjectWasteKg.toFixed(2)} kg</strong>.

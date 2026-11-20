@@ -156,6 +156,8 @@ console.log('\nTest 5: ToolGuideTab renders About, Collection, Workflow, Visuali
   assert.ok(guideHtml.includes('01 • USER INPUT') && guideHtml.includes('02 • DATA VALIDATION') && guideHtml.includes('03 • DATA ORGANIZATION') && guideHtml.includes('04 • DATA STORAGE') && guideHtml.includes('05 • DATA ANALYSIS') && guideHtml.includes('06 • USER INSIGHTS'), 'Section C 6 numbered stages must be present');
   assert.ok(!guideHtml.includes('compressImageForOCR') && !guideHtml.includes('getProjectWeekForDate') && !guideHtml.includes('/api/trips') && !guideHtml.includes('CourseProjectView.js'), 'Technical filenames, functions, and endpoints must be removed from Sections B and C');
   assert.ok(guideHtml.includes('Weekly Expenses vs.'), 'Live bar chart visualization must be rendered');
+  assert.ok(guideHtml.includes('baseline-fill') && guideHtml.includes('baseline-line-indicator') && guideHtml.includes('chart-legend'), 'Weekly Expenses chart must match Dashboard Insights bar styling, dashed baseline, and legend');
+  assert.ok(guideHtml.includes('Baseline (W1)') && guideHtml.includes('Under Baseline') && guideHtml.includes('Over Baseline') && guideHtml.includes('Baseline Reference'), 'Chart legend items must be rendered');
   assert.ok(guideHtml.includes('data-home-course-tab="scan"'), 'Feature guide must link to Scan Food');
 
   const lightboxHtml = renderToolGuideTab({ processMapLightboxOpen: true });
